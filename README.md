@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Project ROLEXM
 
 A standalone, lightweight Android launcher and performance platform for older
@@ -200,3 +201,6 @@ Robolectric runs the code but draws no pixels and measures no jank. **Install
 See [BUILD_REPORT.md](BUILD_REPORT.md) for the full list, including features
 deferred from this pass (home-screen widgets, ROLEXM Shield, Brave bridge) and
 the verification boundary.
+=======
+# rolexm
+>>>>>>> origin/main
