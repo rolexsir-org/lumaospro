@@ -19,3 +19,8 @@ keystore.properties
 
 # --- OS ---
 .DS_Store
+key.properties
+**/key.properties
+.env
+.env.*
+**/build/
