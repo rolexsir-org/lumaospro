@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        ROLEXM draws its own light/dark palettes in code (see ui.Palette), so it
+        does not depend on AppCompat or MaterialComponents day/night themes.
+        That removes a dependency and keeps resource resolution trivial on slow
+        devices. These platform themes only set window chrome.
+    -->
+    <style name="Theme.Rolexm" parent="@android:style/Theme.Material.NoActionBar" />
+
+    <!-- Home screen: transparent so the live wallpaper shows through. -->
+    <style name="Theme.Rolexm.Home" parent="Theme.Rolexm">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <!-- Settings / onboarding: ordinary opaque window. -->
+    <style name="Theme.Rolexm.Settings" parent="Theme.Rolexm">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <!-- Cloud backup: settings and home layout only; measurements are excluded
+         by omission and will be re-taken on the new device. -->
+    <cloud-backup>
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="datastore/" />
+    </cloud-backup>
+    <!-- Device-to-device transfer: a direct switch should carry the history too. -->
+    <device-transfer>
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="datastore/" />
+        <include domain="file" path="databases/" />
+    </device-transfer>
+</data-extraction-rules>

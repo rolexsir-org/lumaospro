@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        ROLEXM requests exactly one permission in its default configuration:
+        REQUEST_DELETE_PACKAGES, used only by the user-initiated "uninstall" item
+        in the app drawer long-press menu (it launches the standard system
+        uninstall confirmation; ROLEXM never removes an app silently).
+
+        Deliberately NOT requested:
+          * QUERY_ALL_PACKAGES - the app list comes from LauncherApps, the
+            official launcher API, which is not subject to package-visibility
+            filtering. The <queries> block below covers the remaining
+            PackageManager lookups.
+          * KILL_BACKGROUND_PROCESSES / FORCE_STOP - ROLEXM does not terminate
+            other applications.
+          * Any accessibility or device-admin binding for core features.
+        Additional permissions (VPN consent, notifications) are added only with
+        the Phase 6 Shield work and are opt-in at runtime.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".core.RolexApp"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Rolexm"
+        android:supportsRtl="true"
+        android:hardwareAccelerated="true"
+        android:largeHeap="false"
+        tools:targetApi="31">
+
+        <!--
+            The home screen. singleTask + stateNotNeeded + excludeFromRecents are
+            the conventional launcher settings: one instance, no per-instance
+            saved state to restore (the launcher rebuilds from its own store),
+            and no entry in the recent-tasks list.
+        -->
+        <activity
+            android:name=".launcher.HomeActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:clearTaskOnLaunch="true"
+            android:stateNotNeeded="true"
+            android:excludeFromRecents="true"
+            android:resumeWhilePausing="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Rolexm.Home">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".onboarding.OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Rolexm.Settings" />
+
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/title_settings"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Rolexm.Settings" />
+    </application>
+
+</manifest>

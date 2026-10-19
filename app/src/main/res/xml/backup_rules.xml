@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup policy for Android 11 and below (see data_extraction_rules.xml for
+    Android 12+).
+
+    Once any <include> is present, everything else is excluded by default, so
+    listing an <exclude> would be redundant (and lint rejects it). The
+    diagnostics database is therefore left out simply by not being named.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="datastore/" />
+</full-backup-content>

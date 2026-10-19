@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ROLEXM home screen.
+
+    Structure is deliberately shallow - one FrameLayout for the desktop and one
+    overlay for the drawer - because view-tree depth is a direct cost on the
+    weak CPUs this launcher targets, and the home screen is drawn on every
+    single return to the desktop.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/home_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <!-- Desktop -->
+    <LinearLayout
+        android:id="@+id/desktop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/home_grid"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:scrollbars="none" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/dock_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:scrollbars="none" />
+
+    </LinearLayout>
+
+    <!-- App drawer overlay: hidden until a swipe-up or drawer gesture. -->
+    <FrameLayout
+        android:id="@+id/drawer_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <View
+            android:id="@+id/drawer_scrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/rolexm_scrim" />
+
+        <LinearLayout
+            android:id="@+id/drawer_sheet"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="bottom"
+            android:background="@drawable/bg_drawer_sheet"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/search_field"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginLeft="16dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginRight="16dp"
+                android:layout_marginBottom="8dp"
+                android:autofillHints="false"
+                android:background="@drawable/bg_search_field"
+                android:hint="@string/search_hint"
+                android:imeOptions="actionSearch|flagNoFullscreen"
+                android:importantForAutofill="no"
+                android:inputType="text|textNoSuggestions"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:singleLine="true"
+                android:textColorHint="#99FFFFFF"
+                android:textSize="15sp" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/drawer_grid"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:overScrollMode="never"
+                    android:scrollbars="none" />
+
+                <com.rolexm.launcher.launcher.view.AlphaIndexView
+                    android:id="@+id/alpha_index"
+                    android:layout_width="26dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="end|center_vertical" />
+
+                <TextView
+                    android:id="@+id/empty_view"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="@string/empty_no_apps"
+                    android:textSize="15sp"
+                    android:visibility="gone" />
+
+            </FrameLayout>
+
+            <View
+                android:id="@+id/drawer_bottom_pad"
+                android:layout_width="match_parent"
+                android:layout_height="1dp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</FrameLayout>

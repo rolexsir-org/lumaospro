@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand accents. Light/dark surfaces are produced by ui.Palette at runtime. -->
+    <color name="rolexm_accent">#4DD0E1</color>
+    <color name="rolexm_scrim">#66000000</color>
+</resources>

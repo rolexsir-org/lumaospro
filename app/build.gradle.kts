@@ -1,0 +1,152 @@
+import java.util.Properties
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+// ---------------------------------------------------------------------------
+// Signing.
+// Release signing is driven by an optional, gitignored keystore.properties file:
+//   storeFile=../keystore/rolexm.jks
+//   storePassword=...
+//   keyAlias=rolexm
+//   keyPassword=...
+// If the file is absent the build falls back to the standard debug keystore so
+// that a contributor can always produce an installable APK. No secret is ever
+// committed to the repository.
+// ---------------------------------------------------------------------------
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { load(it) }
+    }
+}
+
+android {
+    namespace = "com.rolexm.launcher"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.rolexm.launcher"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "0.1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += setOf("en")
+    }
+
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                // rootProject.file, not file(): inside the module's android {}
+                // block, file() resolves relative to app/, so a path written as
+                // "keystore/rolexm.jks" would look for app/keystore/rolexm.jks.
+                storeFile = keystoreProps["storeFile"]?.let { rootProject.file(it as String) }
+                storePassword = keystoreProps["storePassword"] as String?
+                keyAlias = keystoreProps["keyAlias"] as String?
+                keyPassword = keystoreProps["keyPassword"] as String?
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            isMinifyEnabled = false
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = if (keystoreProps.isNotEmpty()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*"
+            )
+        }
+    }
+
+    // Keep the test task honest: unit tests run on the JVM only, against pure
+    // Kotlin logic, so they stay fast and need no emulator.
+    testOptions {
+        unitTests {
+            // Robolectric needs the real merged resources: inflating
+            // activity_home.xml is part of what these tests verify.
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+dependencies {
+    // --- Core Android -------------------------------------------------
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.recyclerview)
+
+    // --- Lifecycle (drives the whole intelligence engine) -------------
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // --- Compose (settings + dashboard surfaces only) -----------------
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.activity.compose)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // --- Persistence --------------------------------------------------
+    implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.kotlinx.coroutines.android)
+
+    // --- Tests ---------------------------------------------------------
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+}
+
+// --- Test JVM tuning --------------------------------------------------------
+// Robolectric loads a full Android framework image, so the test JVM needs more
+// than Gradle's 512 MB default. Robolectric's ~150 MB android-all jar is
+// fetched into .cache/ so it stays out of the project snapshot.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "900m"
+    systemProperty("robolectric.dependency.dir", file("${rootDir}/.cache/robolectric").absolutePath)
+}
