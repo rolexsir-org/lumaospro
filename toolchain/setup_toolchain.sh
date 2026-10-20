@@ -25,7 +25,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 java -version 2>&1 | head -1
 
 # ---------- Gradle ----------
-GRADLE_VERSION=8.7
+GRADLE_VERSION=8.13
 if [ ! -x "$TOOLS/gradle-$GRADLE_VERSION/bin/gradle" ]; then
   echo "==> downloading Gradle $GRADLE_VERSION"
   curl -fsSL -o gradle.zip \
@@ -57,8 +57,8 @@ echo "==> installing SDK packages"
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
 sdkmanager --install \
   "platform-tools" \
-  "platforms;android-34" \
-  "build-tools;34.0.0" >/dev/null
+  "platforms;android-36" \
+  "build-tools;35.0.0" >/dev/null
 
 echo "==> SDK contents"
 ls "$ANDROID_HOME"

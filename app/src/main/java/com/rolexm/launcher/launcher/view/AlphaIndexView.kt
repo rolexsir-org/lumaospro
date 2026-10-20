@@ -24,6 +24,11 @@ class AlphaIndexView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    init {
+        isClickable = true
+        isFocusable = true
+    }
+
     /** Bucket characters to draw, in order. */
     var letters: List<Char> = emptyList()
         set(value) {
@@ -33,6 +38,11 @@ class AlphaIndexView @JvmOverloads constructor(
 
     /** Called continuously while dragging, so the grid tracks the finger. */
     var onLetterTouched: ((Char) -> Unit)? = null
+
+    fun setAccentColor(color: Int) {
+        paint.color = color
+        invalidate()
+    }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.rolexm_accent)

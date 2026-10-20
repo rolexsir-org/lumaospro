@@ -27,7 +27,10 @@ data class CellConfig(
     val showLabels: Boolean,
     val textScale: Float,
     val labelColor: Int,
-    val labelShadow: Boolean
+    val labelShadow: Boolean,
+    val labelShadowColor: Int = 0xB3000000.toInt(),
+    /** Fixed viewport row height for the home grid; null keeps natural drawer sizing. */
+    val cellHeightPx: Int? = null
 )
 
 class AppCellViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -80,12 +83,19 @@ class AppEntryAdapter(
             }
             holder.icon.setImageDrawable(icon)
 
+            val cellParams = holder.itemView.layoutParams
+            val targetHeight = config.cellHeightPx ?: ViewGroup.LayoutParams.WRAP_CONTENT
+            if (cellParams.height != targetHeight) {
+                cellParams.height = targetHeight
+                holder.itemView.layoutParams = cellParams
+            }
+
             holder.label.text = label
             holder.label.setTextColor(config.labelColor)
             holder.label.textSize = BASE_LABEL_SP * config.textScale
             holder.label.visibility = if (config.showLabels) View.VISIBLE else View.GONE
             if (config.labelShadow) {
-                holder.label.setShadowLayer(3f, 0f, 1f, SHADOW_COLOR)
+                holder.label.setShadowLayer(3f, 0f, 1f, config.labelShadowColor)
             } else {
                 holder.label.setShadowLayer(0f, 0f, 0f, 0)
             }

@@ -13,7 +13,7 @@
     <!-- Ring -->
     <path
         android:pathData="M54,26a28,28 0 1,0 0,56a28,28 0 1,0 0,-56"
-        android:strokeColor="#4DD0E1"
+        android:strokeColor="#B5C5A9"
         android:strokeWidth="7"
         android:strokeLineCap="round"
         android:fillColor="#00000000" />
@@ -37,5 +37,5 @@
     <!-- Hub -->
     <path
         android:pathData="M54,48a6,6 0 1,0 0,12a6,6 0 1,0 0,-12"
-        android:fillColor="#4DD0E1" />
+        android:fillColor="#B5C5A9" />
 </vector>

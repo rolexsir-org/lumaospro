@@ -73,8 +73,10 @@ class SettingsActivity : ComponentActivity() {
 
                 // Keep the status-bar icons legible against our own background.
                 DisposableEffect(palette.isDark) {
-                    WindowCompat.getInsetsController(window, window.decorView)
-                        .isAppearanceLightStatusBars = !palette.isDark
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !palette.isDark
+                        isAppearanceLightNavigationBars = !palette.isDark
+                    }
                     onDispose { }
                 }
 

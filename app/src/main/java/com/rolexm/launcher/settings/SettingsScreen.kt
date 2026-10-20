@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -36,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.rolexm.launcher.R
+import com.rolexm.launcher.ui.RolexCorners
+import com.rolexm.launcher.ui.RolexSpacing
 import com.rolexm.launcher.core.prefs.GestureKind
 import com.rolexm.launcher.intelligence.ProfileId
 import com.rolexm.launcher.launcher.model.GestureAction
@@ -61,8 +64,11 @@ fun SettingsRoot(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(
+                    horizontal = RolexSpacing.screenHorizontal,
+                    vertical = RolexSpacing.screenVertical
+                ),
+            verticalArrangement = Arrangement.spacedBy(RolexSpacing.sectionGap)
         ) {
             HomeRoleSection(viewModel, onRequestHomeRole, onOpenHomeSettings)
             AppearanceSection(viewModel)
@@ -70,7 +76,7 @@ fun SettingsRoot(
             PerformanceSection(viewModel)
             PrivacySection()
             AboutSection()
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(RolexSpacing.screenEnd))
         }
     }
 }
@@ -78,16 +84,17 @@ fun SettingsRoot(
 @Composable
 private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(RolexCorners.card)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(RolexSpacing.cardPadding)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(RolexSpacing.elementGap))
             content()
         }
     }

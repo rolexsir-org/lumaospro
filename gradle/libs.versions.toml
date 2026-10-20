@@ -1,6 +1,6 @@
 [versions]
-agp = "8.5.2"
-kotlin = "2.0.21"
+agp = "8.13.2"
+kotlin = "2.2.21"
 # Pinned explicitly as well as via the BOM: a version-less catalog entry relies
 # on Gradle resolving the platform in the same configuration, which is fragile.
 composeUi = "1.7.8"
