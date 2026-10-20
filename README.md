@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Project ROLEXM
 
 A standalone, lightweight Android launcher and performance platform for older
@@ -14,9 +13,10 @@ optimizer to function.
 
 ```bash
 ./build.sh assembleDebug      # debuggable APK, installs alongside other launchers
-./build.sh test               # 127 tests (89 logic + 38 Robolectric runtime)
+./build.sh test               # 133 tests (94 logic + 39 Robolectric runtime)
 ./build.sh lint               # Android lint
-./build.sh assembleRelease    # minified, R8-shrunk, signed APK
+./build.sh assembleRelease    # minified APK; release signing is never debug-key fallback
+./build.sh bundleRelease      # Android App Bundle for Play (requires upload-key signing)
 ```
 
 `build.sh` provisions the JDK 17 / Gradle / Android SDK toolchain into
@@ -24,7 +24,7 @@ optimizer to function.
 Android SDK). The toolchain lives outside the repo so it never bloats the
 project snapshot.
 
-The 38 runtime tests execute the app's **real** code on the JVM via Robolectric,
+The 39 runtime tests execute the app's **real** code on the JVM via Robolectric,
 inflating the actual layouts and driving `HomeActivity` through its lifecycle.
 No emulator is required and none is possible in this environment (no KVM, no
 nested virtualisation). See §"Running the code without a device" below for
@@ -34,6 +34,44 @@ On first launch ROLEXM offers to become the default launcher. Skipping is a
 first-class outcome — it stays fully usable as an app, and the choice remains
 available in Settings at any time.
 
+### Install on a connected Android device
+
+```bash
+./build.sh assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell monkey -p com.rolexm.launcher.debug 1
+```
+
+The debug build uses the separate application ID `com.rolexm.launcher.debug`.
+For a release APK, run `./build.sh assembleRelease`; install
+`app/build/outputs/apk/release/app-release.apk`. Release variants are unsigned
+unless valid local upload-key credentials are configured; they are never signed
+with the debug key. Google Play distribution uses the signed AAB from
+`./build.sh bundleRelease` at `app/build/outputs/bundle/release/app-release.aab`.
+See [keystore/README.md](keystore/README.md) for safe upload-key setup.
+
+### Google Play release checklist
+
+- The project now targets Android 16 / API 36. Google Play requires new mobile
+  apps and updates submitted from August 31, 2026 to target API 36 or higher
+  ([current target API policy](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)).
+- Upload the signed AAB and enroll in Play App Signing. `bundleRelease` does not
+  sign with a debug key; without a valid upload key it will not produce an
+  uploadable signed release.
+- Complete the Play Console Data safety form and provide a public privacy-policy
+  URL. Google requires both even for apps declaring no data collection
+  ([Data safety requirements](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)).
+  ROLEXM's in-app privacy summary describes local launcher/diagnostics data and
+  Android backup behavior, but it is not a substitute for the publisher's
+  reviewed policy and Play Console disclosures. This repository has no
+  publisher contact details or public policy URL, so those must be supplied by
+  the app owner; none are fabricated here.
+- Review the supplied 512 × 512 icon and 1024 × 500 feature graphic in
+  `store-assets/`. Capture real screenshots from verified devices, confirm the
+  application ID, increment `versionCode` for each upload, and complete Play's
+  review and testing requirements. These artwork files are not device
+  screenshots, and a local build is not Play approval.
+
 ---
 
 ## Project identity
@@ -42,10 +80,11 @@ available in Settings at any time.
 |---|---|
 | Application ID | `com.rolexm.launcher` |
 | minSdk | 26 (Android 8.0) |
-| targetSdk / compileSdk | 34 (Android 14) |
+| targetSdk / compileSdk | 36 (Android 16) |
+| Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
 | Version | 0.1.0 (versionCode 1) |
 | UI | Views for the hot path, Jetpack Compose for settings & diagnostics |
-| Signing | `keystore.properties` (gitignored), falls back to debug key |
+| Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
 ---
 
@@ -73,7 +112,7 @@ com.rolexm.launcher
 ├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), StartupStats, formatting
 ├── settings/        SettingsActivity, SettingsScreen, DashboardScreen (Compose)
 ├── onboarding/      OnboardingActivity (Compose)
-└── ui/              Palette, ThemeMode
+└── ui/              Palette, ThemeMode, RolexSpacing/RolexCorners
 ```
 
 ### Why Views for the home screen and Compose for settings
@@ -159,16 +198,15 @@ option is absent — see the note in `GestureAction.kt`.
 
 ## Privacy
 
-- No account, no backend, no analytics, no advertising SDK, no telemetry.
-- All data stays on the device.
-- **One permission** in the merged manifest: `REQUEST_DELETE_PACKAGES`, used
-  only by the user-initiated uninstall item, which launches the system
-  confirmation dialog.
-- `QUERY_ALL_PACKAGES` is not requested: the app list comes from
-  `LauncherApps`, the official launcher API, which is not subject to
-  package-visibility filtering.
-- Backup includes settings and layout; diagnostics are excluded from cloud
-  backup by omission (`res/xml/data_extraction_rules.xml`).
+- No account, backend, analytics, advertising SDK, or app network permission.
+  ROLEXM itself does not upload app-list or diagnostics data.
+- Installed app labels/icons are read from Android for launcher display and
+  search. Preferences, home layout, and diagnostics are stored locally.
+- Android cloud backup may transfer preferences and layout. Device-to-device
+  transfer also includes diagnostics history; cloud backup excludes it.
+- The merged manifest requests `REQUEST_DELETE_PACKAGES` for the user-confirmed
+  uninstall action. `QUERY_ALL_PACKAGES` is not requested; app discovery uses
+  Android's `LauncherApps` API and the declared launcher-intent query.
 
 ---
 
@@ -176,7 +214,7 @@ option is absent — see the note in `GestureAction.kt`.
 
 A real Android emulator is **not possible** in this workspace: there is no
 `/dev/kvm`, no nested virtualisation, no `qemu` and no `adb`. Rather than accept
-"it has never run", 38 of the tests run the app's genuine code on the JVM under
+"it has never run", 39 of the tests run the app's genuine code on the JVM under
 Robolectric 4.16.1 (SDK 34), with `isIncludeAndroidResources = true` so the real
 merged resources are used.
 
@@ -201,6 +239,3 @@ Robolectric runs the code but draws no pixels and measures no jank. **Install
 See [BUILD_REPORT.md](BUILD_REPORT.md) for the full list, including features
 deferred from this pass (home-screen widgets, ROLEXM Shield, Brave bridge) and
 the verification boundary.
-=======
-# rolexm
->>>>>>> origin/main

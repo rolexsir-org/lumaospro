@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.rolexm.launcher.R
+import com.rolexm.launcher.ui.RolexSpacing
 import com.rolexm.launcher.diagnostics.OptimizationEvent
 import com.rolexm.launcher.diagnostics.Reading
 import com.rolexm.launcher.diagnostics.StartupStats
@@ -64,8 +65,11 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(
+                horizontal = RolexSpacing.screenHorizontal,
+                vertical = RolexSpacing.screenVertical
+            ),
+        verticalArrangement = Arrangement.spacedBy(RolexSpacing.sectionGap)
     ) {
         if (statusMessage != null) {
             StatusCard(statusMessage!!) { viewModel.consumeStatusMessage() }
@@ -74,14 +78,14 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
         ProfileCard(state, viewModel)
         ActionsCard(viewModel, running, results)
         HistoryCard(events)
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(RolexSpacing.screenEnd))
     }
 }
 
 @Composable
 private fun MeasurementsCard(state: IntelligenceState, startupStats: StartupStats?) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_measurements))
 
             when (val memory = state.memory) {
@@ -193,7 +197,7 @@ private fun describeBattery(snapshot: BatterySnapshot): String {
 private fun ProfileCard(state: IntelligenceState, viewModel: SettingsViewModel) {
     val capability = viewModel.capability
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_profile_card))
             MetricRow(
                 label = stringResource(R.string.dash_profile),
@@ -225,7 +229,7 @@ private fun ActionsCard(
     var confirmReset by remember { mutableStateOf(false) }
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_actions_title))
             Text(
                 stringResource(R.string.dash_actions_note),
@@ -290,7 +294,7 @@ private fun ActionsCard(
     if (confirmReset) {
         Dialog(onDismissRequest = { confirmReset = false }) {
             Card {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(RolexSpacing.contentPadding)) {
                     Text(
                         stringResource(R.string.dash_reset_title),
                         style = MaterialTheme.typography.titleMedium
@@ -320,7 +324,7 @@ private fun ActionsCard(
 @Composable
 private fun HistoryCard(events: List<OptimizationEvent>) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_recent_actions))
             if (events.isEmpty()) {
                 Text(

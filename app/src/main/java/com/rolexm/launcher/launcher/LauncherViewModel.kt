@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,7 +51,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      */
     val drawerApps: StateFlow<List<AppEntry>> = combine(_apps, _query) { list, query ->
         AppMatcher.filter(list, query)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _layout = MutableStateFlow(HomeLayout.EMPTY)
     val layout: StateFlow<HomeLayout> = _layout
@@ -78,10 +80,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun refreshApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val list = repository.refresh()
+            val alphabeticalBuckets = AppMatcher.buckets(list)
             _isLoading.value = false
             withContext(Dispatchers.Main) {
                 _apps.value = list
-                _buckets.value = AppMatcher.buckets(list)
+                _buckets.value = alphabeticalBuckets
             }
             seedDefaultDockIfNeeded(list)
             pruneUninstalled(list)

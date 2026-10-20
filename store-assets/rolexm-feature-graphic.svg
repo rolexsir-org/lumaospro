@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <rect width="1024" height="500" fill="#171B17"/>
+  <circle cx="220" cy="250" r="116" fill="none" stroke="#B5C5A9" stroke-width="25"/>
+  <path d="M220 134 A116 116 0 0 1 320 192" fill="none" stroke="#E8EBE4" stroke-width="25" stroke-linecap="round"/>
+  <path d="M220 250 L294 289" fill="none" stroke="#E8EBE4" stroke-width="19" stroke-linecap="round"/>
+  <circle cx="220" cy="250" r="18" fill="#B5C5A9"/>
+  <text x="410" y="238" fill="#E8EBE4" font-family="sans-serif" font-size="62" font-weight="600" letter-spacing="5">ROLEXM</text>
+  <rect x="412" y="278" width="72" height="3" rx="1.5" fill="#B5C5A9"/>
+  <text x="410" y="330" fill="#B2BAAD" font-family="sans-serif" font-size="27" font-weight="400">A quieter home for Android.</text>
+</svg>

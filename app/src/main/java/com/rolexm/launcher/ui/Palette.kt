@@ -57,37 +57,37 @@ data class Palette(
 
 object Palettes {
 
-    private const val ACCENT = 0xFF26A69A.toInt()
-    private const val ACCENT_DARK = 0xFF4DD0E1.toInt()
+    private const val ACCENT = 0xFF526B4F.toInt()
+    private const val ACCENT_DARK = 0xFFB5C5A9.toInt()
 
     val LIGHT = Palette(
         isDark = false,
         background = 0x00000000, // transparent: the wallpaper is the background
-        surface = 0xFFF5F6F7.toInt(),
-        surfaceVariant = 0xFFE6E9EB.toInt(),
-        onSurface = 0xFF10171A.toInt(),
-        onSurfaceVariant = 0xFF546066.toInt(),
-        outline = 0x1F000000,
+        surface = 0xFFF6F5F1.toInt(),
+        surfaceVariant = 0xFFE9E9E2.toInt(),
+        onSurface = 0xFF20251F.toInt(),
+        onSurfaceVariant = 0xFF62695F.toInt(),
+        outline = 0x1F20251F,
         accent = ACCENT,
         onAccent = 0xFFFFFFFF.toInt(),
         scrim = 0x99000000.toInt(),
-        drawerBackground = 0xE6FFFFFF.toInt(),
-        fieldBackground = 0xFFE6E9EB.toInt()
+        drawerBackground = 0xF2F6F5F1.toInt(),
+        fieldBackground = 0xFFE9E9E2.toInt()
     )
 
     val DARK = Palette(
         isDark = true,
         background = 0x00000000,
-        surface = 0xFF121A1E.toInt(),
-        surfaceVariant = 0xFF1E282D.toInt(),
-        onSurface = 0xFFE8EEF0.toInt(),
-        onSurfaceVariant = 0xFF9FAEB4.toInt(),
+        surface = 0xFF171B17.toInt(),
+        surfaceVariant = 0xFF242A23.toInt(),
+        onSurface = 0xFFE8EBE4.toInt(),
+        onSurfaceVariant = 0xFFB2BAAD.toInt(),
         outline = 0x33FFFFFF,
         accent = ACCENT_DARK,
-        onAccent = 0xFF06212A.toInt(),
+        onAccent = 0xFF20271E.toInt(),
         scrim = 0xB3000000.toInt(),
-        drawerBackground = 0xE60E1418.toInt(),
-        fieldBackground = 0xFF1E282D.toInt()
+        drawerBackground = 0xF2171B17.toInt(),
+        fieldBackground = 0xFF242A23.toInt()
     )
 
     fun forMode(mode: ThemeMode, systemIsDark: Boolean): Palette =

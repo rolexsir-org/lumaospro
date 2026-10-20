@@ -3,12 +3,15 @@ package com.rolexm.launcher.settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalDensity
+import com.rolexm.launcher.ui.RolexCorners
 import androidx.compose.ui.unit.Density
 import com.rolexm.launcher.ui.Palette
 import com.rolexm.launcher.ui.Palettes
@@ -35,7 +38,7 @@ fun RolexmTheme(
         darkColorScheme(
             primary = Color(palette.accent),
             onPrimary = Color(palette.onAccent),
-            background = Color(0xFF0E1418),
+            background = Color(0xFF101310),
             surface = Color(palette.surface),
             surfaceVariant = Color(palette.surfaceVariant),
             onSurface = Color(palette.onSurface),
@@ -46,7 +49,7 @@ fun RolexmTheme(
         lightColorScheme(
             primary = Color(palette.accent),
             onPrimary = Color(palette.onAccent),
-            background = Color(0xFFF5F6F7),
+            background = Color(0xFFF0F0EA),
             surface = Color(palette.surface),
             surfaceVariant = Color(palette.surfaceVariant),
             onSurface = Color(palette.onSurface),
@@ -66,6 +69,11 @@ fun RolexmTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography(),
+            shapes = Shapes(
+                small = RoundedCornerShape(RolexCorners.small),
+                medium = RoundedCornerShape(RolexCorners.card),
+                large = RoundedCornerShape(RolexCorners.large)
+            ),
             content = content
         )
     }

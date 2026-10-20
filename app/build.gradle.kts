@@ -9,13 +9,12 @@ plugins {
 // ---------------------------------------------------------------------------
 // Signing.
 // Release signing is driven by an optional, gitignored keystore.properties file:
-//   storeFile=../keystore/rolexm.jks
+//   storeFile=keystore/rolexm-upload.jks
 //   storePassword=...
 //   keyAlias=rolexm
 //   keyPassword=...
-// If the file is absent the build falls back to the standard debug keystore so
-// that a contributor can always produce an installable APK. No secret is ever
-// committed to the repository.
+// Without complete credentials, release outputs remain unsigned. They are not
+// uploadable to Play; never silently sign a production variant with a debug key.
 // ---------------------------------------------------------------------------
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
@@ -23,15 +22,26 @@ val keystoreProps = Properties().apply {
         keystorePropsFile.inputStream().use { load(it) }
     }
 }
+val releaseSigningFields = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+if (keystoreProps.isNotEmpty()) {
+    val missingFields = releaseSigningFields.filter { keystoreProps.getProperty(it).isNullOrBlank() }
+    if (missingFields.isNotEmpty()) {
+        throw GradleException("Incomplete release signing configuration; missing: ${missingFields.joinToString()}.")
+    }
+    val configuredStore = rootProject.file(keystoreProps.getProperty("storeFile"))
+    if (!configuredStore.isFile) {
+        throw GradleException("The configured release keystore file does not exist.")
+    }
+}
 
 android {
     namespace = "com.rolexm.launcher"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.rolexm.launcher"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
@@ -66,10 +76,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (keystoreProps.isNotEmpty()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (keystoreProps.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }

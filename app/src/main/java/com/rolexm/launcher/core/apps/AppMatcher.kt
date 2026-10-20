@@ -29,11 +29,14 @@ object AppMatcher {
     /** Bucket character for apps that do not begin with a letter. */
     const val OTHER_BUCKET = '#'
 
-    private val collator: Collator =
+    // Collator is mutable and not thread-safe. Search filtering runs off the
+    // main thread, so use one configured instance per worker thread.
+    private val collators = ThreadLocal.withInitial {
         Collator.getInstance().apply {
             strength = Collator.TERTIARY
             decomposition = Collator.CANONICAL_DECOMPOSITION
         }
+    }
 
     fun normalize(label: String): String = label.trim().lowercase(Locale.getDefault())
 
@@ -61,7 +64,7 @@ object AppMatcher {
                 else -> ba.compareTo(bb)
             }
             else -> {
-                val byLabel = collator.compare(a.sortLabel, b.sortLabel)
+                val byLabel = collators.get().compare(a.sortLabel, b.sortLabel)
                 if (byLabel != 0) byLabel
                 else {
                     val byPkg = a.key.packageName.compareTo(b.key.packageName)

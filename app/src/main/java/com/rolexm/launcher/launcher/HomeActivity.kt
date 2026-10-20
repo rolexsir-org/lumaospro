@@ -35,6 +35,7 @@ import com.rolexm.launcher.core.RolexApp
 import com.rolexm.launcher.core.apps.AppEntry
 import com.rolexm.launcher.core.model.ComponentKey
 import com.rolexm.launcher.core.prefs.GestureKind
+import com.rolexm.launcher.core.prefs.RolexPrefs
 import com.rolexm.launcher.core.util.RoleHelper
 import com.rolexm.launcher.core.util.RolexLog
 import com.rolexm.launcher.intelligence.Profile
@@ -76,7 +77,12 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
 
     private lateinit var homeRoot: FrameLayout
     private lateinit var desktop: LinearLayout
+    private lateinit var homeHeader: View
     private lateinit var homeGrid: RecyclerView
+    private lateinit var homeEmpty: TextView
+    private lateinit var homeClock: TextView
+    private lateinit var homeDate: TextView
+    private lateinit var dockSurface: FrameLayout
     private lateinit var dockRow: RecyclerView
     private lateinit var drawerContainer: FrameLayout
     private lateinit var drawerSheet: LinearLayout
@@ -85,6 +91,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private lateinit var searchField: EditText
     private lateinit var emptyView: TextView
     private lateinit var alphaIndex: AlphaIndexView
+    private lateinit var drawerTopPad: View
     private lateinit var drawerBottomPad: View
 
     private lateinit var drawerAdapter: AppEntryAdapter
@@ -101,6 +108,8 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private var gestureActions: Map<GestureKind, GestureAction> = emptyMap()
 
     private var gridColumns = 4
+    private var requestedIconSizePx = 48
+    private var homeRows = RolexPrefs.DEFAULT_GRID_ROWS
     private var drawerColumns = 4
     private var drawerOpen = false
     private var startupMeasured = false
@@ -177,7 +186,12 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private fun bindViews() {
         homeRoot = findViewById(R.id.home_root)
         desktop = findViewById(R.id.desktop)
+        homeHeader = findViewById(R.id.home_header)
         homeGrid = findViewById(R.id.home_grid)
+        homeEmpty = findViewById(R.id.home_empty)
+        homeClock = findViewById(R.id.home_clock)
+        homeDate = findViewById(R.id.home_date)
+        dockSurface = findViewById(R.id.dock_surface)
         dockRow = findViewById(R.id.dock_row)
         drawerContainer = findViewById(R.id.drawer_container)
         drawerSheet = findViewById(R.id.drawer_sheet)
@@ -186,11 +200,19 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         searchField = findViewById(R.id.search_field)
         emptyView = findViewById(R.id.empty_view)
         alphaIndex = findViewById(R.id.alpha_index)
+        drawerTopPad = findViewById(R.id.drawer_top_pad)
         drawerBottomPad = findViewById(R.id.drawer_bottom_pad)
 
         homeGrid.layoutManager = GridLayoutManager(this, gridColumns)
+        homeGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            refreshResponsiveIcons()
+            updateHomeCellSizing(homeRows)
+        }
         dockRow.layoutManager = GridLayoutManager(this, gridColumns)
         drawerGrid.layoutManager = GridLayoutManager(this, drawerColumns)
+        drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            refreshResponsiveIcons()
+        }
     }
 
     private fun setupAdapters() {
@@ -217,7 +239,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         homeGrid.adapter = homeAdapter
 
         dockAdapter = HomeItemAdapter(
-            config = { homeCellConfig },
+            config = { homeCellConfig.copy(cellHeightPx = null) },
             iconLoader = iconLoader,
             density = density,
             onClick = { item, _ -> onHomeItemClick(item) },
@@ -235,12 +257,15 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
      */
     private fun setupInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(homeRoot) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            desktop.setPadding(
-                desktop.paddingLeft, bars.top + dp(8),
-                desktop.paddingRight, bars.bottom + dp(8)
+            val safeInsets = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
-            drawerBottomPad.layoutParams.height = bars.bottom
+            desktop.setPadding(
+                safeInsets.left, safeInsets.top + dp(8),
+                safeInsets.right, safeInsets.bottom + dp(8)
+            )
+            drawerTopPad.layoutParams = drawerTopPad.layoutParams.apply { height = safeInsets.top }
+            drawerBottomPad.layoutParams = drawerBottomPad.layoutParams.apply { height = safeInsets.bottom }
             insets
         }
         ViewCompat.requestApplyInsets(homeRoot)
@@ -251,7 +276,11 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
-                viewModel.setQuery(s?.toString().orEmpty())
+                val query = s?.toString().orEmpty()
+                viewModel.setQuery(query)
+                // The A–Z offsets refer to the unfiltered list; hide the strip
+                // while filtered results use a different set of positions.
+                alphaIndex.visibility = if (query.isBlank()) View.VISIBLE else View.GONE
             }
         })
         searchField.setOnEditorActionListener { _, _, _ ->
@@ -318,6 +347,16 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         })
 
         drawerScrim.setOnClickListener { closeDrawer() }
+        findViewById<View>(R.id.drawer_close).setOnClickListener { closeDrawer() }
+        findViewById<View>(R.id.home_search).setOnClickListener {
+            openDrawer()
+            searchField.requestFocus()
+            showKeyboard()
+        }
+        findViewById<View>(R.id.home_settings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        homeEmpty.setOnClickListener { openDrawer() }
 
         alphaIndex.onLetterTouched = { letter ->
             val index = viewModel.buckets.value.firstOrNull { it.first == letter }?.second
@@ -345,6 +384,13 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     /** True when the point is over an actual grid cell rather than empty space. */
     private fun isOverItem(x: Float, y: Float): Boolean {
         val location = IntArray(2)
+        for (control in arrayOf(homeHeader, homeEmpty)) {
+            if (control.visibility != View.VISIBLE) continue
+            control.getLocationOnScreen(location)
+            if (x >= location[0] && y >= location[1] &&
+                x <= location[0] + control.width && y <= location[1] + control.height
+            ) return true
+        }
         for (recycler in arrayOf(homeGrid, dockRow)) {
             recycler.getLocationOnScreen(location)
             val localX = x - location[0]
@@ -413,7 +459,9 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
 
                 launch {
                     viewModel.layout.collect { layout ->
-                        homeAdapter.submitList(layout.page(0))
+                        val homeItems = layout.page(0)
+                        homeAdapter.submitList(homeItems)
+                        homeEmpty.visibility = if (homeItems.isEmpty()) View.VISIBLE else View.GONE
                         updateDock(layout.dock)
                     }
                 }
@@ -426,15 +474,15 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
 
                 // Appearance: recompute only when an input actually changes.
                 launch {
-                    // Six inputs exceed the arity of the typed combine()
-                    // overloads, so the Iterable form is used with explicit
-                    // casts rather than splitting into nested combines.
+                    // Seven inputs exceed the arity of the typed combine()
+                    // overloads, so the Iterable form is used with explicit casts.
                     val appearanceFlows: List<Flow<Any>> = listOf(
                         viewModel.prefs.themeMode,
                         viewModel.prefs.iconSizeDp,
                         viewModel.prefs.showLabels,
                         viewModel.prefs.textScale,
                         viewModel.prefs.gridColumns,
+                        viewModel.prefs.gridRows,
                         viewModel.prefs.drawerColumns
                     )
                     combine(appearanceFlows) { values ->
@@ -445,7 +493,8 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
                             showLabels = values[2] as Boolean,
                             textScale = values[3] as Float,
                             gridColumns = values[4] as Int,
-                            drawerColumns = values[5] as Int
+                            gridRows = values[5] as Int,
+                            drawerColumns = values[6] as Int
                         )
                     }.distinctUntilChanged().collect { appearance ->
                         applyAppearance(appearance)
@@ -469,6 +518,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         val showLabels: Boolean,
         val textScale: Float,
         val gridColumns: Int,
+        val gridRows: Int,
         val drawerColumns: Int
     )
 
@@ -479,23 +529,35 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         palette = Palettes.forMode(appearance.themeMode, systemNight)
 
         val iconPx = dp(appearance.iconSizeDp)
+        requestedIconSizePx = iconPx
 
-        // Home and dock sit on the wallpaper: white labels with a shadow.
+        // Keep wallpaper labels legible in either chosen theme; the soft
+        // opposite-colour shadow adds contrast without placing plates behind icons.
+        val homeForeground = if (palette.isDark) Color.WHITE else Color.rgb(26, 31, 29)
+        val homeShadow = if (palette.isDark) 0x99000000.toInt() else 0x66FFFFFF
         homeCellConfig = CellConfig(
-            iconSizePx = iconPx,
+            iconSizePx = iconSizeForGrid(iconPx, homeGrid, appearance.gridColumns, 0),
             showLabels = appearance.showLabels,
             textScale = appearance.textScale,
-            labelColor = Color.WHITE,
-            labelShadow = true
+            labelColor = homeForeground,
+            labelShadow = true,
+            labelShadowColor = homeShadow
         )
         // The drawer is opaque: themed text, no shadow.
         drawerCellConfig = CellConfig(
-            iconSizePx = iconPx,
+            iconSizePx = iconSizeForGrid(
+                iconPx,
+                drawerGrid,
+                appearance.drawerColumns,
+                drawerGrid.paddingLeft + drawerGrid.paddingRight
+            ),
             showLabels = appearance.showLabels,
             textScale = appearance.textScale,
             labelColor = palette.onSurface,
             labelShadow = false
         )
+        homeRows = appearance.gridRows
+        updateHomeCellSizing(homeRows)
 
         if (appearance.gridColumns != gridColumns) {
             gridColumns = appearance.gridColumns
@@ -513,6 +575,27 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         searchField.setTextColor(palette.onSurface)
         searchField.setHintTextColor(palette.onSurfaceVariant)
         emptyView.setTextColor(palette.onSurfaceVariant)
+        alphaIndex.setAccentColor(palette.accent)
+        findViewById<TextView>(R.id.drawer_title).setTextColor(palette.onSurface)
+
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !palette.isDark
+            isAppearanceLightNavigationBars = !palette.isDark
+        }
+        homeClock.setTextColor(homeForeground)
+        homeDate.setTextColor(if (palette.isDark) 0xF2FFFFFF.toInt() else 0xF21A1F1D.toInt())
+        homeEmpty.setTextColor(if (palette.isDark) 0xE6FFFFFF.toInt() else 0xE61A1F1D.toInt())
+        findViewById<android.widget.ImageButton>(R.id.home_search).imageTintList =
+            android.content.res.ColorStateList.valueOf(homeForeground)
+        findViewById<android.widget.ImageButton>(R.id.home_settings).imageTintList =
+            android.content.res.ColorStateList.valueOf(homeForeground)
+        findViewById<android.widget.ImageButton>(R.id.drawer_close).imageTintList =
+            android.content.res.ColorStateList.valueOf(palette.onSurface)
+        dockSurface.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(32).toFloat()
+            setColor(if (palette.isDark) 0x660B0F0D else 0x99FFFFFF.toInt())
+        }
 
         // A full rebind is correct here: icon size, label visibility, text
         // scale and colours change every visible row at once, so there is no
@@ -523,9 +606,70 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         drawerAdapter.notifyDataSetChanged()
     }
 
+    /**
+     * Keeps the requested icon size when it fits, and scales down at narrow
+     * widths so high column counts do not clip icons inside their cells.
+     */
+    private fun iconSizeForGrid(
+        preferredPx: Int,
+        grid: RecyclerView,
+        columns: Int,
+        horizontalInsetsPx: Int
+    ): Int {
+        return responsiveIconSizePx(
+            preferredPx = preferredPx,
+            gridWidthPx = grid.width,
+            horizontalInsetsPx = horizontalInsetsPx,
+            columns = columns,
+            cellGutterPx = dp(8),
+            minimumPx = dp(24)
+        )
+    }
+
+    private fun refreshResponsiveIcons() {
+        if (!::homeAdapter.isInitialized) return
+        val homeSize = iconSizeForGrid(requestedIconSizePx, homeGrid, gridColumns, 0)
+        if (homeCellConfig.iconSizePx != homeSize) {
+            homeCellConfig = homeCellConfig.copy(iconSizePx = homeSize)
+            homeAdapter.notifyDataSetChanged()
+            dockAdapter.notifyDataSetChanged()
+        }
+        val drawerSize = iconSizeForGrid(
+            requestedIconSizePx,
+            drawerGrid,
+            drawerColumns,
+            drawerGrid.paddingLeft + drawerGrid.paddingRight
+        )
+        if (drawerCellConfig.iconSizePx != drawerSize) {
+            drawerCellConfig = drawerCellConfig.copy(iconSizePx = drawerSize)
+            drawerAdapter.notifyDataSetChanged()
+        }
+    }
+
+    /**
+     * The home-row preference controls how many rows fit in the visible grid;
+     * rows beyond that remain available by scrolling. A minimum based on the
+     * current icon and scaled label size avoids clipping on compact screens.
+     */
+    private fun updateHomeCellSizing(rows: Int) {
+        if (homeGrid.height <= 0) return
+        val labelHeight = android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_SP,
+            AppEntryAdapter.BASE_LABEL_SP * homeCellConfig.textScale * 2f,
+            resources.displayMetrics
+        ).toInt()
+        val minimumHeight = homeCellConfig.iconSizePx + dp(25) + labelHeight
+        val targetHeight = homeCellHeightPx(homeGrid.height, rows, minimumHeight)
+        if (homeCellConfig.cellHeightPx != targetHeight) {
+            homeCellConfig = homeCellConfig.copy(cellHeightPx = targetHeight)
+            homeAdapter.notifyDataSetChanged()
+        }
+    }
+
     private fun updateDock(items: List<HomeItem>) {
         val span = items.size.coerceIn(1, gridColumns)
         (dockRow.layoutManager as GridLayoutManager).spanCount = span
+        dockSurface.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
         dockAdapter.submitList(items)
     }
 
@@ -560,7 +704,11 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         drawerOpen = true
         drawerContainer.visibility = View.VISIBLE
         drawerContainer.alpha = 1f
-        animateDrawerSheet(show = true)
+        // The sheet has no measured height while its overlay is GONE; wait for
+        // the first layout so the entry transition starts at the real height.
+        drawerSheet.post {
+            if (drawerOpen) animateDrawerSheet(show = true)
+        }
     }
 
     private fun closeDrawer() {

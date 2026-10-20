@@ -4,6 +4,7 @@ import com.rolexm.launcher.core.model.ComponentKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.Executors
 
 class AppMatcherTest {
 
@@ -89,6 +90,26 @@ class AppMatcherTest {
     @Test
     fun `an unmatched query yields nothing`() {
         assertTrue(AppMatcher.filter(AppMatcher.sort(apps), "zzzzz").isEmpty())
+    }
+
+    @Test
+    fun `search sorting is deterministic across worker threads`() {
+        val sorted = AppMatcher.sort(apps)
+        val expected = AppMatcher.filter(sorted, "o").map { it.label }
+        val workers = Executors.newFixedThreadPool(4)
+        try {
+            val tasks = (0 until 8).map {
+                workers.submit<List<String>> {
+                    repeat(20) {
+                        assertEquals(expected, AppMatcher.filter(sorted, "o").map { it.label })
+                    }
+                    expected
+                }
+            }
+            tasks.forEach { assertEquals(expected, it.get()) }
+        } finally {
+            workers.shutdownNow()
+        }
     }
 
     @Test
