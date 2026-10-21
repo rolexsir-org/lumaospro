@@ -4,6 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rolexm.launcher.core.RolexApp
+import com.rolexm.launcher.core.apps.AppEntry
+import com.rolexm.launcher.core.model.ComponentKey
+import com.rolexm.launcher.context.ContextProfile
+import com.rolexm.launcher.context.ProfileSchedule
 import com.rolexm.launcher.core.util.RoleHelper
 import com.rolexm.launcher.diagnostics.OptimizationEvent
 import com.rolexm.launcher.diagnostics.StartupStats
@@ -16,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Whether ROLEXM currently owns the Home screen, and what it was replaced by. */
 data class RoleState(
@@ -62,9 +68,44 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
+    val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
+    private val _appsLoading = MutableStateFlow(true)
+    val appsLoading: StateFlow<Boolean> = _appsLoading.asStateFlow()
+
+    private val _historyLoading = MutableStateFlow(true)
+    val historyLoading: StateFlow<Boolean> = _historyLoading.asStateFlow()
+
+    private val _hasDndAccess = MutableStateFlow(false)
+    val hasDndAccess: StateFlow<Boolean> = _hasDndAccess.asStateFlow()
+
     init {
+        refreshApps()
         refreshRoleStatus()
         refreshHistory()
+    }
+
+    fun refreshApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _appsLoading.value = true
+            try {
+                _apps.value = core.appRepository.refresh()
+            } finally {
+                _appsLoading.value = false
+            }
+        }
+    }
+
+    fun setAppHidden(profile: ContextProfile, key: ComponentKey, hidden: Boolean) {
+        viewModelScope.launch { prefs.setAppHidden(profile, key, hidden) }
+    }
+
+    fun setSchedule(profile: ContextProfile, schedule: ProfileSchedule) {
+        viewModelScope.launch { prefs.setProfileSchedule(profile, schedule) }
+    }
+
+    fun selectContextProfile(profile: ContextProfile) {
+        viewModelScope.launch { prefs.setActiveContextProfile(profile) }
     }
 
     /**
@@ -85,9 +126,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshHistory() {
-        viewModelScope.launch {
-            _events.value = core.diagnostics.recentEvents(limit = 30)
-            _startupStats.value = StartupStats.from(core.diagnostics.startupHistory(limit = 20))
+        viewModelScope.launch(Dispatchers.IO) {
+            _historyLoading.value = true
+            try {
+                _events.value = core.diagnostics.recentEvents(limit = 30)
+                _startupStats.value = StartupStats.from(core.diagnostics.startupHistory(limit = 20))
+            } finally {
+                _historyLoading.value = false
+            }
         }
     }
 
@@ -118,5 +164,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun consumeStatusMessage() {
         _statusMessage.value = null
+    }
+
+    fun refreshContextDnd() {
+        _hasDndAccess.value = getApplication<Application>()
+            .getSystemService(android.app.NotificationManager::class.java)
+            ?.isNotificationPolicyAccessGranted == true
+        core.refreshContextDnd()
     }
 }

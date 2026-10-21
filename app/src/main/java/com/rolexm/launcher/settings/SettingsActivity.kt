@@ -1,6 +1,9 @@
 package com.rolexm.launcher.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.rolexm.launcher.R
 import com.rolexm.launcher.core.util.RoleHelper
 import com.rolexm.launcher.ui.Palettes
@@ -58,6 +63,12 @@ class SettingsActivity : ComponentActivity() {
         viewModel.refreshRoleStatus()
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(granted) }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,7 +76,7 @@ class SettingsActivity : ComponentActivity() {
         window.statusBarColor = Color.TRANSPARENT
 
         setContent {
-            val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
+            val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.LIGHT)
             val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
 
             RolexmTheme(themeMode = themeMode, textScale = textScale) {
@@ -121,7 +132,8 @@ class SettingsActivity : ComponentActivity() {
                                     onRequestHomeRole = ::requestHomeRole,
                                     onOpenHomeSettings = {
                                         RoleHelper.openHomeSettings(this@SettingsActivity)
-                                    }
+                                    },
+                                    onRequestNotifications = ::requestContextNotifications
                                 )
                                 else -> DashboardRoot(viewModel = viewModel)
                             }
@@ -138,6 +150,20 @@ class SettingsActivity : ComponentActivity() {
         // role is re-resolved every time this screen appears.
         viewModel.refreshRoleStatus()
         viewModel.refreshHistory()
+        viewModel.refreshContextDnd()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(false) }
+        }
+    }
+
+    private fun requestContextNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(true) }
+        }
     }
 
     private fun requestHomeRole() {

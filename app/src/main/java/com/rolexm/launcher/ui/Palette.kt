@@ -57,37 +57,37 @@ data class Palette(
 
 object Palettes {
 
-    private const val ACCENT = 0xFF526B4F.toInt()
-    private const val ACCENT_DARK = 0xFFB5C5A9.toInt()
+    private const val ACCENT = 0xFF0066CC.toInt()
+    private const val ACCENT_DARK = 0xFF64D2FF.toInt()
 
     val LIGHT = Palette(
         isDark = false,
-        background = 0x00000000, // transparent: the wallpaper is the background
-        surface = 0xFFF6F5F1.toInt(),
-        surfaceVariant = 0xFFE9E9E2.toInt(),
-        onSurface = 0xFF20251F.toInt(),
-        onSurfaceVariant = 0xFF62695F.toInt(),
-        outline = 0x1F20251F,
+        background = 0xFFFFFFFF.toInt(),
+        surface = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFF5F5F7.toInt(),
+        onSurface = 0xFF1C1C1E.toInt(),
+        onSurfaceVariant = 0xFF6E6E73.toInt(),
+        outline = 0xFFE5E5EA.toInt(),
         accent = ACCENT,
         onAccent = 0xFFFFFFFF.toInt(),
-        scrim = 0x99000000.toInt(),
-        drawerBackground = 0xF2F6F5F1.toInt(),
-        fieldBackground = 0xFFE9E9E2.toInt()
+        scrim = 0x52000000.toInt(),
+        drawerBackground = 0xFFFFFFFF.toInt(),
+        fieldBackground = 0xFFF2F2F7.toInt()
     )
 
     val DARK = Palette(
         isDark = true,
         background = 0x00000000,
-        surface = 0xFF171B17.toInt(),
-        surfaceVariant = 0xFF242A23.toInt(),
-        onSurface = 0xFFE8EBE4.toInt(),
-        onSurfaceVariant = 0xFFB2BAAD.toInt(),
-        outline = 0x33FFFFFF,
+        surface = 0xFF1C1C1E.toInt(),
+        surfaceVariant = 0xFF2C2C2E.toInt(),
+        onSurface = 0xFFF5F5F7.toInt(),
+        onSurfaceVariant = 0xFFAEAEB2.toInt(),
+        outline = 0xFF3A3A3C.toInt(),
         accent = ACCENT_DARK,
-        onAccent = 0xFF20271E.toInt(),
-        scrim = 0xB3000000.toInt(),
-        drawerBackground = 0xF2171B17.toInt(),
-        fieldBackground = 0xFF242A23.toInt()
+        onAccent = 0xFF001018.toInt(),
+        scrim = 0x99000000.toInt(),
+        drawerBackground = 0xFF1C1C1E.toInt(),
+        fieldBackground = 0xFF2C2C2E.toInt()
     )
 
     fun forMode(mode: ThemeMode, systemIsDark: Boolean): Palette =

@@ -1,7 +1,9 @@
 package com.rolexm.launcher.launcher
 
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.content.pm.LauncherApps
+import android.speech.RecognizerIntent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -20,8 +22,10 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -33,11 +37,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.rolexm.launcher.R
 import com.rolexm.launcher.core.RolexApp
 import com.rolexm.launcher.core.apps.AppEntry
+import com.rolexm.launcher.core.apps.AppMatcher
 import com.rolexm.launcher.core.model.ComponentKey
 import com.rolexm.launcher.core.prefs.GestureKind
 import com.rolexm.launcher.core.prefs.RolexPrefs
 import com.rolexm.launcher.core.util.RoleHelper
 import com.rolexm.launcher.core.util.RolexLog
+import com.rolexm.launcher.context.ContextProfile
+import com.rolexm.launcher.context.VoiceCommand
+import com.rolexm.launcher.context.VoiceCommandParser
 import com.rolexm.launcher.intelligence.Profile
 import com.rolexm.launcher.intelligence.Profiles
 import com.rolexm.launcher.launcher.model.GestureAction
@@ -73,6 +81,15 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private val core by lazy { (application as RolexApp).core }
     private val viewModel by lazy { ViewModelProvider(this)[LauncherViewModel::class.java] }
 
+    private val voiceCommandLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val transcript = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (transcript != null) handleVoiceCommand(transcript)
+        }
+    }
+
     private lateinit var iconLoader: IconLoader
 
     private lateinit var homeRoot: FrameLayout
@@ -82,6 +99,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private lateinit var homeEmpty: TextView
     private lateinit var homeClock: TextView
     private lateinit var homeDate: TextView
+    private lateinit var homeContext: TextView
     private lateinit var dockSurface: FrameLayout
     private lateinit var dockRow: RecyclerView
     private lateinit var drawerContainer: FrameLayout
@@ -101,7 +119,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
     private lateinit var homeGestureDetector: GestureDetector
     private lateinit var drawerGestureDetector: GestureDetector
 
-    private var palette: Palette = Palettes.DARK
+    private var palette: Palette = Palettes.LIGHT
     private var profile: Profile = Profiles.BALANCED
     private var homeCellConfig = DEFAULT_HOME_CELL
     private var drawerCellConfig = DEFAULT_DRAWER_CELL
@@ -191,6 +209,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         homeEmpty = findViewById(R.id.home_empty)
         homeClock = findViewById(R.id.home_clock)
         homeDate = findViewById(R.id.home_date)
+        homeContext = findViewById(R.id.home_context)
         dockSurface = findViewById(R.id.dock_surface)
         dockRow = findViewById(R.id.dock_row)
         drawerContainer = findViewById(R.id.drawer_container)
@@ -348,6 +367,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
 
         drawerScrim.setOnClickListener { closeDrawer() }
         findViewById<View>(R.id.drawer_close).setOnClickListener { closeDrawer() }
+        findViewById<View>(R.id.drawer_voice).setOnClickListener { launchVoiceCommand() }
         findViewById<View>(R.id.home_search).setOnClickListener {
             openDrawer()
             searchField.requestFocus()
@@ -422,6 +442,18 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
 
     // ------------------------------------------------------------ observation
 
+    private fun updateDrawerEmptyState() {
+        val apps = viewModel.drawerApps.value
+        val query = viewModel.query.value
+        val loading = viewModel.isLoading.value
+        emptyView.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
+        emptyView.text = when {
+            loading -> getString(R.string.drawer_loading_apps)
+            query.isNotBlank() -> getString(R.string.empty_no_results, query)
+            else -> getString(R.string.empty_no_apps)
+        }
+    }
+
     private fun observeState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -441,19 +473,33 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
                 launch {
                     viewModel.drawerApps.collect { list ->
                         drawerAdapter.submitList(list)
-                        val query = viewModel.query.value
-                        emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
-                        emptyView.text = if (query.isBlank()) {
-                            getString(R.string.empty_no_apps)
-                        } else {
-                            getString(R.string.empty_no_results, query)
-                        }
+                        updateDrawerEmptyState()
                     }
+                }
+
+                launch {
+                    viewModel.isLoading.collect { updateDrawerEmptyState() }
                 }
 
                 launch {
                     viewModel.buckets.collect { buckets ->
                         alphaIndex.letters = buckets.map { it.first }
+                    }
+                }
+
+                launch {
+                    var previous: ContextProfile? = null
+                    viewModel.activeContextProfile.collect { contextProfile ->
+                        homeContext.text = contextProfile.title.uppercase()
+                        if (previous != null && previous != contextProfile && profile.transitionsEnabled) {
+                            desktop.animate().cancel()
+                            desktop.alpha = 0.86f
+                            desktop.animate().alpha(1f)
+                                .setDuration((220L * profile.animationScale).toLong().coerceAtLeast(1L))
+                                .setInterpolator(DecelerateInterpolator())
+                                .start()
+                        }
+                        previous = contextProfile
                     }
                 }
 
@@ -584,6 +630,7 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
         }
         homeClock.setTextColor(homeForeground)
         homeDate.setTextColor(if (palette.isDark) 0xF2FFFFFF.toInt() else 0xF21A1F1D.toInt())
+        homeContext.setTextColor(if (palette.isDark) 0xCCFFFFFF.toInt() else 0xCC1A1F1D.toInt())
         homeEmpty.setTextColor(if (palette.isDark) 0xE6FFFFFF.toInt() else 0xE61A1F1D.toInt())
         findViewById<android.widget.ImageButton>(R.id.home_search).imageTintList =
             android.content.res.ColorStateList.valueOf(homeForeground)
@@ -591,10 +638,12 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
             android.content.res.ColorStateList.valueOf(homeForeground)
         findViewById<android.widget.ImageButton>(R.id.drawer_close).imageTintList =
             android.content.res.ColorStateList.valueOf(palette.onSurface)
+        findViewById<android.widget.ImageButton>(R.id.drawer_voice).imageTintList =
+            android.content.res.ColorStateList.valueOf(palette.onSurface)
         dockSurface.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(32).toFloat()
-            setColor(if (palette.isDark) 0x660B0F0D else 0x99FFFFFF.toInt())
+            cornerRadius = dp(18).toFloat()
+            setColor(if (palette.isDark) 0xCC0B0F0D.toInt() else 0xE6FFFFFF.toInt())
         }
 
         // A full rebind is correct here: icon size, label visibility, text
@@ -774,6 +823,42 @@ class HomeActivity : ComponentActivity(), DrawerItemActions, HomeItemActions {
             // The app vanished between the list update and the tap.
             toast(getString(R.string.toast_app_unavailable))
             viewModel.refreshApps()
+        }
+    }
+
+    /** Speech is delegated to Android's selected recognition service; ROLEXM records nothing. */
+    private fun launchVoiceCommand() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.voice_command_prompt))
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+        try {
+            voiceCommandLauncher.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            toast(getString(R.string.voice_command_unavailable))
+        } catch (_: SecurityException) {
+            toast(getString(R.string.voice_command_unavailable))
+        }
+    }
+
+    private fun handleVoiceCommand(transcript: String) {
+        when (val command = VoiceCommandParser.parse(transcript)) {
+            is VoiceCommand.SwitchProfile -> lifecycleScope.launch {
+                viewModel.prefs.setActiveContextProfile(command.profile)
+                closeDrawer()
+            }
+            is VoiceCommand.OpenApp -> {
+                val matches = AppMatcher.filter(viewModel.drawerApps.value, command.query)
+                val entry = matches.firstOrNull { it.label.equals(command.query, ignoreCase = true) }
+                    ?: matches.firstOrNull()
+                if (entry == null) toast(getString(R.string.voice_command_app_not_found))
+                else {
+                    launch(entry.key)
+                    closeDrawer()
+                }
+            }
+            VoiceCommand.Unrecognized -> toast(getString(R.string.voice_command_unrecognized))
         }
     }
 

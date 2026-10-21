@@ -12,6 +12,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.rolexm.launcher.core.util.RolexLog
+import com.rolexm.launcher.context.ContextProfile
+import com.rolexm.launcher.context.ProfileSchedule
+import com.rolexm.launcher.core.model.ComponentKey
 import com.rolexm.launcher.intelligence.ProfileId
 import com.rolexm.launcher.launcher.model.GestureAction
 import com.rolexm.launcher.ui.ThemeMode
@@ -49,6 +52,12 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
         val PROFILE_OVERRIDE = stringPreferencesKey("profile_override")
         val AUTO_OPTIMIZE = booleanPreferencesKey("auto_optimize")
         val HOME_LAYOUT = stringPreferencesKey("home_layout")
+        val ACTIVE_CONTEXT_PROFILE = stringPreferencesKey("active_context_profile")
+        val CONTEXT_NOTIFICATIONS_ENABLED = booleanPreferencesKey("context_notifications_enabled")
+        val CONTEXT_NOTIFICATION_PROFILES = stringPreferencesKey("context_notification_profiles")
+        val CONTEXT_DND_PROFILES = stringPreferencesKey("context_dnd_profiles")
+        val DND_MANAGED = booleanPreferencesKey("context_dnd_managed")
+        val DND_RESTORE_FILTER = intPreferencesKey("context_dnd_restore_filter")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val WIDGETS_ENABLED = booleanPreferencesKey("widgets_enabled")
         val LAYOUT_SEEDED = booleanPreferencesKey("layout_seeded")
@@ -57,7 +66,7 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
 
     // --- Appearance -------------------------------------------------------
 
-    val themeMode: Flow<ThemeMode> = read(Keys.THEME_MODE) { ThemeMode.SYSTEM.storageKey }
+    val themeMode: Flow<ThemeMode> = read(Keys.THEME_MODE) { ThemeMode.LIGHT.storageKey }
         .map { ThemeMode.fromStorageKey(it) }
 
     suspend fun setThemeMode(mode: ThemeMode) = write(Keys.THEME_MODE, mode.storageKey)
@@ -104,6 +113,78 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
 
     val homeLayoutRaw: Flow<String?> = readNullable(Keys.HOME_LAYOUT)
     suspend fun setHomeLayoutRaw(value: String) = write(Keys.HOME_LAYOUT, value)
+
+    /** Existing layout remains the fallback for profiles not customized yet. */
+    fun homeLayoutRaw(profile: ContextProfile): Flow<String?> = readNullable(profileLayoutKey(profile))
+        .map { saved -> saved ?: homeLayoutRaw.first() }
+
+    suspend fun setHomeLayoutRaw(profile: ContextProfile, value: String) =
+        write(profileLayoutKey(profile), value)
+
+    val activeContextProfile: Flow<ContextProfile> =
+        read(Keys.ACTIVE_CONTEXT_PROFILE) { ContextProfile.PERSONAL.name }
+            .map { ContextProfile.parse(it) ?: ContextProfile.PERSONAL }
+
+    suspend fun setActiveContextProfile(profile: ContextProfile) =
+        write(Keys.ACTIVE_CONTEXT_PROFILE, profile.name)
+
+    /** Notifications here mean ROLEXM's opt-in context-change alerts, not control of other apps. */
+    val contextNotificationsEnabled: Flow<Boolean> = read(Keys.CONTEXT_NOTIFICATIONS_ENABLED) { false }
+    suspend fun setContextNotificationsEnabled(enabled: Boolean) = write(Keys.CONTEXT_NOTIFICATIONS_ENABLED, enabled)
+
+    val contextNotificationProfiles: Flow<Set<ContextProfile>> = profileSet(Keys.CONTEXT_NOTIFICATION_PROFILES)
+    suspend fun setContextNotificationEnabled(profile: ContextProfile, enabled: Boolean) =
+        editProfileSet(Keys.CONTEXT_NOTIFICATION_PROFILES, profile, enabled)
+
+    val contextDndProfiles: Flow<Set<ContextProfile>> = profileSet(Keys.CONTEXT_DND_PROFILES)
+    suspend fun setContextDndEnabled(profile: ContextProfile, enabled: Boolean) =
+        editProfileSet(Keys.CONTEXT_DND_PROFILES, profile, enabled)
+
+    val contextDndManaged: Flow<Boolean> = read(Keys.DND_MANAGED) { false }
+    suspend fun setContextDndManaged(value: Boolean) = write(Keys.DND_MANAGED, value)
+    val contextDndRestoreFilter: Flow<Int> = read(Keys.DND_RESTORE_FILTER) { android.app.NotificationManager.INTERRUPTION_FILTER_ALL }
+    suspend fun setContextDndRestoreFilter(value: Int) = write(Keys.DND_RESTORE_FILTER, value)
+
+    private fun profileSet(key: Preferences.Key<String>): Flow<Set<ContextProfile>> =
+        read(key) { "" }.map { raw -> raw.split(',').mapNotNull { ContextProfile.parse(it) }.toSet() }
+
+    private suspend fun editProfileSet(key: Preferences.Key<String>, profile: ContextProfile, enabled: Boolean) {
+        dataStore.edit { values ->
+            val profiles = values[key].orEmpty().split(',').mapNotNull { ContextProfile.parse(it) }.toMutableSet()
+            if (enabled) profiles.add(profile) else profiles.remove(profile)
+            values[key] = profiles.map { it.name }.sorted().joinToString(",")
+        }
+    }
+
+    fun profileSchedule(profile: ContextProfile): Flow<ProfileSchedule> =
+        readNullable(scheduleKey(profile)).map { ProfileSchedule.decode(it, ProfileSchedule.defaults(profile)) }
+
+    val profileSchedules: Flow<Map<ContextProfile, ProfileSchedule>> = kotlinx.coroutines.flow.combine(
+        ContextProfile.entries.map { profileSchedule(it) }
+    ) { schedules ->
+        ContextProfile.entries.mapIndexed { index, profile -> profile to schedules[index] }.toMap()
+    }
+
+    suspend fun setProfileSchedule(profile: ContextProfile, schedule: ProfileSchedule) =
+        write(scheduleKey(profile), ProfileSchedule.encode(schedule))
+
+    fun hiddenApps(profile: ContextProfile): Flow<Set<ComponentKey>> =
+        read(hiddenAppsKey(profile)) { "" }.map { raw ->
+            raw.split('|').mapNotNullTo(linkedSetOf()) { ComponentKey.parse(it) }
+        }
+
+    suspend fun setAppHidden(profile: ContextProfile, key: ComponentKey, hidden: Boolean) {
+        dataStore.edit { prefs ->
+            val prefKey = hiddenAppsKey(profile)
+            val current = prefs[prefKey].orEmpty().split('|').mapNotNullTo(linkedSetOf()) { ComponentKey.parse(it) }
+            if (hidden) current.add(key) else current.remove(key)
+            prefs[prefKey] = current.joinToString("|") { it.serialize() }
+        }
+    }
+
+    private fun profileLayoutKey(profile: ContextProfile) = stringPreferencesKey("home_layout_${profile.name.lowercase()}")
+    private fun scheduleKey(profile: ContextProfile) = stringPreferencesKey("schedule_${profile.name.lowercase()}")
+    private fun hiddenAppsKey(profile: ContextProfile) = stringPreferencesKey("hidden_apps_${profile.name.lowercase()}")
 
     val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { false }
     suspend fun setWidgetsEnabled(value: Boolean) = write(Keys.WIDGETS_ENABLED, value)

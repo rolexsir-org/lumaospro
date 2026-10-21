@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Runtime palette counterpart used as the initial A-Z index tint. -->
-    <color name="rolexm_accent">#526B4F</color>
+    <color name="rolexm_accent">#0066CC</color>
     <color name="rolexm_scrim">#66000000</color>
 </resources>

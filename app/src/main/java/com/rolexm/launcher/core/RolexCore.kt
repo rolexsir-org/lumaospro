@@ -6,6 +6,9 @@ import com.rolexm.launcher.core.apps.AppRepository
 import com.rolexm.launcher.core.apps.IconCache
 import com.rolexm.launcher.core.prefs.RolexPrefs
 import com.rolexm.launcher.core.util.RolexLog
+import com.rolexm.launcher.context.ContextScheduleManager
+import com.rolexm.launcher.context.ContextAutomation
+import com.rolexm.launcher.context.ContextProfile
 import com.rolexm.launcher.diagnostics.DiagnosticsRepository
 import com.rolexm.launcher.diagnostics.DiagnosticsStore
 import com.rolexm.launcher.intelligence.DeviceCapability
@@ -18,6 +21,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -63,6 +68,32 @@ class RolexCore(private val application: Application) {
 
         intelligence.attach()
 
+        // One-shot wall-clock alarms drive context changes; there is no periodic poll.
+        coreScope.launch {
+            prefs.profileSchedules.distinctUntilChanged().collect {
+                runCatching { ContextScheduleManager.refresh(application, prefs) }
+                    .onFailure { RolexLog.e("Could not refresh context schedule", it) }
+            }
+        }
+
+        coreScope.launch {
+            var previous: ContextProfile? = null
+            prefs.activeContextProfile.collect { active ->
+                if (previous != null && previous != active) {
+                    ContextAutomation.notifyProfileActivated(application, prefs, active)
+                }
+                previous = active
+            }
+        }
+
+        coreScope.launch {
+            combine(prefs.activeContextProfile, prefs.contextDndProfiles) { active, dndProfiles ->
+                active to dndProfiles
+            }.distinctUntilChanged().collect { (active, _) ->
+                ContextAutomation.applyDoNotDisturb(application, prefs, active)
+            }
+        }
+
         // Keep the icon cache ceiling in step with whichever profile is active.
         // The engine resizes on profile change; this catches the case where the
         // engine has not yet attached when a profile is resolved.
@@ -70,6 +101,13 @@ class RolexCore(private val application: Application) {
             intelligence.state
                 .distinctUntilChanged { a, b -> a.profile.id == b.profile.id }
                 .collect { applyProfile(it.profile) }
+        }
+    }
+
+    /** Re-checks notification-policy access when returning from Android Settings. */
+    fun refreshContextDnd() {
+        coreScope.launch {
+            ContextAutomation.applyDoNotDisturb(application, prefs, prefs.activeContextProfile.first())
         }
     }
 

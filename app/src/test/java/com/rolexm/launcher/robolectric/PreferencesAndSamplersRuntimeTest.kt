@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.test.core.app.ApplicationProvider
 import com.rolexm.launcher.core.RolexApp
+import com.rolexm.launcher.context.ContextProfile
+import com.rolexm.launcher.context.ProfileSchedule
 import com.rolexm.launcher.core.model.ComponentKey
 import com.rolexm.launcher.core.prefs.GestureKind
 import com.rolexm.launcher.core.prefs.RolexPrefs
@@ -72,7 +74,7 @@ class PreferencesAndSamplersRuntimeTest {
 
     @Test
     fun `settings default sensibly before anything is written`() = runTest {
-        assertEquals(ThemeMode.SYSTEM, prefs.themeMode.first())
+        assertEquals(ThemeMode.LIGHT, prefs.themeMode.first())
         assertEquals(true, prefs.showLabels.first())
         assertEquals(1.0f, prefs.textScale.first(), 0f)
         assertEquals(null, prefs.profileOverride.first())
@@ -103,6 +105,30 @@ class PreferencesAndSamplersRuntimeTest {
         assertEquals(ProfileId.LIGHTWEIGHT, prefs.profileOverride.first())
         prefs.setProfileOverride(null)
         assertEquals(null, prefs.profileOverride.first())
+    }
+
+    @Test
+    fun `context profile settings persist independently`() = runTest {
+        val workSchedule = ProfileSchedule.defaults(ContextProfile.WORK).copy(enabled = false)
+        prefs.setProfileSchedule(ContextProfile.WORK, workSchedule)
+        val workKey = ComponentKey("com.work", "com.work.Main")
+        val studyKey = ComponentKey("com.study", "com.study.Main")
+        prefs.setHomeLayoutRaw(ContextProfile.WORK, HomeLayoutCodec.encode(HomeLayoutOps.addToHome(HomeLayout.EMPTY, workKey)))
+        prefs.setHomeLayoutRaw(ContextProfile.STUDY, HomeLayoutCodec.encode(HomeLayoutOps.addToHome(HomeLayout.EMPTY, studyKey)))
+        prefs.setActiveContextProfile(ContextProfile.STUDY)
+        prefs.setContextNotificationsEnabled(true)
+        prefs.setContextNotificationEnabled(ContextProfile.WORK, true)
+        prefs.setContextDndEnabled(ContextProfile.SLEEP, true)
+
+        assertEquals(ContextProfile.STUDY, prefs.activeContextProfile.first())
+        assertEquals(workSchedule, prefs.profileSchedule(ContextProfile.WORK).first())
+        val workLayout = HomeLayoutCodec.decode(prefs.homeLayoutRaw(ContextProfile.WORK).first())
+        val studyLayout = HomeLayoutCodec.decode(prefs.homeLayoutRaw(ContextProfile.STUDY).first())
+        assertEquals(workKey, (workLayout.page(0).single() as HomeItem.App).key)
+        assertEquals(studyKey, (studyLayout.page(0).single() as HomeItem.App).key)
+        assertTrue(prefs.contextNotificationsEnabled.first())
+        assertEquals(setOf(ContextProfile.WORK), prefs.contextNotificationProfiles.first())
+        assertEquals(setOf(ContextProfile.SLEEP), prefs.contextDndProfiles.first())
     }
 
     @Test
