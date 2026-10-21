@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rolexm.launcher.core.RolexApp
+import com.rolexm.launcher.context.ContextProfile
 import com.rolexm.launcher.core.apps.AppEntry
 import com.rolexm.launcher.core.apps.AppMatcher
 import com.rolexm.launcher.core.apps.DefaultDockResolver
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -49,24 +51,51 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      * WhileSubscribed(5s) rather than Eagerly so that when the drawer is closed
      * and the home screen is idle, filtering work stops.
      */
-    val drawerApps: StateFlow<List<AppEntry>> = combine(_apps, _query) { list, query ->
-        AppMatcher.filter(list, query)
+    val activeContextProfile: StateFlow<ContextProfile> = prefs.activeContextProfile
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ContextProfile.PERSONAL)
+
+    private val hiddenKeys = activeContextProfile.flatMapLatest(prefs::hiddenApps)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    val drawerApps: StateFlow<List<AppEntry>> = combine(_apps, _query, hiddenKeys) { list, query, hidden ->
+        AppMatcher.filter(list.filterNot { it.key in hidden }, query)
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _layout = MutableStateFlow(HomeLayout.EMPTY)
-    val layout: StateFlow<HomeLayout> = _layout
+    private val _displayLayout = MutableStateFlow(HomeLayout.EMPTY)
+    val layout: StateFlow<HomeLayout> = _displayLayout
 
     /** Index for the drawer's A-Z strip, recomputed only when the list changes. */
     private val _buckets = MutableStateFlow<List<Pair<Char, Int>>>(emptyList())
     val buckets: StateFlow<List<Pair<Char, Int>>> = _buckets
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
 
     init {
         viewModelScope.launch {
-            prefs.homeLayoutRaw.collect { raw -> _layout.value = HomeLayoutCodec.decode(raw) }
+            activeContextProfile.flatMapLatest(prefs::homeLayoutRaw).collect { raw ->
+                _layout.value = HomeLayoutCodec.decode(raw)
+            }
+        }
+        viewModelScope.launch {
+            combine(_layout, hiddenKeys) { current, hidden ->
+                fun visible(items: List<HomeItem>): List<HomeItem> = items.mapNotNull { item ->
+                    when (item) {
+                        is HomeItem.App -> item.takeUnless { it.key in hidden }
+                        is HomeItem.Folder -> {
+                            val children = item.children.filterNot { it in hidden }
+                            when (children.size) {
+                                0 -> null
+                                1 -> HomeItem.App(children.single())
+                                else -> item.copy(children = children)
+                            }
+                        }
+                    }
+                }
+                current.copy(dock = visible(current.dock), pages = current.pages.map(::visible))
+            }.collect { _displayLayout.value = it }
         }
         refreshApps()
     }
@@ -78,16 +107,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      * per profile and can take hundreds of milliseconds on a loaded device.
      */
     fun refreshApps() {
+        _isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            val list = repository.refresh()
-            val alphabeticalBuckets = AppMatcher.buckets(list)
-            _isLoading.value = false
-            withContext(Dispatchers.Main) {
-                _apps.value = list
-                _buckets.value = alphabeticalBuckets
+            try {
+                val list = repository.refresh()
+                val alphabeticalBuckets = AppMatcher.buckets(list)
+                withContext(Dispatchers.Main) {
+                    _apps.value = list
+                    _buckets.value = alphabeticalBuckets
+                }
+                seedDefaultDockIfNeeded(list)
+                pruneUninstalled(list)
+            } finally {
+                withContext(Dispatchers.Main) { _isLoading.value = false }
             }
-            seedDefaultDockIfNeeded(list)
-            pruneUninstalled(list)
         }
     }
 
@@ -99,6 +132,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (keys.isEmpty()) return
         val seeded = keys.fold(HomeLayout.EMPTY) { acc, key -> HomeLayoutOps.addToDock(acc, key) }
         persistLayout(seeded)
+        // Keep the original layout as the seed for profiles not customized yet.
+        prefs.setHomeLayoutRaw(HomeLayoutCodec.encode(seeded))
         prefs.setLayoutSeeded(true)
     }
 
@@ -109,14 +144,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      */
     private suspend fun pruneUninstalled(apps: List<AppEntry>) {
         val installed = apps.mapTo(HashSet()) { it.key }
-        val current = _layout.value
-        val pruned = HomeLayoutOps.prune(current, installed)
-        if (pruned != current) persistLayout(pruned)
+        for (profile in ContextProfile.entries) {
+            val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
+            val pruned = HomeLayoutOps.prune(current, installed)
+            if (pruned != current) {
+                prefs.setHomeLayoutRaw(profile, HomeLayoutCodec.encode(pruned))
+                if (profile == activeContextProfile.value) {
+                    withContext(Dispatchers.Main) { _layout.value = pruned }
+                }
+            }
+        }
     }
 
-    private suspend fun persistLayout(layout: HomeLayout) {
-        withContext(Dispatchers.Main) { _layout.value = layout }
-        prefs.setHomeLayoutRaw(HomeLayoutCodec.encode(layout))
+    private suspend fun persistLayout(
+        layout: HomeLayout,
+        profile: ContextProfile = activeContextProfile.value
+    ) {
+        if (profile == activeContextProfile.value) {
+            withContext(Dispatchers.Main) { _layout.value = layout }
+        }
+        prefs.setHomeLayoutRaw(profile, HomeLayoutCodec.encode(layout))
     }
 
     fun setQuery(value: String) {

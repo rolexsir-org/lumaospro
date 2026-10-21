@@ -1,5 +1,6 @@
 package com.rolexm.launcher.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,13 +9,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.rolexm.launcher.R
 import com.rolexm.launcher.ui.RolexSpacing
+import com.rolexm.launcher.ui.RolexCorners
 import com.rolexm.launcher.diagnostics.OptimizationEvent
 import com.rolexm.launcher.diagnostics.Reading
 import com.rolexm.launcher.diagnostics.StartupStats
@@ -56,6 +62,7 @@ private enum class Badge { MEASURED, ESTIMATE, UNAVAILABLE, SETTING }
 fun DashboardRoot(viewModel: SettingsViewModel) {
     val state by viewModel.intelligenceState.collectAsState()
     val events by viewModel.events.collectAsState()
+    val historyLoading by viewModel.historyLoading.collectAsState()
     val startupStats by viewModel.startupStats.collectAsState()
     val results by viewModel.lastResults.collectAsState()
     val running by viewModel.isRunning.collectAsState()
@@ -74,17 +81,21 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
         if (statusMessage != null) {
             StatusCard(statusMessage!!) { viewModel.consumeStatusMessage() }
         }
-        MeasurementsCard(state, startupStats)
-        ProfileCard(state, viewModel)
+        MeasurementsCard(state, startupStats, viewModel.capability)
         ActionsCard(viewModel, running, results)
-        HistoryCard(events)
+        HistoryCard(events, historyLoading)
         Spacer(Modifier.height(RolexSpacing.screenEnd))
     }
 }
 
 @Composable
-private fun MeasurementsCard(state: IntelligenceState, startupStats: StartupStats?) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun MeasurementsCard(state: IntelligenceState, startupStats: StartupStats?, capability: com.rolexm.launcher.intelligence.DeviceCapability) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(RolexCorners.card),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_measurements))
 
@@ -163,6 +174,27 @@ private fun MeasurementsCard(state: IntelligenceState, startupStats: StartupStat
                 badge = Badge.SETTING,
                 source = stringResource(R.string.dash_engine_note)
             )
+            MetricRow(
+                label = stringResource(R.string.dash_profile),
+                value = state.profile.id.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
+                badge = Badge.SETTING,
+                source = state.profileReason
+            )
+            MetricRow(
+                label = stringResource(R.string.dash_device),
+                value = stringResource(
+                    R.string.dash_device_summary,
+                    capability.tier.name,
+                    capability.totalMemoryMb,
+                    capability.cpuCoreCount
+                ),
+                badge = Badge.MEASURED,
+                source = if (capability.isLowRamDevice) {
+                    stringResource(R.string.dash_low_ram)
+                } else {
+                    capability.reasons.firstOrNull { it.startsWith("classified as") }
+                }
+            )
         }
     }
 }
@@ -194,33 +226,6 @@ private fun describeBattery(snapshot: BatterySnapshot): String {
 }
 
 @Composable
-private fun ProfileCard(state: IntelligenceState, viewModel: SettingsViewModel) {
-    val capability = viewModel.capability
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(RolexSpacing.contentPadding)) {
-            CardTitle(stringResource(R.string.dash_profile_card))
-            MetricRow(
-                label = stringResource(R.string.dash_profile),
-                value = state.profile.id.name.lowercase().replace('_', ' '),
-                badge = Badge.SETTING,
-                source = state.profileReason
-            )
-            MetricRow(
-                label = stringResource(R.string.dash_device),
-                value = buildString {
-                    append(capability.tier.name).append(" tier · ")
-                    append(capability.totalMemoryMb).append(" MB RAM · ")
-                    append(capability.cpuCoreCount).append(" cores")
-                    if (capability.isLowRamDevice) append(" · low-RAM device")
-                },
-                badge = Badge.MEASURED,
-                source = capability.reasons.joinToString("; ")
-            )
-        }
-    }
-}
-
-@Composable
 private fun ActionsCard(
     viewModel: SettingsViewModel,
     running: Set<String>,
@@ -228,7 +233,12 @@ private fun ActionsCard(
 ) {
     var confirmReset by remember { mutableStateOf(false) }
 
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(RolexCorners.card),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_actions_title))
             Text(
@@ -238,7 +248,7 @@ private fun ActionsCard(
             )
             Spacer(Modifier.height(10.dp))
 
-            viewModel.actions.forEach { action ->
+            viewModel.actions.forEachIndexed { index, action ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Text(action.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Text(
@@ -282,6 +292,9 @@ private fun ActionsCard(
                         )
                     }
                 }
+                if (index != viewModel.actions.lastIndex) {
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+                }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -293,7 +306,11 @@ private fun ActionsCard(
 
     if (confirmReset) {
         Dialog(onDismissRequest = { confirmReset = false }) {
-            Card {
+            Card(
+                shape = RoundedCornerShape(RolexCorners.large),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
                 Column(Modifier.padding(RolexSpacing.contentPadding)) {
                     Text(
                         stringResource(R.string.dash_reset_title),
@@ -322,18 +339,37 @@ private fun ActionsCard(
 }
 
 @Composable
-private fun HistoryCard(events: List<OptimizationEvent>) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun HistoryCard(events: List<OptimizationEvent>, loading: Boolean) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(RolexCorners.card),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Column(Modifier.padding(RolexSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_recent_actions))
-            if (events.isEmpty()) {
+            if (events.isEmpty() && loading) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.dash_history_loading),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (events.isEmpty()) {
                 Text(
                     stringResource(R.string.dash_no_actions),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                events.forEach { event ->
+                events.forEachIndexed { index, event ->
                     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -375,6 +411,9 @@ private fun HistoryCard(events: List<OptimizationEvent>) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    if (index != events.lastIndex) {
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+                    }
                 }
             }
         }
@@ -383,7 +422,12 @@ private fun HistoryCard(events: List<OptimizationEvent>) {
 
 @Composable
 private fun StatusCard(message: String, onDismiss: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = RoundedCornerShape(RolexCorners.card),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.width(8.dp))
@@ -396,7 +440,7 @@ private fun StatusCard(message: String, onDismiss: () -> Unit) {
 private fun CardTitle(text: String) {
     Column {
         Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
     }
 }
 
@@ -415,6 +459,7 @@ private fun MetricRow(label: String, value: String, badge: Badge, source: String
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        HorizontalDivider(Modifier.padding(top = 8.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
     }
 }
 

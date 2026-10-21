@@ -27,7 +27,7 @@ import com.rolexm.launcher.ui.ThemeMode
  */
 @Composable
 fun RolexmTheme(
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    themeMode: ThemeMode = ThemeMode.LIGHT,
     textScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
@@ -38,7 +38,7 @@ fun RolexmTheme(
         darkColorScheme(
             primary = Color(palette.accent),
             onPrimary = Color(palette.onAccent),
-            background = Color(0xFF101310),
+            background = Color(0xFF101012),
             surface = Color(palette.surface),
             surfaceVariant = Color(palette.surfaceVariant),
             onSurface = Color(palette.onSurface),
@@ -49,7 +49,7 @@ fun RolexmTheme(
         lightColorScheme(
             primary = Color(palette.accent),
             onPrimary = Color(palette.onAccent),
-            background = Color(0xFFF0F0EA),
+            background = Color(0xFFFFFFFF),
             surface = Color(palette.surface),
             surfaceVariant = Color(palette.surfaceVariant),
             onSurface = Color(palette.onSurface),

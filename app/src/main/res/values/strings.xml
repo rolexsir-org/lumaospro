@@ -6,7 +6,8 @@
 
     <!-- Onboarding -->
     <string name="onboarding_welcome">ROLEXM</string>
-    <string name="onboarding_subtitle">A lightweight launcher and performance platform for older phones.</string>
+    <string name="onboarding_subtitle">A calm, lightweight home for your day.</string>
+    <string name="onboarding_contexts">Work, Study, Personal, and Sleep spaces with on-device schedules and layouts.</string>
     <string name="onboarding_set_default">Set as default launcher</string>
     <string name="onboarding_skip">Not now</string>
     <string name="onboarding_privacy_note">You can change this at any time in ROLEXM Settings. ROLEXM has no account or app server. Android backup may transfer launcher settings if enabled.</string>
@@ -15,12 +16,24 @@
     <string name="home_clock_description">Current time</string>
     <string name="home_search_description">Search installed apps</string>
     <string name="home_settings_description">Launcher settings</string>
+    <string name="voice_command_description">Use a voice command to switch profile or open an app</string>
+    <string name="voice_command_prompt">Say “switch to Work” or “open Calendar”</string>
+    <string name="voice_command_unavailable">No speech recognition service is available</string>
+    <string name="voice_command_unrecognized">Try “switch to Work” or “open [app name]”</string>
+    <string name="voice_command_app_not_found">I couldn’t find that app</string>
+    <string name="context_notification_title">ROLEXM switched to %1$s</string>
+    <string name="context_notification_body">Your launcher layout and app visibility have been updated.</string>
+    <string name="context_notification_channel">Context changes</string>
+    <string name="context_notification_summary">ROLEXM context-change alerts</string>
+    <string name="dnd_access_unavailable">This device does not expose Notification Policy Access settings.</string>
+    <string name="notification_settings_unavailable">This device does not expose app notification settings.</string>
     <string name="home_empty_hint">Swipe up to explore your apps</string>
     <string name="drawer_title">Apps</string>
     <string name="drawer_close_description">Close app drawer</string>
     <string name="drawer_alphabet_index_description">Alphabetical app index</string>
     <string name="search_hint">Search apps</string>
     <string name="empty_no_apps">No apps found</string>
+    <string name="drawer_loading_apps">Loading apps…</string>
     <string name="empty_no_results">No apps match “%1$s”</string>
 
     <!-- App actions -->
@@ -104,11 +117,14 @@
     <string name="dash_battery_current">%1$d mA</string>
     <string name="dash_profile">Active profile</string>
     <string name="dash_device">Device capability</string>
+    <string name="dash_device_summary">%1$s tier · %2$d MB RAM · %3$d cores</string>
+    <string name="dash_low_ram">The system classifies this as a low-RAM device.</string>
     <string name="dash_engine">Engine</string>
     <string name="dash_engine_active">Sampling (every %1$ds)</string>
     <string name="dash_engine_paused">Paused — ROLEXM is not visible</string>
     <string name="dash_engine_note">No background work runs while ROLEXM is not visible.</string>
     <string name="dash_recent_actions">Recent optimization actions</string>
+    <string name="dash_history_loading">Loading recent activity…</string>
     <string name="dash_no_actions">No actions recorded yet.</string>
 
     <!-- Dashboard: provenance badges -->

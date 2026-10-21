@@ -3,10 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        ROLEXM requests exactly one permission in its default configuration:
-        REQUEST_DELETE_PACKAGES, used only by the user-initiated "uninstall" item
-        in the app drawer long-press menu (it launches the standard system
-        uninstall confirmation; ROLEXM never removes an app silently).
+        REQUEST_DELETE_PACKAGES supports the user-confirmed uninstall action.
+        RECEIVE_BOOT_COMPLETED only rebuilds the next inexact profile alarm.
+        POST_NOTIFICATIONS is requested only if the user enables context alerts;
+        no permission grants silent control over other apps.
 
         Deliberately NOT requested:
           * QUERY_ALL_PACKAGES - the app list comes from LauncherApps, the
@@ -16,10 +16,10 @@
           * KILL_BACKGROUND_PROCESSES / FORCE_STOP - ROLEXM does not terminate
             other applications.
           * Any accessibility or device-admin binding for core features.
-        Additional permissions (VPN consent, notifications) are added only with
-        the Phase 6 Shield work and are opt-in at runtime.
     -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <intent>
@@ -69,6 +69,24 @@
             android:name=".onboarding.OnboardingActivity"
             android:exported="false"
             android:theme="@style/Theme.Rolexm.Settings" />
+
+        <receiver
+            android:name=".context.ContextScheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.rolexm.launcher.action.REEVALUATE_CONTEXT" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".context.ContextBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <activity
             android:name=".settings.SettingsActivity"

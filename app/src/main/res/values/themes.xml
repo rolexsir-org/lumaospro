@@ -7,7 +7,14 @@
         That removes a dependency and keeps resource resolution trivial on slow
         devices. These platform themes only set window chrome.
     -->
-    <style name="Theme.Rolexm" parent="@android:style/Theme.Material.NoActionBar" />
+    <style name="Theme.Rolexm" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#0066CC</item>
+        <item name="android:colorControlActivated">#0066CC</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 
     <!-- Home screen: transparent so the live wallpaper shows through. -->
     <style name="Theme.Rolexm.Home" parent="Theme.Rolexm">

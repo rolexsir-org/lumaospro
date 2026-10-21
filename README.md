@@ -13,7 +13,7 @@ optimizer to function.
 
 ```bash
 ./build.sh assembleDebug      # debuggable APK, installs alongside other launchers
-./build.sh test               # 133 tests (94 logic + 39 Robolectric runtime)
+./build.sh test               # 141 tests (101 logic + 40 Robolectric runtime)
 ./build.sh lint               # Android lint
 ./build.sh assembleRelease    # minified APK; release signing is never debug-key fallback
 ./build.sh bundleRelease      # Android App Bundle for Play (requires upload-key signing)
@@ -83,7 +83,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
 | Version | 0.1.0 (versionCode 1) |
-| UI | Views for the hot path, Jetpack Compose for settings & diagnostics |
+| UI | Views for the hot path, Jetpack Compose for settings & diagnostics; clean light theme by default |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
 ---
@@ -114,6 +114,34 @@ com.rolexm.launcher
 ├── onboarding/      OnboardingActivity (Compose)
 └── ui/              Palette, ThemeMode, RolexSpacing/RolexCorners
 ```
+
+### Context profiles
+
+The home screen has four independent contexts: Work, Study, Personal, and Sleep.
+Each keeps its own shortcut/folder layout and app-visibility list in DataStore;
+profiles without a customized layout inherit the existing launcher layout, so
+upgrading does not blank or rearrange the current desktop. The drawer also
+respects the selected profile's hidden-app list.
+
+Work (weekdays, 09:00–17:00), Study (weekdays, 17:00–20:00), and Sleep
+(daily, 22:00–07:00) have editable local-time schedules by default. Personal is
+the fallback outside scheduled windows and can also be assigned its own window.
+A single inexact `AlarmManager` alarm is recalculated at each schedule boundary
+and after reboot or wall-clock/time-zone changes; there is no polling service or
+exact-alarm permission. Overlaps resolve deterministically as Sleep, Work,
+Study, then Personal. Context selection and all schedule/layout/visibility data
+remain on-device. Optional voice commands use Android's installed recognition
+activity to switch profiles or open apps; ROLEXM does not retain transcripts.
+
+Optional context-change notifications are controlled by a master switch and a
+per-profile preference, and request Android's notification permission only when
+enabled. Per-profile Do Not Disturb is also opt-in: Android Notification Policy
+Access is granted by the user in system Settings, and ROLEXM restores the prior
+interruption filter when leaving a DND profile when it still owns that filter.
+These features do not alter other apps' notification settings.
+
+Location, calendar-event, and physical-activity triggers are not enabled yet.
+No location or calendar data is accessed by the current implementation.
 
 ### Why Views for the home screen and Compose for settings
 
