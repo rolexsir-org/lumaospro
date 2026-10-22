@@ -46,4 +46,10 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 echo "==> JAVA_HOME=$JAVA_HOME"
 echo "==> ANDROID_HOME=$ANDROID_HOME"
 echo "==> gradle $*"
-exec gradle --no-daemon "$@"
+
+# Use gradle wrapper if available, otherwise fall back to toolchain gradle
+if [ -x "./gradlew" ]; then
+    exec ./gradlew --no-daemon "$@"
+else
+    exec gradle --no-daemon "$@"
+fi
