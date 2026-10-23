@@ -62,7 +62,12 @@ class AppRepository(private val context: Context) {
             val component = info.componentName ?: continue
             val key = ComponentKey(component.packageName, component.className)
             val label = info.label?.toString().orEmpty().ifBlank { component.packageName }
-            entries += AppEntry(key = key, label = label)
+            entries += AppEntry(
+                key = key,
+                label = label,
+                category = runCatching { info.applicationInfo.category }.getOrDefault(AppCategories.UNDEFINED),
+                installedAt = runCatching { info.firstInstallTime }.getOrDefault(0L)
+            )
             map[key] = info
         }
         snapshot = map
@@ -73,14 +78,19 @@ class AppRepository(private val context: Context) {
     fun iconFor(key: ComponentKey, density: Int): Drawable? =
         snapshot[key]?.getIcon(density)
 
+    /** Whether [key] is currently installed and launchable. */
+    fun isInstalled(key: ComponentKey): Boolean = snapshot.containsKey(key)
+
     /**
      * Launches an app. Returns false if the app is no longer installed - the
      * caller shows a message; a launcher must never silently do nothing.
      */
-    fun launch(key: ComponentKey): Boolean {
+    fun launch(key: ComponentKey, sourceBounds: android.graphics.Rect? = null, options: android.os.Bundle? = null): Boolean {
         val component = android.content.ComponentName(key.packageName, key.className)
         return try {
-            launcherApps.startMainActivity(component, userHandle, null, null)
+            // sourceBounds tells the system where the icon is; options carry
+            // ROLEXM's clip-reveal opening animation from that icon.
+            launcherApps.startMainActivity(component, userHandle, sourceBounds, options)
             true
         } catch (e: ActivityNotFoundException) {
             RolexLog.w("App no longer installed: ${key.packageName}")

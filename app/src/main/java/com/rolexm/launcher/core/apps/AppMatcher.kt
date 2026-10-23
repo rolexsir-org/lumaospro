@@ -14,7 +14,11 @@ data class AppEntry(
     val key: ComponentKey,
     val label: String,
     val sortLabel: String = AppMatcher.normalize(label),
-    val searchText: String = AppMatcher.normalize(label)
+    val searchText: String = AppMatcher.normalize(label),
+    /** ApplicationInfo.category as declared by the app (-1 = undefined). */
+    val category: Int = AppCategories.UNDEFINED,
+    /** PackageInfo.firstInstallTime in epoch millis; 0 when unknown. */
+    val installedAt: Long = 0L
 )
 
 /**

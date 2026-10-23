@@ -17,6 +17,11 @@ import com.rolexm.launcher.intelligence.IntelligenceEngine
 import com.rolexm.launcher.intelligence.Profile
 import com.rolexm.launcher.intelligence.Profiles
 import com.rolexm.launcher.optimizer.Optimizer
+import com.rolexm.launcher.core.apps.ShortcutRepository
+import com.rolexm.launcher.core.usage.LaunchHistoryStore
+import com.rolexm.launcher.effects.EffectsController
+import com.rolexm.launcher.icons.IconPackManager
+import com.rolexm.launcher.ui.theme.ThemeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,6 +65,18 @@ class RolexCore(private val application: Application) {
 
     private val coreScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Theme engine runtime: settings + system dark + schedule + context + wallpaper. */
+    val themes: ThemeRepository = ThemeRepository(application, prefs, coreScope)
+
+    /** Effects tiering from live device signals. */
+    val effects: EffectsController = EffectsController(application, capability, prefs, intelligence.state, coreScope)
+
+    /** Launches made through ROLEXM (on-device only). */
+    val launchHistory: LaunchHistoryStore = LaunchHistoryStore(application, coreScope)
+
+    val shortcuts: ShortcutRepository = ShortcutRepository(application)
+    val iconPacks: IconPackManager = IconPackManager(application)
+
     fun start() {
         RolexLog.i(
             "ROLEXM starting: ${capability.totalMemoryMb} MB RAM, " +
@@ -67,6 +84,8 @@ class RolexCore(private val application: Application) {
         )
 
         intelligence.attach()
+        themes.start()
+        effects.start()
 
         // One-shot wall-clock alarms drive context changes; there is no periodic poll.
         coreScope.launch {

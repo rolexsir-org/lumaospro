@@ -26,6 +26,11 @@ class RolexApp : Application() {
         RolexLog.d("Application created")
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (::core.isInitialized) core.themes.onConfiguration(newConfig)
+    }
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (::core.isInitialized) core.onTrimMemory(level)

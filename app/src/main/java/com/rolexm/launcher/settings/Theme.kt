@@ -1,25 +1,43 @@
 package com.rolexm.launcher.settings
 
+import android.graphics.Typeface
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalDensity
-import com.rolexm.launcher.ui.RolexCorners
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
-import com.rolexm.launcher.ui.Palette
-import com.rolexm.launcher.ui.Palettes
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import com.rolexm.launcher.ui.RolexCorners
 import com.rolexm.launcher.ui.ThemeMode
+import com.rolexm.launcher.ui.theme.ResolvedTheme
+import com.rolexm.launcher.ui.theme.ThemeEngine
+import com.rolexm.launcher.ui.theme.ThemeEnvironment
+import com.rolexm.launcher.ui.theme.ThemeId
+import com.rolexm.launcher.ui.theme.ThemeSettings
+import com.rolexm.launcher.ui.theme.TypeStyle
+
+/** The resolved ROLEXM theme, for composables that draw with theme roles directly. */
+val LocalRolexTheme = staticCompositionLocalOf {
+    ThemeEngine.resolve(ThemeSettings(), ThemeEnvironment(systemDark = true, minuteOfDay = 0))
+}
 
 /**
- * Material3 theme driven by ROLEXM's own [Palette], so the Compose settings
- * screens and the View-based home screen use exactly the same colours.
+ * Material 3 theme driven by ROLEXM's [ResolvedTheme], so the Compose screens
+ * (Settings, Studio, onboarding, diagnostics) and the View-based home screen
+ * draw from exactly the same palette, typography voice and corner geometry.
  *
  * [textScale] is applied through LocalDensity rather than by multiplying every
  * font size: sp units then scale everywhere, including inside Material
@@ -27,54 +45,120 @@ import com.rolexm.launcher.ui.ThemeMode
  */
 @Composable
 fun RolexmTheme(
-    themeMode: ThemeMode = ThemeMode.LIGHT,
+    theme: ResolvedTheme,
     textScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
-    val systemDark = isSystemInDarkTheme()
-    val palette = Palettes.forMode(themeMode, systemDark)
-
-    val colorScheme = if (palette.isDark) {
-        darkColorScheme(
-            primary = Color(palette.accent),
-            onPrimary = Color(palette.onAccent),
-            background = Color(0xFF101012),
-            surface = Color(palette.surface),
-            surfaceVariant = Color(palette.surfaceVariant),
-            onSurface = Color(palette.onSurface),
-            onSurfaceVariant = Color(palette.onSurfaceVariant),
-            outline = Color(palette.outline)
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(palette.accent),
-            onPrimary = Color(palette.onAccent),
-            background = Color(0xFFFFFFFF),
-            surface = Color(palette.surface),
-            surfaceVariant = Color(palette.surfaceVariant),
-            onSurface = Color(palette.onSurface),
-            onSurfaceVariant = Color(palette.onSurfaceVariant),
-            outline = Color(palette.outline)
-        )
-    }
-
     val density = LocalDensity.current
-
     CompositionLocalProvider(
-        LocalDensity provides Density(
-            density = density.density,
-            fontScale = density.fontScale * textScale
-        )
+        LocalRolexTheme provides theme,
+        LocalDensity provides Density(density = density.density, fontScale = density.fontScale * textScale)
     ) {
         MaterialTheme(
-            colorScheme = colorScheme,
-            typography = Typography(),
+            colorScheme = colorSchemeFor(theme),
+            typography = typographyFor(theme.typography),
             shapes = Shapes(
-                small = RoundedCornerShape(RolexCorners.small),
-                medium = RoundedCornerShape(RolexCorners.card),
-                large = RoundedCornerShape(RolexCorners.large)
+                extraSmall = RoundedCornerShape((6f * theme.cornerScale).dp),
+                small = RoundedCornerShape(RolexCorners.small * theme.cornerScale),
+                medium = RoundedCornerShape(RolexCorners.card * theme.cornerScale),
+                large = RoundedCornerShape(RolexCorners.large * theme.cornerScale),
+                extraLarge = RoundedCornerShape((28f * theme.cornerScale).dp)
             ),
             content = content
         )
     }
+}
+
+/** 0.1-compatible entry point (light/dark/system), mapped onto the 0.2 presets. */
+@Composable
+fun RolexmTheme(
+    themeMode: ThemeMode = ThemeMode.LIGHT,
+    textScale: Float = 1.0f,
+    content: @Composable () -> Unit
+) {
+    val dark = themeMode.resolveDark(isSystemInDarkTheme())
+    val theme = ThemeEngine.resolve(
+        ThemeSettings().pinned(if (dark) ThemeId.GRAPHITE else ThemeId.PORCELAIN),
+        ThemeEnvironment(systemDark = dark, minuteOfDay = 0)
+    )
+    RolexmTheme(theme = theme, textScale = textScale, content = content)
+}
+
+fun colorSchemeFor(theme: ResolvedTheme): ColorScheme {
+    val c = theme.colors
+    fun col(v: Int) = Color(v)
+    return if (c.isDark) {
+        darkColorScheme(
+            primary = col(c.accent), onPrimary = col(c.onAccent),
+            primaryContainer = col(c.accentContainer), onPrimaryContainer = col(c.onAccentContainer),
+            secondary = col(c.secondary), onSecondary = col(c.onAccent),
+            secondaryContainer = col(c.surface3), onSecondaryContainer = col(c.onSurface),
+            tertiary = col(c.secondary),
+            background = col(c.background), onBackground = col(c.onBackground),
+            surface = col(c.surface0), onSurface = col(c.onSurface),
+            surfaceVariant = col(c.surface2), onSurfaceVariant = col(c.onSurfaceMuted),
+            surfaceTint = col(c.accent),
+            outline = col(c.outlineStrong), outlineVariant = col(c.outline),
+            error = col(c.danger), scrim = col(c.scrim),
+            surfaceContainerLowest = col(c.surface0), surfaceContainerLow = col(c.surface1),
+            surfaceContainer = col(c.surface1), surfaceContainerHigh = col(c.surface2),
+            surfaceContainerHighest = col(c.surface3), surfaceBright = col(c.surface3), surfaceDim = col(c.background)
+        )
+    } else {
+        lightColorScheme(
+            primary = col(c.accent), onPrimary = col(c.onAccent),
+            primaryContainer = col(c.accentContainer), onPrimaryContainer = col(c.onAccentContainer),
+            secondary = col(c.secondary), onSecondary = col(c.onAccent),
+            secondaryContainer = col(c.surface3), onSecondaryContainer = col(c.onSurface),
+            tertiary = col(c.secondary),
+            background = col(c.background), onBackground = col(c.onBackground),
+            surface = col(c.surface0), onSurface = col(c.onSurface),
+            surfaceVariant = col(c.surface2), onSurfaceVariant = col(c.onSurfaceMuted),
+            surfaceTint = col(c.accent),
+            outline = col(c.outlineStrong), outlineVariant = col(c.outline),
+            error = col(c.danger), scrim = col(c.scrim),
+            surfaceContainerLowest = col(c.surface1), surfaceContainerLow = col(c.surface0),
+            surfaceContainer = col(c.surface0), surfaceContainerHigh = col(c.surface2),
+            surfaceContainerHighest = col(c.surface3), surfaceBright = col(c.surface1), surfaceDim = col(c.surface3)
+        )
+    }
+}
+
+/** Compose font family for a platform family name. */
+fun fontFamilyOf(name: String): Pair<FontFamily, FontWeight> = when (name) {
+    "sans-serif-thin" -> FontFamily.SansSerif to FontWeight.Thin
+    "sans-serif-light" -> FontFamily.SansSerif to FontWeight.Light
+    "sans-serif-medium" -> FontFamily.SansSerif to FontWeight.Medium
+    "serif" -> FontFamily.Serif to FontWeight.Normal
+    "monospace" -> FontFamily.Monospace to FontWeight.Normal
+    "sans-serif-condensed" -> FontFamily(Typeface.create("sans-serif-condensed", Typeface.NORMAL)) to FontWeight.Normal
+    else -> FontFamily.SansSerif to FontWeight.Normal
+}
+
+fun typographyFor(style: TypeStyle): Typography {
+    val base = Typography()
+    val (titleFamily, titleWeight) = fontFamilyOf(style.titleFamily)
+    val (bodyFamily, _) = fontFamilyOf(style.labelFamily)
+    val (readoutFamily, readoutWeight) = fontFamilyOf(style.readoutFamily)
+    val (clockFamily, clockWeight) = fontFamilyOf(style.clockFamily)
+    fun TextStyle.title() = copy(fontFamily = titleFamily, fontWeight = if (titleWeight == FontWeight.Normal) FontWeight.Medium else titleWeight)
+    fun TextStyle.body() = copy(fontFamily = bodyFamily)
+    fun TextStyle.readout() = copy(fontFamily = readoutFamily, fontWeight = readoutWeight, letterSpacing = style.readoutTracking.em)
+    return base.copy(
+        displayLarge = base.displayLarge.copy(fontFamily = clockFamily, fontWeight = clockWeight, letterSpacing = style.clockTracking.em),
+        displayMedium = base.displayMedium.copy(fontFamily = clockFamily, fontWeight = clockWeight, letterSpacing = style.clockTracking.em),
+        displaySmall = base.displaySmall.copy(fontFamily = clockFamily, fontWeight = clockWeight, letterSpacing = style.clockTracking.em),
+        headlineLarge = base.headlineLarge.title(),
+        headlineMedium = base.headlineMedium.title(),
+        headlineSmall = base.headlineSmall.title(),
+        titleLarge = base.titleLarge.title(),
+        titleMedium = base.titleMedium.title(),
+        titleSmall = base.titleSmall.title(),
+        bodyLarge = base.bodyLarge.body(),
+        bodyMedium = base.bodyMedium.body(),
+        bodySmall = base.bodySmall.body(),
+        labelLarge = base.labelLarge.body(),
+        labelMedium = base.labelMedium.readout(),
+        labelSmall = base.labelSmall.readout()
+    )
 }

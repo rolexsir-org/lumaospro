@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings added with the 0.2 redesign (home, drawer, edit mode, widgets, Studio, backup). -->
+<resources>
+    <!-- Home -->
+    <string name="search_pill_hint">Search apps and shortcuts</string>
+    <string name="home_context_description">Status: %1$s. Double-tap to switch context.</string>
+    <string name="context_menu_title">Context</string>
+    <string name="toast_context_switched">Switched to %1$s</string>
+
+    <!-- Drawer -->
+    <string name="drawer_sort_description">Sort apps</string>
+    <string name="drawer_chip_all">All</string>
+    <string name="drawer_chip_frequent">Frequent</string>
+    <string name="drawer_chip_selected">%1$s, selected</string>
+    <plurals name="drawer_app_count">
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <plurals name="drawer_result_count">
+        <item quantity="one">%d match</item>
+        <item quantity="other">%d matches</item>
+    </plurals>
+    <string name="sort_title">Sort</string>
+    <string name="sort_alpha">A to Z</string>
+    <string name="sort_usage">Most used</string>
+    <string name="sort_newest">Recently installed</string>
+    <string name="search_web_for">Search the web for “%1$s”</string>
+    <string name="search_store_for">Search Play Store for “%1$s”</string>
+    <string name="toast_no_handler">No app can handle this</string>
+    <string name="toast_shortcut_unavailable">That shortcut is no longer available</string>
+
+    <!-- Menus -->
+    <string name="action_open_folder">Open</string>
+    <string name="action_edit_home">Edit home</string>
+    <string name="action_move_to_home">Move to home</string>
+    <string name="action_move_to_dock">Move to dock</string>
+    <string name="action_remove_folder">Remove folder</string>
+    <string name="action_remove_widget">Remove widget</string>
+    <string name="action_remove_from_dock">Remove from dock</string>
+    <string name="action_remove_from_folder_short">Remove from folder</string>
+    <string name="action_hide_app">Hide in %1$s</string>
+    <string name="toast_app_hidden">%1$s hidden. Unhide it in Settings.</string>
+
+    <!-- Folders -->
+    <string name="folder_close_description">Close folder</string>
+    <string name="folder_name_description">Folder name</string>
+    <string name="folder_opened">%1$s folder opened</string>
+    <string name="smart_folder_hint">Updates itself from apps you open with ROLEXM. History stays on this device.</string>
+    <string name="smart_folder_empty">Nothing here yet. Open a few apps from ROLEXM and they will appear.</string>
+    <string name="smart_add_frequent">Add smart folder: Frequent</string>
+    <string name="smart_add_recent">Add smart folder: Recent</string>
+    <string name="smart_add_new">Add smart folder: New apps</string>
+    <string name="smart_frequent">Frequent</string>
+    <string name="smart_recent">Recent</string>
+    <string name="smart_new">New apps</string>
+
+    <!-- Edit mode -->
+    <string name="edit_title">Edit home</string>
+    <string name="edit_hint">Drag to arrange · hold over an app to group · drag here to remove</string>
+    <string name="edit_release_to_remove">Release to remove</string>
+    <string name="edit_done">Done</string>
+    <string name="edit_announce">Edit mode. Long-press and drag items to rearrange.</string>
+    <string name="edit_widgets">Widgets</string>
+    <string name="edit_layout">Layout</string>
+    <string name="edit_studio">Studio</string>
+    <string name="edit_wallpaper">Wallpaper</string>
+    <string name="edit_settings">Settings</string>
+
+    <!-- Widgets -->
+    <string name="widgets_title">Widgets</string>
+    <string name="widgets_subtitle">From apps installed on this device</string>
+    <string name="widgets_empty">No installed app offers widgets.</string>
+    <string name="widgets_size">%1$d × %2$d</string>
+    <string name="widgets_row_description">%1$s, about %2$d by %3$d cells</string>
+    <string name="widget_unavailable">Widget unavailable. Its app may have been removed — long-press to remove.</string>
+    <string name="widget_resize_description">Resize widget</string>
+    <string name="widget_description">Widget, %1$d rows tall</string>
+    <string name="widget_generic">Widget</string>
+    <string name="toast_widget_failed">The widget could not be added</string>
+    <plurals name="widget_rows">
+        <item quantity="one">Height: %d row</item>
+        <item quantity="other">Height: %d rows</item>
+    </plurals>
+
+    <!-- Gestures (new) -->
+    <string name="gesture_swipe_left">Swipe left</string>
+    <string name="gesture_swipe_right">Swipe right</string>
+    <string name="gesture_pinch_in">Pinch in</string>
+    <string name="gesture_edit_mode">Edit home</string>
+    <string name="gesture_open_studio">Open Studio</string>
+    <string name="gesture_next_context">Next context</string>
+    <string name="gesture_voice">Voice command</string>
+
+    <!-- Settings tabs & Studio -->
+    <string name="tab_studio">Studio</string>
+    <string name="studio_preview_label">Live preview</string>
+    <string name="studio_themes">Themes</string>
+    <string name="studio_apply">Apply</string>
+    <string name="studio_revert">Revert</string>
+    <string name="studio_applied">Applied</string>
+    <string name="studio_unsaved">Unsaved changes</string>
+    <string name="studio_switching">Light and dark</string>
+    <string name="studio_switch_fixed">Always this theme</string>
+    <string name="studio_switch_system">Follow system dark theme</string>
+    <string name="studio_switch_schedule">On a schedule</string>
+    <string name="studio_light_theme">Light theme</string>
+    <string name="studio_dark_theme">Dark theme</string>
+    <string name="studio_dark_from">Dark from</string>
+    <string name="studio_dark_until">until</string>
+    <string name="studio_accent">Accent</string>
+    <string name="studio_background">Background</string>
+    <string name="studio_theme_default">Theme default</string>
+    <string name="studio_backdrop">Backdrop</string>
+    <string name="studio_backdrop_wallpaper">Wallpaper</string>
+    <string name="studio_backdrop_theme">ROLEXM atmosphere</string>
+    <string name="studio_typography">Typography</string>
+    <string name="studio_icons">Icons</string>
+    <string name="studio_icon_shape">Shape</string>
+    <string name="studio_icon_style">Style</string>
+    <string name="studio_icon_pack">Icon pack</string>
+    <string name="studio_icon_pack_none">App icons</string>
+    <string name="studio_icon_pack_none_installed">No icon packs installed</string>
+    <string name="studio_layout">Home layout</string>
+    <string name="studio_dock_style">Dock</string>
+    <string name="studio_effects">Effects</string>
+    <string name="studio_motion">Motion</string>
+    <string name="studio_contrast">Contrast %1$s:1</string>
+    <string name="studio_profile_themes">Context themes</string>
+    <string name="studio_profile_theme_none">Use current theme</string>
+    <string name="studio_effects_now">Right now: %1$s</string>
+    <string name="studio_wallpaper_hint_estimated">Wallpaper lightness is estimated on this Android version.</string>
+    <string name="studio_no_wallpaper_colors">Wallpaper colours are not available, so Chroma uses its built-in palette.</string>
+
+    <string name="shape_system">Device</string>
+    <string name="shape_squircle">Squircle</string>
+    <string name="shape_circle">Circle</string>
+    <string name="shape_rounded">Rounded</string>
+    <string name="shape_teardrop">Teardrop</string>
+    <string name="shape_octagon">Octagon</string>
+    <string name="style_natural">Natural</string>
+    <string name="style_plate">Plate</string>
+    <string name="style_tinted">Tinted</string>
+    <string name="type_precision">Precision</string>
+    <string name="type_grotesk">Grotesk</string>
+    <string name="type_serif">Serif</string>
+    <string name="type_mono">Mono</string>
+    <string name="dock_bezel">Bezel</string>
+    <string name="dock_float">Floating</string>
+    <string name="dock_minimal">Minimal</string>
+    <string name="effects_auto">Auto</string>
+    <string name="effects_minimal">Minimal</string>
+    <string name="effects_balanced">Balanced</string>
+    <string name="effects_full">Full</string>
+    <string name="motion_full">Full</string>
+    <string name="motion_reduced">Reduced</string>
+    <string name="motion_off">Off</string>
+    <string name="effects_level_minimal">minimal effects</string>
+    <string name="effects_level_balanced">balanced effects</string>
+    <string name="effects_level_full">full effects</string>
+
+    <!-- Settings: drawer & privacy -->
+    <string name="section_drawer">App drawer</string>
+    <string name="pref_drawer_categories">Category chips</string>
+    <string name="pref_drawer_categories_desc">Uses the category each app declares. Apps without one are listed under Other.</string>
+    <string name="pref_suggestions">Learn from my launches</string>
+    <string name="pref_suggestions_desc">Suggested apps, Frequent, Most used sorting and smart folders use launches made through ROLEXM only. Stored on this device, never sent anywhere.</string>
+    <string name="pref_clear_history">Clear launch history</string>
+    <string name="pref_history_cleared">Launch history cleared</string>
+    <string name="pref_hidden_search">Find hidden apps in search</string>
+    <string name="pref_hidden_search_desc">Off by default. Hidden apps never appear in the drawer, suggestions or folders.</string>
+    <string name="pref_hidden_lock">Protect hidden apps with screen lock</string>
+    <string name="pref_hidden_lock_desc">Asks for your PIN, pattern or fingerprint before the hidden list can be shown or changed.</string>
+    <string name="hidden_unlock_title">Unlock hidden apps</string>
+    <string name="hidden_locked">Hidden apps are locked</string>
+    <string name="hidden_unlock">Unlock</string>
+    <string name="hidden_no_lock">Set a screen lock in Android settings to use this protection.</string>
+
+    <!-- Backup -->
+    <string name="section_backup">Backup and restore</string>
+    <string name="backup_desc">Saves settings, themes, gestures, schedules, hidden lists and home layouts to a file you choose. Widgets and launch history are not included.</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_import">Restore backup</string>
+    <string name="backup_exported">Backup saved</string>
+    <string name="backup_export_failed">Backup could not be written</string>
+    <string name="backup_restored">Restored %1$d settings</string>
+    <string name="backup_restored_skipped">Restored %1$d settings, skipped %2$d unknown</string>
+    <string name="backup_restore_failed">Restore failed: %1$s</string>
+    <string name="backup_confirm_title">Replace current setup?</string>
+    <string name="backup_confirm_body">Your current settings and home layouts will be replaced by the backup from %1$s.</string>
+    <string name="backup_confirm_restore">Restore</string>
+</resources>

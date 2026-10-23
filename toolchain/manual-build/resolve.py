@@ -3,11 +3,18 @@
 import json, os, re, sys
 import xml.etree.ElementTree as ET
 
+# Public GitHub repositories that commit a Gradle module cache (files-2.1).
+# Clone each sparsely (git clone --depth 1 --filter=blob:none --sparse, then
+# `git sparse-checkout set --no-cone <files-2.1 path>`) into .cache/deps/<dir>.
+#   edmo  <- github.com/jonnevuorela/edmo-course            (caches/...)
+#   masud <- github.com/masudrana35362/News-Apps-Using-Compose (caches/...)
+#   cap   <- github.com/FairuzAldaPerkasa/Project-Capstone  ("Mobile Development/caches/...")
+#   lid   <- github.com/TechnoVen-UG/LiD                     (gradle-home/caches/..., also D8 + apksig)
+#   zhudi <- github.com/ThanhPham2111/Face_Filter            (.gradle-local/caches/...)
+# Roots that are absent are skipped (a warning is printed).
 CACHE_ROOTS = [
     "/home/user/rolexm/.cache/deps/edmo/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/wcw/.gradle-home/caches/modules-2/files-2.1",
     "/home/user/rolexm/.cache/deps/lid/gradle-home/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/gerc/caches/modules-2/files-2.1",
     "/home/user/rolexm/.cache/deps/cap/Mobile Development/caches/modules-2/files-2.1",
     "/home/user/rolexm/.cache/deps/masud/caches/modules-2/files-2.1",
     "/home/user/rolexm/.cache/deps/zhudi/.gradle-local/caches/modules-2/files-2.1",
@@ -190,7 +197,7 @@ def resolve(direct):
     # dedup: prefer -android variant over MPP root when both have binaries
     drop = set()
     for (g, m), v in chosen.items():
-        if not m.endswith("-android") and (g, m + "-android") in chosen:
+        if not m.endswith(("-android", "-jvm")) and ((g, m + "-android") in chosen or (g, m + "-jvm") in chosen):
             if get_file(find(g, m, v), "aar") or get_file(find(g, m, v), "jar"):
                 pass
             drop.add((g, m))

@@ -68,10 +68,13 @@ def sh(args, **kw):
         if a in ("--ks-pass", "--key-pass"):
             red.append(a); hide = True; continue
         red.append(a)
-    print("+", " ".join(red[:8]), "..." if len(red) > 8 else "")
+    # Long classpaths make full command lines unreadable; show the tool and
+    # the first arguments only, with long values elided.
+    shown = [a if len(a) <= 120 else a[:60] + "..." + a[-40:] for a in red[:6]]
+    print("+", " ".join(shown), "..." if len(red) > 6 else "")
     r = subprocess.run(args, env=env, **kw)
     if r.returncode != 0:
-        sys.exit(f"command failed: {args[:10]}")
+        sys.exit(f"command failed ({os.path.basename(args[0])}, exit {r.returncode})")
     return r
 
 # --------------------------------------------------------------------------- #
@@ -334,6 +337,47 @@ def phase_kotlin():
     print("kotlin compiled:", len(srcs), "sources")
 
 # --------------------------------------------------------------------------- #
+# Phase 5b: JVM unit tests (logic tests only)
+# --------------------------------------------------------------------------- #
+# JUnit 4.13.2 + Hamcrest 1.3 (SHA-1 verified against Maven Central:
+# 8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12 / 42a25dc3219429f0e5d060061f71acb49bf010a0).
+TESTLIBS = os.path.join(CACHE, "deps", "testlibs")
+JUNIT_JARS = [os.path.join(TESTLIBS, "junit-4.13.2.jar"), os.path.join(TESTLIBS, "hamcrest-core-1.3.jar")]
+# Robolectric runtime tests need org.robolectric jars plus a ~140 MB
+# android-all-instrumented framework jar that cannot be obtained offline here,
+# so that directory is excluded and reported as NOT RUN.
+TEST_EXCLUDE_DIRS = ("robolectric",)
+
+def phase_test():
+    info = json.load(open(os.path.join(OUT, "libs.json")))
+    test_root = os.path.join(ROOT, "app/src/test/java")
+    tclasses = os.path.join(OUT, "test-classes")
+    shutil.rmtree(tclasses, ignore_errors=True)
+    os.makedirs(tclasses)
+    srcs, skipped = [], []
+    for dp, dns, fns in os.walk(test_root):
+        rel = os.path.relpath(dp, test_root).split(os.sep)
+        for fn in fns:
+            if not fn.endswith(".kt"):
+                continue
+            (skipped if any(part in TEST_EXCLUDE_DIRS for part in rel) else srcs).append(os.path.join(dp, fn))
+    cp = [os.path.join(OUT, "classes"), ANDROID_JAR] + info["libjars"] + JUNIT_JARS
+    # -Xfriend-paths lets tests see `internal` declarations, as Gradle does for
+    # a module's own test source set.
+    sh([KOTLINC, "-classpath", ":".join(cp), "-jvm-target", "17",
+        "-Xfriend-paths=" + os.path.join(OUT, "classes"), "-d", tclasses] + srcs)
+    names = []
+    for dp, _, fns in os.walk(tclasses):
+        for fn in fns:
+            if fn.endswith("Test.class"):
+                names.append(os.path.relpath(os.path.join(dp, fn), tclasses)[:-6].replace(os.sep, "."))
+    names.sort()
+    # android.jar goes LAST at runtime so real library classes win over stubs.
+    run_cp = [tclasses, os.path.join(OUT, "classes"), KOTLIN_STDLIB] + info["libjars"] + JUNIT_JARS + [ANDROID_JAR]
+    print(f"running {len(names)} test classes; skipped (Robolectric, not runnable offline): {len(skipped)} files")
+    sh([JAVA, "-cp", ":".join(run_cp), "org.junit.runner.JUnitCore"] + names)
+
+# --------------------------------------------------------------------------- #
 # Phase 6: dex (D8)
 # --------------------------------------------------------------------------- #
 def phase_dex():
@@ -511,6 +555,8 @@ def main():
         phase_codegen()
     if "all" in steps or "kotlin" in steps:
         phase_kotlin()
+    if "test" in steps:
+        phase_test()
     if "all" in steps or "dex" in steps:
         phase_dex()
     if "all" in steps or "aab" in steps:
