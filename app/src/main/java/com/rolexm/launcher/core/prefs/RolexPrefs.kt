@@ -18,6 +18,19 @@ import com.rolexm.launcher.core.model.ComponentKey
 import com.rolexm.launcher.intelligence.ProfileId
 import com.rolexm.launcher.launcher.model.GestureAction
 import com.rolexm.launcher.ui.ThemeMode
+import com.rolexm.launcher.ui.theme.Backdrop
+import com.rolexm.launcher.ui.theme.DarkWindow
+import com.rolexm.launcher.ui.theme.IconShape
+import com.rolexm.launcher.ui.theme.IconStyle
+import com.rolexm.launcher.ui.theme.ThemeId
+import com.rolexm.launcher.ui.theme.ThemeSettings
+import com.rolexm.launcher.ui.theme.ThemeSwitching
+import com.rolexm.launcher.ui.theme.TypeStyle
+import com.rolexm.launcher.core.apps.DrawerSort
+import com.rolexm.launcher.effects.EffectsPreference
+import com.rolexm.launcher.launcher.model.DockStyle
+import com.rolexm.launcher.launcher.model.HomePreset
+import com.rolexm.launcher.motion.MotionPreference
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -62,6 +75,29 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
         val WIDGETS_ENABLED = booleanPreferencesKey("widgets_enabled")
         val LAYOUT_SEEDED = booleanPreferencesKey("layout_seeded")
         val LAST_ACTION_AT = stringPreferencesKey("last_action_at")
+
+        // Theme engine (0.2)
+        val THEME_ID = stringPreferencesKey("theme_id")
+        val THEME_SWITCHING = stringPreferencesKey("theme_switching")
+        val THEME_LIGHT_ID = stringPreferencesKey("theme_light_id")
+        val THEME_DARK_ID = stringPreferencesKey("theme_dark_id")
+        val THEME_DARK_WINDOW = stringPreferencesKey("theme_dark_window")
+        val ACCENT_OVERRIDE = intPreferencesKey("accent_override")
+        val BACKGROUND_OVERRIDE = intPreferencesKey("background_override")
+        val TYPOGRAPHY = stringPreferencesKey("typography")
+        val ICON_SHAPE = stringPreferencesKey("icon_shape")
+        val ICON_STYLE = stringPreferencesKey("icon_style")
+        val ICON_PACK = stringPreferencesKey("icon_pack")
+        val BACKDROP = stringPreferencesKey("backdrop")
+        val EFFECTS_PREF = stringPreferencesKey("effects_pref")
+        val MOTION_PREF = stringPreferencesKey("motion_pref")
+        val HOME_PRESET = stringPreferencesKey("home_preset")
+        val DOCK_STYLE = stringPreferencesKey("dock_style")
+        val DRAWER_SORT = stringPreferencesKey("drawer_sort")
+        val DRAWER_CATEGORIES = booleanPreferencesKey("drawer_categories")
+        val SUGGESTIONS_ENABLED = booleanPreferencesKey("suggestions_enabled")
+        val HIDDEN_SEARCH = booleanPreferencesKey("hidden_search")
+        val HIDDEN_LOCK = booleanPreferencesKey("hidden_lock")
     }
 
     // --- Appearance -------------------------------------------------------
@@ -92,6 +128,179 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
      */
     val textScale: Flow<Float> = read(Keys.TEXT_SCALE) { 1.0f }
     suspend fun setTextScale(value: Float) = write(Keys.TEXT_SCALE, value.coerceIn(0.85f, 1.6f))
+
+    // --- Theme engine -------------------------------------------------------
+
+    /**
+     * The full appearance configuration, read in one pass over the snapshot.
+     *
+     * Users of 0.1 had only a light/dark/system switch; when no 0.2 theme has
+     * been chosen yet that choice is mapped onto the new presets (light ->
+     * Porcelain, dark -> Graphite, system -> the pair following the system), so
+     * nobody's home screen changes character on upgrade.
+     */
+    val themeSettings: Flow<ThemeSettings> = dataStore.data
+        .catch { e ->
+            if (e is IOException) {
+                RolexLog.e("Preferences read failed, falling back to defaults", e)
+                emit(emptyPreferences())
+            } else throw e
+        }
+        .map { p -> themeSettingsFrom(p) }
+
+    private fun themeSettingsFrom(p: Preferences): ThemeSettings {
+        val legacy = p[Keys.THEME_MODE]?.let { ThemeMode.fromStorageKey(it) }
+        val explicitId = ThemeId.fromStorageKey(p[Keys.THEME_ID])
+        val switching = ThemeSwitching.fromStorageKey(p[Keys.THEME_SWITCHING]) ?: when {
+            explicitId != null -> ThemeSwitching.FIXED
+            legacy == ThemeMode.LIGHT || legacy == ThemeMode.DARK -> ThemeSwitching.FIXED
+            else -> ThemeSwitching.SYSTEM
+        }
+        val themeId = explicitId ?: when (legacy) {
+            ThemeMode.LIGHT -> ThemeId.PORCELAIN
+            else -> ThemeId.GRAPHITE
+        }
+        val profileThemes = ContextProfile.entries.mapNotNull { profile ->
+            ThemeId.fromStorageKey(p[profileThemeKey(profile)])?.let { profile to it }
+        }.toMap()
+        return ThemeSettings(
+            themeId = themeId,
+            switching = switching,
+            lightThemeId = ThemeId.fromStorageKey(p[Keys.THEME_LIGHT_ID]) ?: ThemeId.PORCELAIN,
+            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.GRAPHITE,
+            darkWindow = DarkWindow.decode(p[Keys.THEME_DARK_WINDOW]),
+            accentOverride = p[Keys.ACCENT_OVERRIDE],
+            backgroundOverride = p[Keys.BACKGROUND_OVERRIDE],
+            typography = TypeStyle.fromStorageKey(p[Keys.TYPOGRAPHY]),
+            iconShape = IconShape.fromStorageKey(p[Keys.ICON_SHAPE]),
+            iconStyle = IconStyle.fromStorageKey(p[Keys.ICON_STYLE]),
+            backdrop = Backdrop.fromStorageKey(p[Keys.BACKDROP]),
+            profileThemes = profileThemes
+        )
+    }
+
+    /**
+     * Writes a complete [ThemeSettings] atomically (Studio "Apply"). The legacy
+     * light/dark key is kept in step so 0.1-era readers stay coherent.
+     */
+    suspend fun applyThemeSettings(settings: ThemeSettings) {
+        dataStore.edit { p ->
+            p[Keys.THEME_ID] = settings.themeId.storageKey
+            p[Keys.THEME_SWITCHING] = settings.switching.storageKey
+            p[Keys.THEME_LIGHT_ID] = settings.lightThemeId.storageKey
+            p[Keys.THEME_DARK_ID] = settings.darkThemeId.storageKey
+            p[Keys.THEME_DARK_WINDOW] = settings.darkWindow.encode()
+            putOrRemove(p, Keys.ACCENT_OVERRIDE, settings.accentOverride)
+            putOrRemove(p, Keys.BACKGROUND_OVERRIDE, settings.backgroundOverride)
+            putOrRemove(p, Keys.TYPOGRAPHY, settings.typography?.storageKey)
+            putOrRemove(p, Keys.ICON_SHAPE, settings.iconShape?.storageKey)
+            putOrRemove(p, Keys.ICON_STYLE, settings.iconStyle?.storageKey)
+            putOrRemove(p, Keys.BACKDROP, settings.backdrop?.storageKey)
+            for (profile in ContextProfile.entries) {
+                putOrRemove(p, profileThemeKey(profile), settings.profileThemes[profile]?.storageKey)
+            }
+            p[Keys.THEME_MODE] = when (settings.switching) {
+                ThemeSwitching.SYSTEM, ThemeSwitching.SCHEDULE -> ThemeMode.SYSTEM.storageKey
+                ThemeSwitching.FIXED -> if (settings.themeId == ThemeId.PORCELAIN) ThemeMode.LIGHT.storageKey
+                else ThemeMode.DARK.storageKey
+            }
+        }
+    }
+
+    suspend fun setProfileTheme(profile: ContextProfile, id: ThemeId?) {
+        dataStore.edit { p -> putOrRemove(p, profileThemeKey(profile), id?.storageKey) }
+    }
+
+    /** Installed icon pack package, or null for the apps' own icons. */
+    val iconPack: Flow<String?> = readNullable(Keys.ICON_PACK)
+    suspend fun setIconPack(packageName: String?) {
+        dataStore.edit { p -> putOrRemove(p, Keys.ICON_PACK, packageName?.takeIf { it.isNotBlank() }) }
+    }
+
+    val effectsPreference: Flow<EffectsPreference> = readNullable(Keys.EFFECTS_PREF)
+        .map { EffectsPreference.fromStorageKey(it) }
+    suspend fun setEffectsPreference(value: EffectsPreference) = write(Keys.EFFECTS_PREF, value.storageKey)
+
+    val motionPreference: Flow<MotionPreference> = readNullable(Keys.MOTION_PREF)
+        .map { MotionPreference.fromStorageKey(it) }
+    suspend fun setMotionPreference(value: MotionPreference) = write(Keys.MOTION_PREF, value.storageKey)
+
+    // --- Home composition --------------------------------------------------
+
+    val homePreset: Flow<HomePreset> = readNullable(Keys.HOME_PRESET).map { HomePreset.fromStorageKey(it) }
+
+    /** Selecting a preset also adopts its row count; rows stay adjustable afterwards. */
+    suspend fun setHomePreset(preset: HomePreset) {
+        dataStore.edit { p ->
+            p[Keys.HOME_PRESET] = preset.storageKey
+            p[Keys.GRID_ROWS] = preset.defaultRows
+            p.remove(Keys.DOCK_STYLE)
+        }
+    }
+
+    /** Null means "use the preset's dock style". */
+    val dockStyleOverride: Flow<DockStyle?> = readNullable(Keys.DOCK_STYLE).map { DockStyle.fromStorageKey(it) }
+    suspend fun setDockStyle(style: DockStyle?) {
+        dataStore.edit { p -> putOrRemove(p, Keys.DOCK_STYLE, style?.storageKey) }
+    }
+
+    // --- Drawer & privacy ----------------------------------------------------
+
+    val drawerSort: Flow<DrawerSort> = readNullable(Keys.DRAWER_SORT).map { DrawerSort.fromStorageKey(it) }
+    suspend fun setDrawerSort(value: DrawerSort) = write(Keys.DRAWER_SORT, value.storageKey)
+
+    val drawerCategoriesEnabled: Flow<Boolean> = read(Keys.DRAWER_CATEGORIES) { true }
+    suspend fun setDrawerCategoriesEnabled(value: Boolean) = write(Keys.DRAWER_CATEGORIES, value)
+
+    /**
+     * Whether ROLEXM learns from launches made through it (frequent/recent
+     * rows, suggestions, smart folders). History never leaves the device.
+     */
+    val suggestionsEnabled: Flow<Boolean> = read(Keys.SUGGESTIONS_ENABLED) { true }
+    suspend fun setSuggestionsEnabled(value: Boolean) = write(Keys.SUGGESTIONS_ENABLED, value)
+
+    /** Hidden apps are excluded from search unless the user opts in. */
+    val hiddenInSearch: Flow<Boolean> = read(Keys.HIDDEN_SEARCH) { false }
+    suspend fun setHiddenInSearch(value: Boolean) = write(Keys.HIDDEN_SEARCH, value)
+
+    /** Require the device screen lock before showing or changing the hidden-apps list. */
+    val hiddenLock: Flow<Boolean> = read(Keys.HIDDEN_LOCK) { false }
+    suspend fun setHiddenLock(value: Boolean) = write(Keys.HIDDEN_LOCK, value)
+
+    // --- Backup -----------------------------------------------------------
+
+    /** Every stored value keyed by preference name (the backup codec filters it). */
+    suspend fun snapshotForBackup(): Map<String, Any> =
+        dataStore.data.first().asMap().mapKeys { it.key.name }
+
+    /**
+     * Restores [values] (already validated by BackupCodec): known keys absent
+     * from the backup are cleared so the result matches the backup exactly,
+     * while device-local state (DND bookkeeping, optimizer timestamps) is kept.
+     */
+    suspend fun restoreFromBackup(values: Map<String, Any>, isRestorable: (String) -> Boolean) {
+        dataStore.edit { p ->
+            for (key in p.asMap().keys.toList()) {
+                if (isRestorable(key.name) && key.name !in values) p.remove(key)
+            }
+            for ((name, value) in values) {
+                when (value) {
+                    is String -> p[stringPreferencesKey(name)] = value
+                    is Int -> p[intPreferencesKey(name)] = value
+                    is Long -> p[longPreferencesKey(name)] = value
+                    is Boolean -> p[booleanPreferencesKey(name)] = value
+                    is Float -> p[floatPreferencesKey(name)] = value
+                }
+            }
+        }
+    }
+
+    private fun <T> putOrRemove(p: androidx.datastore.preferences.core.MutablePreferences, key: Preferences.Key<T>, value: T?) {
+        if (value == null) p.remove(key) else p[key] = value
+    }
+
+    private fun profileThemeKey(profile: ContextProfile) =
+        stringPreferencesKey("profile_theme_${profile.name.lowercase()}")
 
     // --- Performance ------------------------------------------------------
 
@@ -297,8 +506,26 @@ enum class GestureKind(
         androidx.datastore.preferences.core.stringPreferencesKey("gesture_double_tap"),
         GestureAction.None
     ),
+    /**
+     * Long-press on empty space opens edit mode, as on most launchers; Settings
+     * remains one tap away inside edit mode. (Before 0.2 this defaulted to
+     * Settings; a value the user explicitly saved is still honoured.)
+     */
     LONG_PRESS(
         androidx.datastore.preferences.core.stringPreferencesKey("gesture_long_press"),
-        GestureAction.OpenSettings
+        GestureAction.EnterEditMode
+    ),
+    SWIPE_LEFT(
+        androidx.datastore.preferences.core.stringPreferencesKey("gesture_swipe_left"),
+        GestureAction.None
+    ),
+    SWIPE_RIGHT(
+        androidx.datastore.preferences.core.stringPreferencesKey("gesture_swipe_right"),
+        GestureAction.None
+    ),
+    /** Two-finger pinch inwards on the desktop. */
+    PINCH_IN(
+        androidx.datastore.preferences.core.stringPreferencesKey("gesture_pinch_in"),
+        GestureAction.EnterEditMode
     ),
 }

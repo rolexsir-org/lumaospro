@@ -9,8 +9,11 @@ sealed interface VoiceCommand {
 /** Small deterministic grammar; speech recognition itself is provided by Android. */
 object VoiceCommandParser {
     fun parse(transcript: String): VoiceCommand {
-        val normalized = transcript.lowercase().trim().replace(Regex("[^a-z0-9 ]"), " ")
+        // Trim *after* stripping punctuation: "Switch to Work!" must become
+        // "switch to work", not "switch to work " (which matched nothing).
+        val normalized = transcript.lowercase().replace(Regex("[^a-z0-9 ]"), " ")
             .replace(Regex("\\s+"), " ")
+            .trim()
         for (profile in ContextProfile.entries) {
             val name = profile.title.lowercase()
             if (normalized == name || normalized == "$name mode" ||

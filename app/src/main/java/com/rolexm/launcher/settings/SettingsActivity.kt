@@ -9,7 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,9 +35,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.rolexm.launcher.R
+import com.rolexm.launcher.core.RolexApp
 import com.rolexm.launcher.core.util.RoleHelper
-import com.rolexm.launcher.ui.Palettes
-import com.rolexm.launcher.ui.ThemeMode
 
 /**
  * ROLEXM settings and diagnostics.
@@ -75,18 +73,18 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.statusBarColor = Color.TRANSPARENT
 
+        val themes = (application as RolexApp).core.themes
         setContent {
-            val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.LIGHT)
+            // The same resolved theme the home screen draws with.
+            val theme by themes.theme.collectAsState()
             val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
 
-            RolexmTheme(themeMode = themeMode, textScale = textScale) {
-                val palette = Palettes.forMode(themeMode, isSystemInDarkTheme())
-
+            RolexmTheme(theme = theme, textScale = textScale) {
                 // Keep the status-bar icons legible against our own background.
-                DisposableEffect(palette.isDark) {
+                DisposableEffect(theme.isDark) {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
-                        isAppearanceLightStatusBars = !palette.isDark
-                        isAppearanceLightNavigationBars = !palette.isDark
+                        isAppearanceLightStatusBars = !theme.isDark
+                        isAppearanceLightNavigationBars = !theme.isDark
                     }
                     onDispose { }
                 }
@@ -174,5 +172,11 @@ class SettingsActivity : ComponentActivity() {
         } else {
             RoleHelper.openHomeSettings(this)
         }
+    }
+
+    companion object {
+        /** Optional tab to open; the home screen's edit mode passes [TAB_STUDIO]. */
+        const val EXTRA_TAB = "com.rolexm.launcher.extra.SETTINGS_TAB"
+        const val TAB_STUDIO = "studio"
     }
 }

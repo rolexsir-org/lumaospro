@@ -37,6 +37,26 @@ sealed interface GestureAction {
         override val storageKey: String get() = "open_wallpaper"
     }
 
+    /** Home edit mode: rearrange, add widgets, change layout preset. */
+    data object EnterEditMode : GestureAction {
+        override val storageKey: String get() = "edit_mode"
+    }
+
+    /** Customization Studio (themes, icons, layout) with live preview. */
+    data object OpenStudio : GestureAction {
+        override val storageKey: String get() = "open_studio"
+    }
+
+    /** Cycles Work -> Study -> Personal -> Sleep manually. */
+    data object NextContextProfile : GestureAction {
+        override val storageKey: String get() = "next_context"
+    }
+
+    /** Android speech recognition; ROLEXM parses the transcript locally. */
+    data object VoiceCommand : GestureAction {
+        override val storageKey: String get() = "voice"
+    }
+
     data class OpenApp(override val storageKey: String) : GestureAction {
         val key: ComponentKey? get() = ComponentKey.parse(storageKey.removePrefix(PREFIX))
         companion object {
@@ -46,6 +66,12 @@ sealed interface GestureAction {
     }
 
     companion object {
+        /** Every non-app action, in the order offered in settings. */
+        val BUILT_IN: List<GestureAction> = listOf(
+            None, OpenDrawer, OpenSearch, EnterEditMode, OpenStudio, OpenSettings,
+            OpenWallpaperPicker, NextContextProfile, VoiceCommand
+        )
+
         fun parse(raw: String?): GestureAction {
             if (raw.isNullOrBlank()) return None
             if (raw.startsWith(OpenApp.PREFIX)) return OpenApp(raw)
@@ -55,6 +81,10 @@ sealed interface GestureAction {
                 OpenSearch.storageKey -> OpenSearch
                 OpenSettings.storageKey -> OpenSettings
                 OpenWallpaperPicker.storageKey -> OpenWallpaperPicker
+                EnterEditMode.storageKey -> EnterEditMode
+                OpenStudio.storageKey -> OpenStudio
+                NextContextProfile.storageKey -> NextContextProfile
+                VoiceCommand.storageKey -> VoiceCommand
                 else -> None
             }
         }

@@ -447,6 +447,9 @@ private fun kindLabel(kind: GestureKind): String = stringResource(
         GestureKind.SWIPE_DOWN -> R.string.gesture_swipe_down
         GestureKind.DOUBLE_TAP -> R.string.gesture_double_tap
         GestureKind.LONG_PRESS -> R.string.gesture_long_press
+        GestureKind.SWIPE_LEFT -> R.string.gesture_swipe_left
+        GestureKind.SWIPE_RIGHT -> R.string.gesture_swipe_right
+        GestureKind.PINCH_IN -> R.string.gesture_pinch_in
     }
 )
 

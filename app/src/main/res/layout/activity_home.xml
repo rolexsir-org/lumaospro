@@ -1,110 +1,162 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shallow launcher surface: wallpaper, clock, home grid, dock and drawer. -->
+<!--
+    ROLEXM home: layered composition, back to front.
+
+      backdrop        theme atmosphere (or wallpaper legibility gradients)
+      desktop         chronometer header, widget/icon grid, search pill, dock
+      edit chrome     edit-mode top bar + toolbar (gone until edit mode)
+      drawer          scrim + sheet with search, categories, suggestions, A-Z
+      overlays        folders and the widget picker are added at runtime
+
+    Every view id used by HomeActivityRuntimeTest is kept with the same type.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/home_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/transparent">
+    android:background="@android:color/transparent"
+    android:clipChildren="false">
 
-    <LinearLayout
+    <com.rolexm.launcher.launcher.home.AmbientBackdropView
+        android:id="@+id/backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.rolexm.launcher.launcher.home.DesktopLayout
         android:id="@+id/desktop"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
         android:orientation="vertical">
 
         <LinearLayout
             android:id="@+id/home_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
-            android:layout_marginTop="20dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="12dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_marginStart="22dp"
+            android:layout_marginTop="18dp"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="10dp"
+            android:orientation="vertical">
 
             <LinearLayout
-                android:layout_width="0dp"
+                android:id="@+id/cluster_row"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextClock
-                    android:id="@+id/home_clock"
-                    android:layout_width="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.rolexm.launcher.launcher.home.ChronoDialView
+                    android:id="@+id/home_dial"
+                    android:layout_width="68dp"
+                    android:layout_height="68dp"
+                    android:layout_marginEnd="16dp" />
+
+                <LinearLayout
+                    android:id="@+id/clock_column"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:contentDescription="@string/home_clock_description"
-                    android:format12Hour="h:mm a"
-                    android:format24Hour="HH:mm"
-                    android:fontFamily="sans-serif-light"
-                    android:includeFontPadding="false"
-                    android:letterSpacing="-0.045"
-                    android:textColor="#FFFFFFFF"
-                    android:textSize="58sp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="36sp"
-                    android:autoSizeMaxTextSize="58sp"
-                    android:autoSizeStepGranularity="1sp"
-                    android:maxLines="1"
-                    android:shadowColor="#66000000"
-                    android:shadowDx="0"
-                    android:shadowDy="1"
-                    android:shadowRadius="6" />
-                <TextClock
-                    android:id="@+id/home_date"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextClock
+                        android:id="@+id/home_clock"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:autoSizeMaxTextSize="64sp"
+                        android:autoSizeMinTextSize="36sp"
+                        android:autoSizeStepGranularity="1sp"
+                        android:autoSizeTextType="uniform"
+                        android:contentDescription="@string/home_clock_description"
+                        android:fontFamily="sans-serif-thin"
+                        android:format12Hour="h:mm"
+                        android:format24Hour="HH:mm"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="-0.03"
+                        android:maxLines="1"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="64sp" />
+
+                    <TextClock
+                        android:id="@+id/home_date"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:format12Hour="EEEE, MMM d"
+                        android:format24Hour="EEEE, d MMM"
+                        android:includeFontPadding="false"
+                        android:textColor="#F2FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/header_actions"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:format12Hour="EEEE, MMM d"
-                    android:format24Hour="EEEE, MMM d"
-                    android:includeFontPadding="false"
-                    android:textColor="#F2FFFFFF"
-                    android:textSize="14sp"
-                    android:shadowColor="#66000000"
-                    android:shadowDx="0"
-                    android:shadowDy="1"
-                    android:shadowRadius="4" />
-                <TextView
-                    android:id="@+id/home_context"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:fontFamily="sans-serif-medium"
-                    android:letterSpacing="0.08"
-                    android:text="PERSONAL"
-                    android:textColor="#CCFFFFFF"
-                    android:textSize="10sp" />
+                    android:layout_gravity="top"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/home_search"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/home_search_description"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_rx_search" />
+
+                    <ImageButton
+                        android:id="@+id/home_settings"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/home_settings_description"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_rx_settings" />
+                </LinearLayout>
             </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/home_search"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/home_search_description"
-                android:padding="12dp"
-                android:src="@drawable/ic_search"
-                android:tint="#FF1C1C1E" />
-            <ImageButton
-                android:id="@+id/home_settings"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/home_settings_description"
-                android:padding="12dp"
-                android:src="@drawable/ic_settings"
-                android:tint="#FF1C1C1E" />
+            <TextView
+                android:id="@+id/home_context"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:fontFamily="sans-serif-condensed"
+                android:letterSpacing="0.12"
+                android:minHeight="32dp"
+                android:gravity="center_vertical"
+                android:text="PERSONAL"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
         </LinearLayout>
 
         <FrameLayout
+            android:id="@+id/home_grid_frame"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_weight="1"
+            android:clipChildren="false">
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/home_grid"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:clipChildren="false"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:scrollbars="none" />
+
+            <com.rolexm.launcher.launcher.home.PlacementGuideView
+                android:id="@+id/placement_guide"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/home_empty"
                 android:layout_width="wrap_content"
@@ -113,6 +165,7 @@
                 android:background="?android:attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
+                android:gravity="center"
                 android:padding="16dp"
                 android:text="@string/home_empty_hint"
                 android:textColor="#E6FFFFFF"
@@ -120,18 +173,71 @@
                 android:visibility="gone" />
         </FrameLayout>
 
+        <LinearLayout
+            android:id="@+id/home_search_pill"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:contentDescription="@string/home_search_description"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="6dp">
+
+            <ImageView
+                android:id="@+id/search_pill_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_rx_search" />
+
+            <TextView
+                android:id="@+id/search_pill_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:importantForAccessibility="no"
+                android:text="@string/search_pill_hint"
+                android:textSize="15sp" />
+
+            <ImageButton
+                android:id="@+id/search_pill_voice"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/voice_command_description"
+                android:padding="10dp"
+                android:src="@drawable/ic_rx_voice" />
+
+            <ImageButton
+                android:id="@+id/search_pill_settings"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/home_settings_description"
+                android:padding="10dp"
+                android:src="@drawable/ic_rx_settings"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <FrameLayout
             android:id="@+id/dock_surface"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="14dp"
             android:layout_marginEnd="14dp"
-            android:layout_marginBottom="4dp"
-            android:background="@drawable/bg_dock_surface"
+            android:layout_marginBottom="6dp"
             android:paddingStart="6dp"
-            android:paddingTop="4dp"
+            android:paddingTop="6dp"
             android:paddingEnd="6dp"
-            android:paddingBottom="4dp">
+            android:paddingBottom="6dp">
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/dock_row"
                 android:layout_width="match_parent"
@@ -140,7 +246,70 @@
                 android:overScrollMode="never"
                 android:scrollbars="none" />
         </FrameLayout>
+    </com.rolexm.launcher.launcher.home.DesktopLayout>
+
+    <!-- Edit mode chrome -->
+    <LinearLayout
+        android:id="@+id/edit_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/edit_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/edit_title"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/edit_hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/edit_hint"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/edit_done"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:minWidth="88dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="@string/edit_done"
+            android:textSize="15sp" />
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/edit_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone" />
 
     <FrameLayout
         android:id="@+id/drawer_container"
@@ -167,55 +336,86 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp" />
 
+            <View
+                android:id="@+id/drawer_handle"
+                android:layout_width="36dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:importantForAccessibility="no" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="20dp"
-                android:layout_marginTop="10dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginEnd="8dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-                <TextView
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:id="@+id/drawer_title"
-                    android:text="@string/drawer_title"
-                    android:textColor="#FF1C1C1E"
-                    android:textSize="22sp"
-                    android:fontFamily="sans-serif-medium" />
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/drawer_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/drawer_title"
+                        android:textColor="#FF1C1C1E"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:id="@+id/drawer_subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/drawer_sort"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/drawer_sort_description"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_rx_sort" />
+
                 <ImageButton
                     android:id="@+id/drawer_voice"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/voice_command_description"
-                    android:padding="14dp"
-                    android:src="@drawable/ic_voice"
-                    android:tint="#FF1C1C1E" />
+                    android:padding="13dp"
+                    android:src="@drawable/ic_rx_voice" />
+
                 <ImageButton
                     android:id="@+id/drawer_close"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/drawer_close_description"
-                    android:padding="14dp"
-                    android:src="@drawable/ic_close"
-                    android:tint="#FF1C1C1E" />
+                    android:padding="13dp"
+                    android:src="@drawable/ic_rx_close" />
             </LinearLayout>
 
             <EditText
                 android:id="@+id/search_field"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginStart="20dp"
+                android:layout_marginStart="18dp"
                 android:layout_marginTop="4dp"
-                android:layout_marginEnd="20dp"
-                android:layout_marginBottom="10dp"
+                android:layout_marginEnd="18dp"
+                android:layout_marginBottom="8dp"
                 android:autofillHints="false"
                 android:background="@drawable/bg_search_field"
+                android:drawablePadding="12dp"
                 android:hint="@string/search_hint"
-                android:imeOptions="actionSearch|flagNoFullscreen"
+                android:imeOptions="actionGo|flagNoFullscreen"
                 android:importantForAutofill="no"
                 android:inputType="text|textNoSuggestions"
                 android:paddingStart="16dp"
@@ -224,26 +424,48 @@
                 android:textColorHint="#FF6E6E73"
                 android:textSize="16sp" />
 
+            <HorizontalScrollView
+                android:id="@+id/drawer_chips_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:overScrollMode="never"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/drawer_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingBottom="6dp" />
+            </HorizontalScrollView>
+
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1">
+
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/drawer_grid"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
+                    android:overScrollMode="never"
                     android:paddingStart="10dp"
                     android:paddingTop="4dp"
                     android:paddingEnd="30dp"
-                    android:overScrollMode="never"
+                    android:paddingBottom="12dp"
                     android:scrollbars="none" />
+
                 <com.rolexm.launcher.launcher.view.AlphaIndexView
                     android:id="@+id/alpha_index"
                     android:layout_width="26dp"
                     android:layout_height="match_parent"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/drawer_alphabet_index_description" />
+
                 <TextView
                     android:id="@+id/empty_view"
                     android:layout_width="wrap_content"
