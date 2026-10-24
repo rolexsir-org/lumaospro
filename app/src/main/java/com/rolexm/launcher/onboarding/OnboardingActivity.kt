@@ -60,12 +60,13 @@ class OnboardingActivity : ComponentActivity() {
         // Record the outcome whatever it was: the user has been asked, and
         // nagging them again on every launch would be worse than not asking.
         lifecycleScope.launch {
-            prefs.setOnboardingDone(result.resultCode == RESULT_OK || isDefaultNow())
+            // Completion means the user answered, not that the role was
+            // granted. A denial must not re-open onboarding on every launch;
+            // Home-role status continues to be read independently in Settings.
+            prefs.setOnboardingDone(true)
+            finish()
         }
-        finish()
     }
-
-    private fun isDefaultNow(): Boolean = RoleHelper.isDefaultLauncher(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

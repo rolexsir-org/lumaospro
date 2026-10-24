@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -37,6 +38,7 @@ import kotlinx.coroutines.launch
 import com.rolexm.launcher.R
 import com.rolexm.launcher.core.RolexApp
 import com.rolexm.launcher.core.util.RoleHelper
+import com.rolexm.launcher.settings.studio.StudioRoot
 
 /**
  * ROLEXM settings and diagnostics.
@@ -67,6 +69,22 @@ class SettingsActivity : ComponentActivity() {
         lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(granted) }
     }
 
+    private val exportBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let(viewModel::exportBackup) }
+
+    private val importBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.backup_confirm_title)
+            .setMessage(R.string.backup_confirm_generic)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.backup_confirm_restore) { _, _ -> viewModel.importBackup(uri) }
+            .show()
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,9 +107,11 @@ class SettingsActivity : ComponentActivity() {
                     onDispose { }
                 }
 
-                var tab by remember { mutableIntStateOf(0) }
+                val initialTab = if (intent.getStringExtra(EXTRA_TAB) == TAB_STUDIO) 1 else 0
+                var tab by rememberSaveable { mutableIntStateOf(initialTab) }
                 val tabs = listOf(
                     stringResource(R.string.title_settings_tab),
+                    stringResource(R.string.tab_studio),
                     stringResource(R.string.dash_title)
                 )
 
@@ -131,8 +151,17 @@ class SettingsActivity : ComponentActivity() {
                                     onOpenHomeSettings = {
                                         RoleHelper.openHomeSettings(this@SettingsActivity)
                                     },
-                                    onRequestNotifications = ::requestContextNotifications
+                                    onRequestNotifications = ::requestContextNotifications,
+                                    onExportBackup = {
+                                        exportBackupLauncher.launch("rolexm-backup.json")
+                                    },
+                                    onImportBackup = {
+                                        importBackupLauncher.launch(
+                                            arrayOf("application/json", "text/plain", "application/octet-stream")
+                                        )
+                                    }
                                 )
+                                1 -> StudioRoot(viewModel = viewModel)
                                 else -> DashboardRoot(viewModel = viewModel)
                             }
                         }
@@ -149,6 +178,7 @@ class SettingsActivity : ComponentActivity() {
         viewModel.refreshRoleStatus()
         viewModel.refreshHistory()
         viewModel.refreshContextDnd()
+        viewModel.refreshIconPacks()
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(false) }

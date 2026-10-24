@@ -66,6 +66,9 @@
     <string name="pref_grid_rows">Home rows</string>
     <string name="pref_icon_size">Icon size</string>
     <string name="pref_show_labels">Show app labels</string>
+    <string name="pref_widgets">Allow adding widgets</string>
+    <string name="pref_widgets_desc">Controls new widget insertion. Existing home widgets are kept.</string>
+    <string name="toast_widgets_disabled">Adding widgets is disabled in Settings</string>
     <string name="pref_text_scale">Text scale</string>
     <string name="pref_drawer_columns">Drawer columns</string>
 

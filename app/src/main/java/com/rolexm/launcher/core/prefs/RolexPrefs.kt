@@ -29,6 +29,7 @@ import com.rolexm.launcher.ui.theme.TypeStyle
 import com.rolexm.launcher.core.apps.DrawerSort
 import com.rolexm.launcher.effects.EffectsPreference
 import com.rolexm.launcher.launcher.model.DockStyle
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.launcher.model.HomePreset
 import com.rolexm.launcher.motion.MotionPreference
 import kotlinx.coroutines.flow.Flow
@@ -94,6 +95,7 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
         val HOME_PRESET = stringPreferencesKey("home_preset")
         val DOCK_STYLE = stringPreferencesKey("dock_style")
         val DRAWER_SORT = stringPreferencesKey("drawer_sort")
+        val DRAWER_PRESENTATION = stringPreferencesKey("drawer_presentation")
         val DRAWER_CATEGORIES = booleanPreferencesKey("drawer_categories")
         val SUGGESTIONS_ENABLED = booleanPreferencesKey("suggestions_enabled")
         val HIDDEN_SEARCH = booleanPreferencesKey("hidden_search")
@@ -105,7 +107,26 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
     val themeMode: Flow<ThemeMode> = read(Keys.THEME_MODE) { ThemeMode.LIGHT.storageKey }
         .map { ThemeMode.fromStorageKey(it) }
 
-    suspend fun setThemeMode(mode: ThemeMode) = write(Keys.THEME_MODE, mode.storageKey)
+    /**
+     * Compatibility entry point used by the original settings screen. Keep the
+     * 0.2 resolver in the same transaction: writing only theme_mode would leave
+     * an explicit theme_id in force and make this visible control appear dead.
+     */
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { p ->
+            p[Keys.THEME_MODE] = mode.storageKey
+            when (mode) {
+                ThemeMode.SYSTEM -> p[Keys.THEME_SWITCHING] = ThemeSwitching.SYSTEM.storageKey
+                ThemeMode.LIGHT, ThemeMode.DARK -> {
+                    val pairKey = if (mode == ThemeMode.LIGHT) Keys.THEME_LIGHT_ID else Keys.THEME_DARK_ID
+                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.GRAPHITE
+                    val id = ThemeId.fromStorageKey(p[pairKey]) ?: fallback
+                    p[Keys.THEME_ID] = id.storageKey
+                    p[Keys.THEME_SWITCHING] = ThemeSwitching.FIXED.storageKey
+                }
+            }
+        }
+    }
 
     val gridColumns: Flow<Int> = read(Keys.GRID_COLUMNS) { DEFAULT_GRID_COLUMNS }
     suspend fun setGridColumns(value: Int) = write(Keys.GRID_COLUMNS, value.coerceIn(3, 7))
@@ -249,6 +270,12 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
     val drawerSort: Flow<DrawerSort> = readNullable(Keys.DRAWER_SORT).map { DrawerSort.fromStorageKey(it) }
     suspend fun setDrawerSort(value: DrawerSort) = write(Keys.DRAWER_SORT, value.storageKey)
 
+    /** List is the efficient default; the original grid remains fully supported. */
+    val drawerPresentation: Flow<DrawerPresentation> = readNullable(Keys.DRAWER_PRESENTATION)
+        .map { DrawerPresentation.fromStorageKey(it) ?: DrawerPresentation.LIST }
+    suspend fun setDrawerPresentation(value: DrawerPresentation) =
+        write(Keys.DRAWER_PRESENTATION, value.storageKey)
+
     val drawerCategoriesEnabled: Flow<Boolean> = read(Keys.DRAWER_CATEGORIES) { true }
     suspend fun setDrawerCategoriesEnabled(value: Boolean) = write(Keys.DRAWER_CATEGORIES, value)
 
@@ -391,11 +418,30 @@ class RolexPrefs(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /** Explicit favourites for the vertical/grid drawer, independent per context. */
+    fun pinnedApps(profile: ContextProfile): Flow<List<ComponentKey>> =
+        readNullable(pinnedAppsKey(profile)).map { raw ->
+            raw.orEmpty().split('|').mapNotNullTo(mutableListOf()) { ComponentKey.parse(it) }.distinct()
+        }
+
+    suspend fun setAppPinned(profile: ContextProfile, key: ComponentKey, pinned: Boolean) {
+        dataStore.edit { prefs ->
+            val prefKey = pinnedAppsKey(profile)
+            val current = prefs[prefKey].orEmpty().split('|')
+                .mapNotNullTo(mutableListOf()) { ComponentKey.parse(it) }.distinct().toMutableList()
+            current.remove(key)
+            if (pinned) current.add(key)
+            putOrRemove(prefs, prefKey, current.takeIf { it.isNotEmpty() }?.joinToString("|") { it.serialize() })
+        }
+    }
+
     private fun profileLayoutKey(profile: ContextProfile) = stringPreferencesKey("home_layout_${profile.name.lowercase()}")
     private fun scheduleKey(profile: ContextProfile) = stringPreferencesKey("schedule_${profile.name.lowercase()}")
     private fun hiddenAppsKey(profile: ContextProfile) = stringPreferencesKey("hidden_apps_${profile.name.lowercase()}")
+    private fun pinnedAppsKey(profile: ContextProfile) = stringPreferencesKey("pinned_apps_${profile.name.lowercase()}")
 
-    val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { false }
+    /** Controls adding widgets; existing placed widgets are never removed by this setting. */
+    val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { true }
     suspend fun setWidgetsEnabled(value: Boolean) = write(Keys.WIDGETS_ENABLED, value)
 
     val onboardingDone: Flow<Boolean> = read(Keys.ONBOARDING_DONE) { false }

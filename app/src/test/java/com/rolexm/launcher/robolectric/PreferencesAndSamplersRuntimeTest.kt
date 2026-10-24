@@ -22,7 +22,9 @@ import com.rolexm.launcher.launcher.model.HomeItem
 import com.rolexm.launcher.launcher.model.HomeLayout
 import com.rolexm.launcher.launcher.model.HomeLayoutCodec
 import com.rolexm.launcher.launcher.model.HomeLayoutOps
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.ui.ThemeMode
+import com.rolexm.launcher.ui.theme.ThemeSwitching
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
@@ -88,6 +90,34 @@ class PreferencesAndSamplersRuntimeTest {
         assertEquals(ThemeMode.DARK, prefs.themeMode.first())
         prefs.setThemeMode(ThemeMode.LIGHT)
         assertEquals(ThemeMode.LIGHT, prefs.themeMode.first())
+    }
+
+    @Test
+    fun `legacy theme control updates the active theme resolver atomically`() = runTest {
+        prefs.setThemeMode(ThemeMode.DARK)
+        assertEquals(ThemeSwitching.FIXED, prefs.themeSettings.first().switching)
+        assertEquals(prefs.themeSettings.first().darkThemeId, prefs.themeSettings.first().themeId)
+
+        prefs.setThemeMode(ThemeMode.SYSTEM)
+        assertEquals(ThemeSwitching.SYSTEM, prefs.themeSettings.first().switching)
+    }
+
+    @Test
+    fun `drawer presentation and pinned apps round trip per context`() = runTest {
+        assertEquals(DrawerPresentation.LIST, prefs.drawerPresentation.first())
+        prefs.setDrawerPresentation(DrawerPresentation.GRID)
+        assertEquals(DrawerPresentation.GRID, prefs.drawerPresentation.first())
+
+        val first = ComponentKey("com.first", "com.first.Main")
+        val second = ComponentKey("com.second", "com.second.Main")
+        prefs.setAppPinned(ContextProfile.WORK, first, true)
+        prefs.setAppPinned(ContextProfile.WORK, second, true)
+        prefs.setAppPinned(ContextProfile.WORK, first, true)
+        assertEquals(listOf(second, first), prefs.pinnedApps(ContextProfile.WORK).first())
+        assertTrue(prefs.pinnedApps(ContextProfile.PERSONAL).first().isEmpty())
+
+        prefs.setAppPinned(ContextProfile.WORK, second, false)
+        assertEquals(listOf(first), prefs.pinnedApps(ContextProfile.WORK).first())
     }
 
     @Test

@@ -66,6 +66,7 @@ import com.rolexm.launcher.ui.RolexCorners
 import com.rolexm.launcher.ui.RolexSpacing
 import com.rolexm.launcher.core.prefs.GestureKind
 import com.rolexm.launcher.intelligence.ProfileId
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.launcher.model.GestureAction
 import com.rolexm.launcher.ui.ThemeMode
 import kotlinx.coroutines.launch
@@ -87,7 +88,9 @@ fun SettingsRoot(
     viewModel: SettingsViewModel,
     onRequestHomeRole: () -> Unit,
     onOpenHomeSettings: () -> Unit,
-    onRequestNotifications: () -> Unit
+    onRequestNotifications: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -103,9 +106,11 @@ fun SettingsRoot(
             HomeRoleSection(viewModel, onRequestHomeRole, onOpenHomeSettings)
             ContextSection(viewModel, onRequestNotifications)
             AppearanceSection(viewModel)
+            DrawerSection(viewModel)
             GestureSection(viewModel)
             PerformanceSection(viewModel)
             PrivacySection()
+            BackupSection(viewModel, onExportBackup, onImportBackup)
             AboutSection()
             Spacer(Modifier.height(RolexSpacing.screenEnd))
         }
@@ -366,8 +371,10 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
     val gridRows by viewModel.prefs.gridRows.collectAsState(5)
     val drawerColumns by viewModel.prefs.drawerColumns.collectAsState(4)
+    val drawerPresentation by viewModel.prefs.drawerPresentation.collectAsState(DrawerPresentation.LIST)
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(48)
     val showLabels by viewModel.prefs.showLabels.collectAsState(true)
+    val widgetsEnabled by viewModel.prefs.widgetsEnabled.collectAsState(true)
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
     val scope = rememberCoroutineScope()
 
@@ -392,8 +399,21 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
         SliderRow(stringResource(R.string.pref_grid_rows), gridRows, 3f..8f) {
             scope.launch { viewModel.prefs.setGridRows(it.roundToInt()) }
         }
-        SliderRow(stringResource(R.string.pref_drawer_columns), drawerColumns, 3f..7f) {
-            scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
+        ChoiceRow(
+            label = stringResource(R.string.pref_drawer_presentation),
+            selected = stringResource(
+                if (drawerPresentation == DrawerPresentation.LIST) R.string.drawer_presentation_list
+                else R.string.drawer_presentation_grid
+            ),
+            options = listOf(
+                DrawerPresentation.LIST to stringResource(R.string.drawer_presentation_list),
+                DrawerPresentation.GRID to stringResource(R.string.drawer_presentation_grid)
+            )
+        ) { scope.launch { viewModel.prefs.setDrawerPresentation(it) } }
+        if (drawerPresentation == DrawerPresentation.GRID) {
+            SliderRow(stringResource(R.string.pref_drawer_columns), drawerColumns, 3f..7f) {
+                scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
+            }
         }
         SliderRow(stringResource(R.string.pref_icon_size), iconSizeDp, 36f..72f, suffix = " dp") {
             scope.launch { viewModel.prefs.setIconSizeDp(it.roundToInt()) }
@@ -403,6 +423,53 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
         }
         SwitchRow(stringResource(R.string.pref_show_labels), showLabels) {
             scope.launch { viewModel.prefs.setShowLabels(it) }
+        }
+        SwitchRow(
+            label = stringResource(R.string.pref_widgets),
+            checked = widgetsEnabled,
+            subtitle = stringResource(R.string.pref_widgets_desc)
+        ) { scope.launch { viewModel.prefs.setWidgetsEnabled(it) } }
+    }
+}
+
+// ------------------------------------------------------------- apps & search
+
+@Composable
+private fun DrawerSection(viewModel: SettingsViewModel) {
+    val categories by viewModel.prefs.drawerCategoriesEnabled.collectAsState(true)
+    val suggestions by viewModel.prefs.suggestionsEnabled.collectAsState(true)
+    val hiddenInSearch by viewModel.prefs.hiddenInSearch.collectAsState(false)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    SettingsSection(stringResource(R.string.section_drawer)) {
+        Text(
+            stringResource(R.string.pref_pinned_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SwitchRow(
+            label = stringResource(R.string.pref_drawer_categories),
+            checked = categories,
+            subtitle = stringResource(R.string.pref_drawer_categories_desc)
+        ) { scope.launch { viewModel.prefs.setDrawerCategoriesEnabled(it) } }
+        SwitchRow(
+            label = stringResource(R.string.pref_suggestions),
+            checked = suggestions,
+            subtitle = stringResource(R.string.pref_suggestions_desc)
+        ) { scope.launch { viewModel.prefs.setSuggestionsEnabled(it) } }
+        SwitchRow(
+            label = stringResource(R.string.pref_hidden_search),
+            checked = hiddenInSearch,
+            subtitle = stringResource(R.string.pref_hidden_search_desc)
+        ) { scope.launch { viewModel.prefs.setHiddenInSearch(it) } }
+        OutlinedButton(onClick = {
+            scope.launch {
+                viewModel.clearLaunchHistory()
+                Toast.makeText(context, R.string.pref_history_cleared, Toast.LENGTH_SHORT).show()
+            }
+        }) {
+            Text(stringResource(R.string.pref_clear_history))
         }
     }
 }
@@ -421,13 +488,7 @@ private fun GestureSection(viewModel: SettingsViewModel) {
         )
         Spacer(Modifier.height(10.dp))
 
-        val options = listOf(
-            GestureAction.None to stringResource(R.string.gesture_none),
-            GestureAction.OpenDrawer to stringResource(R.string.gesture_open_drawer),
-            GestureAction.OpenSearch to stringResource(R.string.gesture_open_search),
-            GestureAction.OpenSettings to stringResource(R.string.gesture_open_settings),
-            GestureAction.OpenWallpaperPicker to stringResource(R.string.gesture_open_wallpaper)
-        )
+        val options = GestureAction.BUILT_IN.map { it to gestureActionLabel(it) }
         for (kind in GestureKind.entries) {
             val current by viewModel.prefs.gesture(kind).collectAsState(kind.default)
             ChoiceRow(
@@ -450,6 +511,22 @@ private fun kindLabel(kind: GestureKind): String = stringResource(
         GestureKind.SWIPE_LEFT -> R.string.gesture_swipe_left
         GestureKind.SWIPE_RIGHT -> R.string.gesture_swipe_right
         GestureKind.PINCH_IN -> R.string.gesture_pinch_in
+    }
+)
+
+@Composable
+private fun gestureActionLabel(action: GestureAction): String = stringResource(
+    when (action) {
+        GestureAction.None -> R.string.gesture_none
+        GestureAction.OpenDrawer -> R.string.gesture_open_drawer
+        GestureAction.OpenSearch -> R.string.gesture_open_search
+        GestureAction.OpenSettings -> R.string.gesture_open_settings
+        GestureAction.OpenWallpaperPicker -> R.string.gesture_open_wallpaper
+        GestureAction.EnterEditMode -> R.string.gesture_edit_mode
+        GestureAction.OpenStudio -> R.string.gesture_open_studio
+        GestureAction.NextContextProfile -> R.string.gesture_next_context
+        GestureAction.VoiceCommand -> R.string.gesture_voice
+        is GestureAction.OpenApp -> R.string.gesture_open_app
     }
 )
 
@@ -518,6 +595,60 @@ private fun PrivacySection() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun BackupSection(
+    viewModel: SettingsViewModel,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit
+) {
+    val state by viewModel.backupState.collectAsState()
+    SettingsSection(stringResource(R.string.section_backup)) {
+        Text(
+            text = stringResource(R.string.backup_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onExportBackup,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.backup_export)) }
+        OutlinedButton(
+            onClick = onImportBackup,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.backup_import)) }
+        if (state.busy) {
+            Row(
+                Modifier.padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.backup_working),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        state.message?.let { message ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    message,
+                    modifier = Modifier.weight(1f).padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { viewModel.consumeBackupMessage() }) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
+        }
     }
 }
 

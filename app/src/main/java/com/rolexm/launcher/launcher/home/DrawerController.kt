@@ -15,7 +15,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.rolexm.launcher.R
 import com.rolexm.launcher.core.apps.DrawerCategory
@@ -44,6 +44,7 @@ class DrawerController(
     private val scrim: View,
     val grid: RecyclerView,
     private val searchField: EditText,
+    private val clearButton: ImageButton,
     private val alphaIndex: AlphaIndexView,
     private val emptyView: TextView,
     private val chipsScroll: HorizontalScrollView,
@@ -86,10 +87,16 @@ class DrawerController(
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 val q = s?.toString().orEmpty()
+                clearButton.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
                 host.onQueryChanged(q)
                 chipsScroll.visibility = if (q.isBlank() && chips.childCount > 1) View.VISIBLE else View.GONE
             }
         })
+        clearButton.setOnClickListener {
+            searchField.setText("")
+            searchField.requestFocus()
+            showKeyboard()
+        }
         searchField.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_SEARCH ||
                 actionId == EditorInfo.IME_NULL
@@ -100,7 +107,7 @@ class DrawerController(
         }
         alphaIndex.onLetterTouched = { letter ->
             buckets.firstOrNull { it.first == letter }?.second?.let { pos ->
-                (grid.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(pos, 0)
+                (grid.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(pos, 0)
             }
         }
         grid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -250,7 +257,7 @@ class DrawerController(
             chips.addView(TextView(context).apply {
                 text = label
                 gravity = Gravity.CENTER
-                minHeight = dp(36f)
+                minHeight = dp(48f)
                 minWidth = dp(48f)
                 setPadding(dp(14f), 0, dp(14f), 0)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -267,7 +274,7 @@ class DrawerController(
                 isSelected = chosen
                 contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, label) else label
                 setOnClickListener { host.onFilterSelected(filter) }
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(36f)).apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48f)).apply {
                     marginEnd = dp(8f)
                 }
             })
@@ -286,6 +293,7 @@ class DrawerController(
         searchField.background = ThemedDrawables.surface(c.surface2, theme.corner(18f) * density, c.outline, 1)
         searchField.setTextColor(c.onSurface)
         searchField.setHintTextColor(c.onSurfaceMuted)
+        clearButton.imageTintList = android.content.res.ColorStateList.valueOf(c.onSurfaceMuted)
         searchField.typeface = Typefaces.label(theme.typography)
         ContextCompat.getDrawable(context, R.drawable.ic_rx_search)?.mutate()?.let { d ->
             d.setTint(c.onSurfaceMuted)

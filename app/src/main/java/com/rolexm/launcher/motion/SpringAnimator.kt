@@ -45,7 +45,10 @@ class SpringAnimator(
         spec = motion.adapt(springSpec)
         policy = motion
         onEnd = endAction
-        if (!motion.enabled) {
+        // Reduced motion keeps the same state and callbacks but removes large
+        // travel. Gesture tracking still works; only the decorative settle is
+        // skipped. OFF and reduced therefore cannot strand a surface mid-flight.
+        if (!motion.enabled || motion.reduced) {
             snapTo(newTarget)
             return
         }

@@ -33,6 +33,11 @@ class IconCache(maxEntries: Int) {
         cache.put(key, drawable)
     }
 
+    @Synchronized
+    fun remove(key: ComponentKey) {
+        cache.remove(key)
+    }
+
     /** Changes the ceiling, evicting least-recently-used entries if needed. */
     @Synchronized
     fun resize(newMaxEntries: Int) {

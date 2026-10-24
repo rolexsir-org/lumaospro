@@ -124,7 +124,8 @@
                 android:background="?android:attr/selectableItemBackground"
                 android:fontFamily="sans-serif-condensed"
                 android:letterSpacing="0.12"
-                android:minHeight="32dp"
+                android:minHeight="48dp"
+                android:minWidth="64dp"
                 android:gravity="center_vertical"
                 android:text="PERSONAL"
                 android:textColor="#CCFFFFFF"
@@ -208,8 +209,8 @@
 
             <ImageButton
                 android:id="@+id/search_pill_voice"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/voice_command_description"
                 android:padding="10dp"
@@ -217,8 +218,8 @@
 
             <ImageButton
                 android:id="@+id/search_pill_settings"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/home_settings_description"
                 android:padding="10dp"
@@ -403,26 +404,43 @@
                     android:src="@drawable/ic_rx_close" />
             </LinearLayout>
 
-            <EditText
-                android:id="@+id/search_field"
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:layout_marginStart="18dp"
                 android:layout_marginTop="4dp"
                 android:layout_marginEnd="18dp"
-                android:layout_marginBottom="8dp"
-                android:autofillHints="false"
-                android:background="@drawable/bg_search_field"
-                android:drawablePadding="12dp"
-                android:hint="@string/search_hint"
-                android:imeOptions="actionGo|flagNoFullscreen"
-                android:importantForAutofill="no"
-                android:inputType="text|textNoSuggestions"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:singleLine="true"
-                android:textColorHint="#FF6E6E73"
-                android:textSize="16sp" />
+                android:layout_marginBottom="8dp">
+
+                <EditText
+                    android:id="@+id/search_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:autofillHints="false"
+                    android:background="@drawable/bg_search_field"
+                    android:drawablePadding="12dp"
+                    android:hint="@string/search_hint"
+                    android:imeOptions="actionGo|flagNoFullscreen"
+                    android:importantForAutofill="no"
+                    android:inputType="text|textNoSuggestions"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="54dp"
+                    android:singleLine="true"
+                    android:textColorHint="#FF6E6E73"
+                    android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/search_clear"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="2dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/search_clear_description"
+                    android:padding="14dp"
+                    android:src="@drawable/ic_rx_close"
+                    android:visibility="gone" />
+            </FrameLayout>
 
             <HorizontalScrollView
                 android:id="@+id/drawer_chips_scroll"

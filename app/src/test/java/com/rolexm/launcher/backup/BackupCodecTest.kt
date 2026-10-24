@@ -15,6 +15,9 @@ class BackupCodecTest {
         "show_labels" to false,
         "accent_override" to 0xFF3DF2E0.toInt(),
         "hidden_apps_work" to "0:com.game/com.game.Main",
+        "pinned_apps_work" to "0:com.chat/com.chat.Main|0:com.mail/com.mail.Main",
+        "drawer_presentation" to "list",
+        "widgets_enabled" to true,
         "gesture_swipe_left" to "open_studio",
         "home_layout_personal" to "v2\nD|A|0:com.a/com.a.Main\nP|W|12|p/c|2,A|0:com.b/com.b.Main\n",
         "last_action_at" to "x=1",
@@ -30,6 +33,9 @@ class BackupCodecTest {
         assertEquals(false, decoded.values["show_labels"])
         assertEquals(0xFF3DF2E0.toInt(), decoded.values["accent_override"])
         assertEquals("0:com.game/com.game.Main", decoded.values["hidden_apps_work"])
+        assertEquals("0:com.chat/com.chat.Main|0:com.mail/com.mail.Main", decoded.values["pinned_apps_work"])
+        assertEquals("list", decoded.values["drawer_presentation"])
+        assertEquals(true, decoded.values["widgets_enabled"])
         assertEquals("open_studio", decoded.values["gesture_swipe_left"])
         assertEquals(123L, decoded.createdAtMillis)
         assertEquals("0.2.0", decoded.appVersion)

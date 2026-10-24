@@ -46,6 +46,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.rolexm.launcher.R
 import com.rolexm.launcher.context.ContextProfile
@@ -88,6 +89,7 @@ import com.rolexm.launcher.launcher.model.ClockStyle
 import com.rolexm.launcher.launcher.model.DockStyle
 import com.rolexm.launcher.launcher.model.DrawerAction
 import com.rolexm.launcher.launcher.model.DrawerFilter
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.launcher.model.DrawerRow
 import com.rolexm.launcher.launcher.model.GestureAction
 import com.rolexm.launcher.launcher.model.GridRules
@@ -213,6 +215,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var dockCellConfig = homeCellConfig
     private var drawerCellConfig = CellConfig(48, true, 1f, ColorMath.WHITE, false)
     private var folderCellConfig = drawerCellConfig
+    private var widgetsEnabled = true
     private var cellHeightPx = 0
     private var gridColumns = 4
     private var drawerColumns = 4
@@ -239,6 +242,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val gridColumns: Int = 4,
         val gridRows: Int = 4,
         val drawerColumns: Int = 4,
+        val drawerPresentation: DrawerPresentation = DrawerPresentation.LIST,
         val preset: HomePreset = HomePreset.DEFAULT,
         val dockStyle: DockStyle? = null,
         val iconPack: String? = null
@@ -395,13 +399,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
         })
         dockRow.layoutManager = GridLayoutManager(this, gridColumns)
-        drawerGrid.layoutManager = GridLayoutManager(this, drawerColumns).apply {
+        drawerGrid.layoutManager = createDrawerLayoutManager(DrawerPresentation.GRID)
+        drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshResponsiveIcons() }
+    }
+
+    private fun createDrawerLayoutManager(presentation: DrawerPresentation): RecyclerView.LayoutManager {
+        if (presentation == DrawerPresentation.LIST) return LinearLayoutManager(this)
+        return GridLayoutManager(this, drawerColumns).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int =
                     if (::drawerAdapter.isInitialized && drawerAdapter.isFullSpan(position)) spanCount else 1
             }
         }
-        drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshResponsiveIcons() }
     }
 
     private fun setupAdapters() {
@@ -460,6 +469,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         drawerAdapter = DrawerAdapter(
             cellConfig = { drawerCellConfig },
+            presentation = { appearance.drawerPresentation },
             rowStyle = ::drawerRowStyle,
             iconLoader = iconLoader,
             density = density,
@@ -478,6 +488,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             scrim = findViewById(R.id.drawer_scrim),
             grid = drawerGrid,
             searchField = searchField,
+            clearButton = findViewById(R.id.search_clear),
             alphaIndex = findViewById<AlphaIndexView>(R.id.alpha_index),
             emptyView = findViewById(R.id.empty_view),
             chipsScroll = findViewById<HorizontalScrollView>(R.id.drawer_chips_scroll),
@@ -719,10 +730,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             repeatOnLifecycle(Lifecycle.State.STARTED) {
 
                 launch {
-                    viewModel.apps.collect { apps ->
-                        if (apps.isNotEmpty() && !appsLoadedOnce) {
+                    viewModel.isLoading.collect { loading ->
+                        if (!loading && !appsLoadedOnce) {
                             appsLoadedOnce = true
-                            if (profile.preloadIcons) iconLoader.preload(apps.map { it.key }, density)
+                            val apps = viewModel.apps.value
+                            if (profile.preloadIcons && apps.isNotEmpty()) {
+                                iconLoader.preload(apps.map { it.key }, density)
+                            }
+                            // Empty/cold launches are real starts too; measuring
+                            // only non-empty app lists hid the slowest edge case.
                             measureStartupWhenDrawn()
                         }
                     }
@@ -741,6 +757,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 }
 
                 launch { viewModel.drawerSort.collect { drawer.currentSort = it } }
+                launch { viewModel.prefs.widgetsEnabled.collect { widgetsEnabled = it } }
 
                 launch {
                     combine(viewModel.activeContextProfile, readouts.state) { p, r -> p to r }.collect { (p, r) ->
@@ -776,7 +793,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
                 launch {
                     core.themes.theme.collect { t ->
-                        val animate = appliedTheme != null && appliedTheme?.id != t.id && motion.enabled
+                        val animate = appliedTheme != null && appliedTheme?.id != t.id && motion.enabled && !motion.reduced
                         theme = t
                         applyTheme(t, animate)
                     }
@@ -793,19 +810,32 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     }
                 }
 
-                launch { core.effects.motion.collect { motion = it } }
+                launch {
+                    core.effects.motion.collect { policy ->
+                        motion = policy
+                        if (policy.reduced) {
+                            themeAnimator?.cancel()
+                            themeAnimator = null
+                            settleProgress = 1f
+                            finishTheme(theme)
+                            applyDepth()
+                        }
+                    }
+                }
 
                 launch {
                     val flows: List<Flow<Any?>> = listOf(
                         viewModel.prefs.iconSizeDp, viewModel.prefs.showLabels, viewModel.prefs.textScale,
                         viewModel.prefs.gridColumns, viewModel.prefs.gridRows, viewModel.prefs.drawerColumns,
-                        viewModel.prefs.homePreset, viewModel.prefs.dockStyleOverride, viewModel.prefs.iconPack
+                        viewModel.prefs.drawerPresentation, viewModel.prefs.homePreset,
+                        viewModel.prefs.dockStyleOverride, viewModel.prefs.iconPack
                     )
                     combine(flows) { v ->
                         Appearance(
                             iconSizeDp = v[0] as Int, showLabels = v[1] as Boolean, textScale = v[2] as Float,
                             gridColumns = v[3] as Int, gridRows = v[4] as Int, drawerColumns = v[5] as Int,
-                            preset = v[6] as HomePreset, dockStyle = v[7] as DockStyle?, iconPack = v[8] as String?
+                            drawerPresentation = v[6] as DrawerPresentation,
+                            preset = v[7] as HomePreset, dockStyle = v[8] as DockStyle?, iconPack = v[9] as String?
                         )
                     }.distinctUntilChanged().collect { a ->
                         appearance = a
@@ -1041,8 +1071,19 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             gridColumns = cols
             (homeGrid.layoutManager as GridLayoutManager).spanCount = cols
         }
-        if (a.drawerColumns != drawerColumns) {
-            drawerColumns = GridRules.effectiveColumns(a.drawerColumns, widthDp)
+        val currentDrawerManager = drawerGrid.layoutManager
+        val presentationChanged = when (a.drawerPresentation) {
+            DrawerPresentation.LIST -> currentDrawerManager !is LinearLayoutManager
+            DrawerPresentation.GRID -> currentDrawerManager !is GridLayoutManager
+        }
+        if (presentationChanged) {
+            drawerGrid.layoutManager = createDrawerLayoutManager(a.drawerPresentation)
+            drawerGrid.recycledViewPool.clear()
+            @Suppress("NotifyDataSetChanged")
+            drawerAdapter.notifyDataSetChanged()
+        }
+        drawerColumns = GridRules.effectiveColumns(a.drawerColumns, widthDp)
+        if (a.drawerPresentation == DrawerPresentation.GRID) {
             (drawerGrid.layoutManager as GridLayoutManager).spanCount = drawerColumns
         }
         homeCellConfig = homeCellConfig.copy(showLabels = a.showLabels, textScale = a.textScale)
@@ -1120,7 +1161,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         }
-        val drawerSize = iconSizeForGrid(requested, drawerGrid, drawerColumns, drawerGrid.paddingLeft + drawerGrid.paddingRight)
+        val drawerSize = if (appearance.drawerPresentation == DrawerPresentation.LIST) requested else
+            iconSizeForGrid(requested, drawerGrid, drawerColumns, drawerGrid.paddingLeft + drawerGrid.paddingRight)
         if (drawerCellConfig.iconSizePx != drawerSize) {
             drawerCellConfig = drawerCellConfig.copy(iconSizePx = drawerSize)
             folderCellConfig = drawerCellConfig
@@ -1189,7 +1231,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      * never fight.
      */
     private fun applyDepth() {
-        val allow = effects.depthTransforms
+        val allow = effects.depthTransforms && !motion.reduced
         val scale = if (allow) 1f - 0.06f * drawerProgress - 0.04f * folderProgress - 0.08f * editProgress -
             0.04f * (1f - settleProgress) else 1f
         desktop.pivotX = desktop.width / 2f
@@ -1210,7 +1252,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Coming back from an app: the desktop settles forward into place. */
     private fun playReturnSettle() {
-        if (!effects.depthTransforms || !motion.enabled) return
+        if (!effects.depthTransforms || !motion.enabled || motion.reduced) return
         SpringAnimator(0.4f) { p ->
             settleProgress = p.coerceIn(0f, 1.1f)
             applyDepth()
@@ -1345,7 +1387,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // ------------------------------------------------------------- launching
 
     private fun launchApp(key: ComponentKey, source: View?) {
-        val options = if (motion.enabled && source != null && source.width > 0) {
+        val options = if (motion.enabled && !motion.reduced && source != null && source.width > 0) {
             ActivityOptions.makeClipRevealAnimation(source, 0, 0, source.width, source.height).toBundle()
         } else null
         val bounds = source?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
@@ -1484,6 +1526,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_from_dock), R.drawable.ic_rx_remove, group = 1)
             }
         }
+        if (context == MenuContext.DRAWER) {
+            val pinned = viewModel.isPinned(key)
+            entries += MenuEntry(
+                if (pinned) M_UNPIN else M_PIN,
+                getString(if (pinned) R.string.action_unpin_app else R.string.action_pin_app),
+                R.drawable.ic_rx_pin,
+                group = 2
+            )
+        }
         entries += MenuEntry(M_HIDE, getString(R.string.action_hide_app, viewModel.activeContextProfile.value.title), R.drawable.ic_rx_hide, group = 2)
         entries += MenuEntry(M_INFO, getString(R.string.action_app_info), R.drawable.ic_rx_info, group = 2)
         entries += MenuEntry(M_UNINSTALL, getString(R.string.action_uninstall), R.drawable.ic_rx_uninstall, destructive = true, group = 2)
@@ -1501,6 +1552,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 e.id == M_TO_DOCK -> viewModel.moveHomeToDock(position)
                 e.id == M_TO_HOME -> viewModel.moveDockToHome(position)
                 e.id == M_REMOVE -> if (context == MenuContext.DOCK) viewModel.removeFromDock(position) else viewModel.removeFromHome(position)
+                e.id == M_PIN -> viewModel.setAppPinned(key, true)
+                e.id == M_UNPIN -> viewModel.setAppPinned(key, false)
                 e.id == M_HIDE -> {
                     viewModel.hideApp(key)
                     toast(getString(R.string.toast_app_hidden, label))
@@ -1559,6 +1612,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // --------------------------------------------------------------- widgets
 
     private fun showWidgetPicker() {
+        if (!widgetsEnabled) {
+            toast(getString(R.string.toast_widgets_disabled))
+            return
+        }
         val picker = widgetPicker ?: WidgetPicker(this, homeRoot, theme, effects, motion, bottomInset).also { widgetPicker = it }
         picker.show(widgets.providers()) { info -> beginWidgetAdd(info) }
     }
@@ -1661,14 +1718,20 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // -------------------------------------------------------- package changes
 
     private val packageCallback = object : LauncherApps.Callback() {
-        override fun onPackageAdded(packageName: String, user: UserHandle) = refresh()
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = refresh()
-        override fun onPackageChanged(packageName: String, user: UserHandle) = refresh()
-        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = refresh()
-        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = refresh()
+        override fun onPackageAdded(packageName: String, user: UserHandle) = refresh(packageName)
+        override fun onPackageRemoved(packageName: String, user: UserHandle) = refresh(packageName)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = refresh(packageName)
+        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+            packageNames.forEach(::refresh)
+        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+            packageNames.forEach(::refresh)
 
-        private fun refresh() {
-            runOnUiThread { viewModel.refreshApps() }
+        private fun refresh(packageName: String) {
+            runOnUiThread {
+                viewModel.apps.value.asSequence().filter { it.key.packageName == packageName }
+                    .forEach { iconLoader.invalidate(it.key) }
+                viewModel.refreshApps()
+            }
         }
     }
 
@@ -1695,6 +1758,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val M_TO_HOME = 9
         private const val M_OPEN = 10
         private const val M_REMOVE_FROM_FOLDER = 11
+        private const val M_PIN = 12
+        private const val M_UNPIN = 13
         private const val M_RESIZE_BASE = 100
         private const val M_PRESET_BASE = 200
         private const val M_SMART_BASE = 300

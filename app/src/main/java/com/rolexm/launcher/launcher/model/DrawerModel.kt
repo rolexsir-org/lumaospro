@@ -10,6 +10,19 @@ import com.rolexm.launcher.core.usage.Frecency
 import com.rolexm.launcher.core.usage.LaunchRecord
 import java.util.Locale
 
+/** Visual presentation only; filtering, ordering and launch behavior stay shared. */
+enum class DrawerPresentation(val storageKey: String) {
+    /** One-handed vertical rows with large labels and an A–Z rail. */
+    LIST("list"),
+    /** The original icon grid, retained for existing and preferred grid setups. */
+    GRID("grid");
+
+    companion object {
+        fun fromStorageKey(raw: String?): DrawerPresentation? =
+            entries.firstOrNull { it.storageKey == raw }
+    }
+}
+
 /** Which slice of the app list the drawer shows. */
 sealed interface DrawerFilter {
     data object All : DrawerFilter
@@ -61,6 +74,8 @@ object DrawerModel {
         val hiddenInSearch: Boolean = false,
         val history: Collection<LaunchRecord> = emptyList(),
         val suggestionsEnabled: Boolean = true,
+        /** Explicit, user-pinned apps in their saved order. Not usage-ranked. */
+        val pinned: List<ComponentKey> = emptyList(),
         val nowMillis: Long = 0L,
         val hourOfDay: Int = 12,
         val suggestionCount: Int = 4,
@@ -77,6 +92,7 @@ object DrawerModel {
         val appCount: Int
     )
 
+    const val SECTION_PINNED = "pinned"
     const val SECTION_SUGGESTED = "suggested"
     const val SECTION_ALL = "all"
     const val SECTION_RESULTS = "results"
@@ -126,16 +142,27 @@ object DrawerModel {
         }
         val sorted = if (input.filter == DrawerFilter.Frequent) list else sort(list, input.sort, records, input.nowMillis)
 
-        val rows = ArrayList<DrawerRow>(sorted.size + input.suggestionCount + 2)
+        val pinnedApps = if (input.filter == DrawerFilter.All) {
+            input.pinned.asSequence().distinct().mapNotNull { byKey[it] }.filter { it.key in visibleKeys }.toList()
+        } else emptyList()
+        val pinnedKeys = pinnedApps.mapTo(HashSet()) { it.key }
+
+        val rows = ArrayList<DrawerRow>(sorted.size + pinnedApps.size + input.suggestionCount + 4)
+        if (pinnedApps.isNotEmpty()) {
+            rows += DrawerRow.Header(SECTION_PINNED, "Pinned")
+            pinnedApps.mapTo(rows) { DrawerRow.App(it, SECTION_PINNED) }
+        }
         if (input.filter == DrawerFilter.All && input.suggestionsEnabled) {
-            val suggested = Frecency.suggestions(records, input.nowMillis, input.hourOfDay, eligible, input.suggestionCount)
-                .mapNotNull { byKey[it] }
+            val suggested = Frecency.suggestions(
+                records, input.nowMillis, input.hourOfDay,
+                { eligible(it) && it !in pinnedKeys }, input.suggestionCount
+            ).mapNotNull { byKey[it] }
             if (suggested.isNotEmpty()) {
                 rows += DrawerRow.Header(SECTION_SUGGESTED, "Suggested")
                 suggested.mapTo(rows) { DrawerRow.App(it, SECTION_SUGGESTED) }
-                rows += DrawerRow.Header(SECTION_ALL, "All apps")
             }
         }
+        if (rows.isNotEmpty()) rows += DrawerRow.Header(SECTION_ALL, "All apps")
         val firstAppRow = rows.size
         sorted.mapTo(rows) { DrawerRow.App(it, SECTION_ALL) }
 
