@@ -1,6 +1,7 @@
 package com.rolexm.launcher.launcher
 
 import android.app.ActivityOptions
+import android.app.KeyguardManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -154,6 +155,19 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
+    private val hiddenUnlockLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val pending = pendingHiddenApp
+        pendingHiddenApp = null
+        if (result.resultCode == RESULT_OK && pending != null) {
+            lifecycleScope.launch {
+                viewModel.prefs.setAppHidden(pending.profile, pending.key, true)
+                toast(getString(R.string.toast_app_hidden, pending.label))
+            }
+        }
+    }
+
     private val widgetBindLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val pending = pendingWidget ?: return@registerForActivityResult
         if (result.resultCode == RESULT_OK) continueWidgetAdd(pending) else {
@@ -216,6 +230,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var drawerCellConfig = CellConfig(48, true, 1f, ColorMath.WHITE, false)
     private var folderCellConfig = drawerCellConfig
     private var widgetsEnabled = true
+    private var hiddenLock = false
+    private var pendingHiddenApp: PendingHiddenApp? = null
     private var cellHeightPx = 0
     private var gridColumns = 4
     private var drawerColumns = 4
@@ -233,6 +249,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var themeAnimator: SpringAnimator? = null
 
     private val density by lazy { resources.displayMetrics.densityDpi }
+
+    private data class PendingHiddenApp(
+        val profile: ContextProfile,
+        val key: ComponentKey,
+        val label: String
+    )
 
     /** Appearance inputs from preferences. */
     private data class Appearance(
@@ -758,6 +780,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
                 launch { viewModel.drawerSort.collect { drawer.currentSort = it } }
                 launch { viewModel.prefs.widgetsEnabled.collect { widgetsEnabled = it } }
+                launch { viewModel.prefs.hiddenLock.collect { hiddenLock = it } }
 
                 launch {
                     combine(viewModel.activeContextProfile, readouts.state) { p, r -> p to r }.collect { (p, r) ->
@@ -1554,13 +1577,38 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 e.id == M_REMOVE -> if (context == MenuContext.DOCK) viewModel.removeFromDock(position) else viewModel.removeFromHome(position)
                 e.id == M_PIN -> viewModel.setAppPinned(key, true)
                 e.id == M_UNPIN -> viewModel.setAppPinned(key, false)
-                e.id == M_HIDE -> {
-                    viewModel.hideApp(key)
-                    toast(getString(R.string.toast_app_hidden, label))
-                }
+                e.id == M_HIDE -> requestHideApp(key, label)
                 e.id == M_INFO -> appInfo(key)
                 e.id == M_UNINSTALL -> uninstall(key)
             }
+        }
+    }
+
+    private fun requestHideApp(key: ComponentKey, label: String) {
+        val profile = viewModel.activeContextProfile.value
+        if (!hiddenLock) {
+            viewModel.hideApp(key)
+            toast(getString(R.string.toast_app_hidden, label))
+            return
+        }
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        val intent = keyguard?.createConfirmDeviceCredentialIntent(
+            getString(R.string.hidden_unlock_title),
+            getString(R.string.pref_hidden_lock_desc)
+        )
+        if (intent == null) {
+            toast(getString(R.string.hidden_no_lock))
+            return
+        }
+        pendingHiddenApp = PendingHiddenApp(profile, key, label)
+        try {
+            hiddenUnlockLauncher.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            pendingHiddenApp = null
+            toast(getString(R.string.hidden_locked))
+        } catch (_: SecurityException) {
+            pendingHiddenApp = null
+            toast(getString(R.string.hidden_locked))
         }
     }
 

@@ -414,7 +414,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     label = stringResource(R.string.studio_dock_style),
                     selected = draft.dockStyle?.let { dockLabel(it) } ?: stringResource(R.string.studio_theme_default),
                     options = listOf<DockStyle?>(null) + DockStyle.entries,
-                    optionLabel = { it?.let(::dockLabel) ?: stringResource(R.string.studio_theme_default) },
+                    optionLabel = { it?.let { value -> dockLabel(value) } ?: stringResource(R.string.studio_theme_default) },
                     onSelected = { draft = draft.copy(dockStyle = it) }
                 )
             }
@@ -424,14 +424,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     label = stringResource(R.string.studio_effects),
                     selected = effectsLabel(draft.effects),
                     options = EffectsPreference.entries.toList(),
-                    optionLabel = ::effectsLabel,
+                    optionLabel = { effectsLabel(it) },
                     onSelected = { draft = draft.copy(effects = it) }
                 )
                 StudioChoice(
                     label = stringResource(R.string.studio_motion),
                     selected = motionLabel(draft.motion),
                     options = MotionPreference.entries.toList(),
-                    optionLabel = ::motionLabel,
+                    optionLabel = { motionLabel(it) },
                     onSelected = { draft = draft.copy(motion = it) }
                 )
                 Text(

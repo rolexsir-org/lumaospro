@@ -184,6 +184,10 @@
     <string name="hidden_locked">Hidden apps are locked</string>
     <string name="hidden_unlock">Unlock</string>
     <string name="hidden_no_lock">Set a screen lock in Android settings to use this protection.</string>
+    <string name="pref_hidden_search_locked">Turn off hidden-app protection to include hidden apps in search.</string>
+    <string name="hidden_manage">Manage hidden apps</string>
+    <string name="hidden_manage_title">App visibility · %1$s</string>
+    <string name="hidden_manage_summary">%1$d hidden in %2$s. Checked apps are hidden.</string>
 
     <!-- Backup -->
     <string name="section_backup">Backup and restore</string>

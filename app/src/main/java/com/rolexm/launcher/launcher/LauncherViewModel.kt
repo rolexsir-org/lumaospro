@@ -76,8 +76,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSort.ALPHABETICAL)
     val suggestionsEnabled: StateFlow<Boolean> = prefs.suggestionsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    private val hiddenInSearch: StateFlow<Boolean> = prefs.hiddenInSearch
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val hiddenInSearch: StateFlow<Boolean> = combine(prefs.hiddenInSearch, prefs.hiddenLock) { include, locked ->
+        // A restored backup may contain both flags. Protection wins: hidden
+        // entries are only exposed through the authenticated manager.
+        include && !locked
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val categoriesEnabled: StateFlow<Boolean> = prefs.drawerCategoriesEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     private val drawerColumns: StateFlow<Int> = prefs.drawerColumns
