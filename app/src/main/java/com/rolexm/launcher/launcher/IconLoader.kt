@@ -14,6 +14,7 @@ import com.rolexm.launcher.icons.IconPackManager
 import com.rolexm.launcher.icons.IconRenderSpec
 import com.rolexm.launcher.icons.IconRenderer
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,6 +50,9 @@ class IconLoader(
     }
     private val handler = Handler(Looper.getMainLooper())
     private val inFlight = Collections.synchronizedSet(HashSet<ComponentKey>())
+    /** Negative results are cached until the package changes or the render spec does. */
+    private val unavailable = Collections.synchronizedSet(HashSet<ComponentKey>())
+    private val keyGenerations = ConcurrentHashMap<ComponentKey, Int>()
     private val shutdown = AtomicBoolean(false)
     private val generation = AtomicInteger(0)
     private val renderer = IconRenderer()
@@ -67,6 +71,7 @@ class IconLoader(
         spec = newSpec
         generation.incrementAndGet()
         inFlight.clear()
+        unavailable.clear()
         cache.clear()
         return true
     }
@@ -77,9 +82,10 @@ class IconLoader(
      */
     fun get(key: ComponentKey, density: Int): Drawable? {
         cache[key]?.let { return it }
-        if (shutdown.get()) return null
+        if (shutdown.get() || unavailable.contains(key)) return null
         if (!inFlight.add(key)) return null
         val gen = generation.get()
+        val keyGen = keyGenerations[key] ?: 0
         val s = spec
         try {
             executor.execute {
@@ -91,9 +97,14 @@ class IconLoader(
                 }
                 if (gen == generation.get()) {
                     inFlight.remove(key)
-                    if (drawable != null) cache[key] = drawable
-                    // Post even on failure so callers are not left waiting on a
-                    // key that will never resolve.
+                    // A package callback may have invalidated this exact icon
+                    // while its old decode was running. Never let that stale
+                    // result overwrite the package's new generation.
+                    if (keyGen == (keyGenerations[key] ?: 0)) {
+                        if (drawable != null) cache[key] = drawable else unavailable.add(key)
+                    }
+                    // Post on success, absence and invalidation. Absence is
+                    // remembered, so this cannot become a decode/notify loop.
                     handler.post { onIconReady?.invoke(key) }
                 }
             }
@@ -135,6 +146,13 @@ class IconLoader(
         }
     }
 
+    /** Invalidates one installed component after a package add/remove/update. */
+    fun invalidate(key: ComponentKey) {
+        cache.remove(key)
+        unavailable.remove(key)
+        keyGenerations.merge(key, 1) { old, delta -> old + delta }
+    }
+
     /**
      * Queues icons for the whole list. Used when the active profile requests
      * preloading; otherwise icons arrive on demand as rows bind.
@@ -150,6 +168,7 @@ class IconLoader(
         if (shutdown.compareAndSet(false, true)) {
             executor.shutdownNow()
             inFlight.clear()
+            unavailable.clear()
         }
     }
 }

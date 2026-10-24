@@ -26,6 +26,7 @@ import com.rolexm.launcher.launcher.model.ShortcutRef
 import com.rolexm.launcher.launcher.model.SmartKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +56,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     val apps: StateFlow<List<AppEntry>> = _apps
+    private var refreshJob: Job? = null
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
@@ -67,13 +69,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val hiddenKeys: StateFlow<Set<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::hiddenApps)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    private val pinnedKeys: StateFlow<List<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::pinnedApps)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val drawerSort: StateFlow<DrawerSort> = prefs.drawerSort
         .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSort.ALPHABETICAL)
     val suggestionsEnabled: StateFlow<Boolean> = prefs.suggestionsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    private val hiddenInSearch: StateFlow<Boolean> = prefs.hiddenInSearch
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val hiddenInSearch: StateFlow<Boolean> = combine(prefs.hiddenInSearch, prefs.hiddenLock) { include, locked ->
+        // A restored backup may contain both flags. Protection wins: hidden
+        // entries are only exposed through the authenticated manager.
+        include && !locked
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val categoriesEnabled: StateFlow<Boolean> = prefs.drawerCategoriesEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     private val drawerColumns: StateFlow<Int> = prefs.drawerColumns
@@ -98,14 +105,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         combine(hiddenInSearch, history.records, suggestionsEnabled, drawerColumns, _shortcuts) { his, rec, sug, cols, sc ->
             Extra(his, rec.values, sug, cols, sc)
         },
-        searchTargets
-    ) { d, e, targets ->
+        searchTargets,
+        pinnedKeys
+    ) { d, e, targets, pinned ->
         val now = System.currentTimeMillis()
         DrawerModel.build(
             DrawerModel.Input(
                 apps = d.apps, query = d.query, filter = d.filter, sort = d.sort, hidden = d.hidden,
                 hiddenInSearch = e.hiddenInSearch, history = e.records, suggestionsEnabled = e.suggestions,
-                nowMillis = now, hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
+                pinned = pinned, nowMillis = now, hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
                 suggestionCount = e.columns,
                 shortcuts = e.shortcuts.map { ShortcutRef(it.packageName, it.id, it.label) },
                 webSearchAvailable = targets.first, storeAvailable = targets.second
@@ -170,8 +178,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      * per profile and can take hundreds of milliseconds on a loaded device.
      */
     fun refreshApps() {
+        // Resume and several package callbacks can arrive together. Coalesce
+        // them rather than racing binder enumeration and default-dock writes.
+        if (refreshJob?.isActive == true) return
         _isLoading.value = true
-        viewModelScope.launch(Dispatchers.IO) {
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val list = repository.refresh()
                 withContext(Dispatchers.Main) { _apps.value = list }
@@ -382,6 +393,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun addSmartFolder(kind: SmartKind, name: String) = mutate {
         HomeLayoutOps.addSmartFolder(it, 0, HomeItem.SmartFolder("smart_${kind.storageKey}", kind, name))
+    }
+
+    fun isPinned(key: ComponentKey): Boolean = key in pinnedKeys.value
+
+    fun setAppPinned(key: ComponentKey, pinned: Boolean) {
+        viewModelScope.launch { prefs.setAppPinned(activeContextProfile.value, key, pinned) }
     }
 
     /** Hides an app in the active context profile (reversible in Settings). */

@@ -83,6 +83,8 @@ class SpringTest {
         assertTrue(p.enabled)
         assertFalse(p.allowOvershoot)
         assertTrue(p.timeScale < 1f)
+        assertTrue(p.reduced)
+        assertFalse(MotionPolicy.DEFAULT.reduced)
         assertTrue(p.adapt(MotionTokens.LIVELY).dampingRatio >= 1f)
     }
 

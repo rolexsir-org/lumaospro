@@ -131,12 +131,18 @@ enum class MotionPreference(val storageKey: String) {
  * [timeScale] follows Android's convention for animator duration scale: 1 is
  * normal, larger is slower. A spring advances by dt / timeScale.
  */
-data class MotionPolicy(val enabled: Boolean, val timeScale: Float, val allowOvershoot: Boolean) {
+data class MotionPolicy(
+    val enabled: Boolean,
+    val timeScale: Float,
+    val allowOvershoot: Boolean,
+    /** Large travel and depth transforms are replaced by immediate state changes. */
+    val reduced: Boolean = false
+) {
 
     fun adapt(spec: SpringSpec): SpringSpec = if (allowOvershoot) spec else spec.withoutOvershoot()
 
     companion object {
-        val INSTANT = MotionPolicy(enabled = false, timeScale = 0f, allowOvershoot = false)
+        val INSTANT = MotionPolicy(enabled = false, timeScale = 0f, allowOvershoot = false, reduced = true)
         val DEFAULT = MotionPolicy(enabled = true, timeScale = 1f, allowOvershoot = true)
 
         /**
@@ -155,7 +161,12 @@ data class MotionPolicy(val enabled: Boolean, val timeScale: Float, val allowOve
             if (preference == MotionPreference.OFF || systemAnimatorScale <= 0f || !transitionsAllowed) return INSTANT
             val base = systemAnimatorScale.coerceIn(0.25f, 3f)
             return when (preference) {
-                MotionPreference.REDUCED -> MotionPolicy(true, base * 0.8f, allowOvershoot = false)
+                MotionPreference.REDUCED -> MotionPolicy(
+                    enabled = true,
+                    timeScale = base * 0.8f,
+                    allowOvershoot = false,
+                    reduced = true
+                )
                 else -> MotionPolicy(true, base, allowOvershoot = overshootAllowed)
             }
         }

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Compact one-handed app row. Full app name remains the accessibility label. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:focusable="true"
+    android:minHeight="60dp"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/app_icon"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitCenter" />
+
+    <TextView
+        android:id="@+id/app_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:gravity="start|center_vertical"
+        android:importantForAccessibility="no"
+        android:maxLines="1"
+        android:textColor="#FF1C1C1E"
+        android:textSize="16sp" />
+
+</LinearLayout>

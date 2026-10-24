@@ -32,6 +32,7 @@ object AppMatcher {
 
     /** Bucket character for apps that do not begin with a letter. */
     const val OTHER_BUCKET = '#'
+    private val WHITESPACE = Regex("\\s+")
 
     // Collator is mutable and not thread-safe. Search filtering runs off the
     // main thread, so use one configured instance per worker thread.
@@ -42,7 +43,8 @@ object AppMatcher {
         }
     }
 
-    fun normalize(label: String): String = label.trim().lowercase(Locale.getDefault())
+    fun normalize(label: String): String =
+        label.trim().lowercase(Locale.getDefault()).replace(WHITESPACE, " ")
 
     /**
      * Which index character an app belongs to. Letters group by upper-case

@@ -81,6 +81,12 @@ class AppMatcherTest {
     }
 
     @Test
+    fun `repeated whitespace and case are normalised`() {
+        val result = AppMatcher.filter(AppMatcher.sort(apps), "  GOOGLE\t   PLAY  ")
+        assertEquals("Google Play Store", result.first().label)
+    }
+
+    @Test
     fun `package name is a last resort match`() {
         val sorted = AppMatcher.sort(apps)
         val result = AppMatcher.filter(sorted, "com.android.vending")

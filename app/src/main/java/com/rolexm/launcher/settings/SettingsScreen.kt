@@ -1,5 +1,9 @@
 package com.rolexm.launcher.settings
 
+import android.app.Activity
+import android.app.KeyguardManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -62,10 +70,12 @@ import androidx.compose.ui.window.Dialog
 import com.rolexm.launcher.R
 import com.rolexm.launcher.context.ContextProfile
 import com.rolexm.launcher.context.ProfileSchedule
+import com.rolexm.launcher.core.apps.AppMatcher
 import com.rolexm.launcher.ui.RolexCorners
 import com.rolexm.launcher.ui.RolexSpacing
 import com.rolexm.launcher.core.prefs.GestureKind
 import com.rolexm.launcher.intelligence.ProfileId
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.launcher.model.GestureAction
 import com.rolexm.launcher.ui.ThemeMode
 import kotlinx.coroutines.launch
@@ -87,7 +97,9 @@ fun SettingsRoot(
     viewModel: SettingsViewModel,
     onRequestHomeRole: () -> Unit,
     onOpenHomeSettings: () -> Unit,
-    onRequestNotifications: () -> Unit
+    onRequestNotifications: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -103,9 +115,11 @@ fun SettingsRoot(
             HomeRoleSection(viewModel, onRequestHomeRole, onOpenHomeSettings)
             ContextSection(viewModel, onRequestNotifications)
             AppearanceSection(viewModel)
+            DrawerSection(viewModel)
             GestureSection(viewModel)
             PerformanceSection(viewModel)
             PrivacySection()
+            BackupSection(viewModel, onExportBackup, onImportBackup)
             AboutSection()
             Spacer(Modifier.height(RolexSpacing.screenEnd))
         }
@@ -176,19 +190,15 @@ private fun HomeRoleSection(
 @Composable
 private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications: () -> Unit) {
     val active by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
-    val apps by viewModel.apps.collectAsState()
-    val appsLoading by viewModel.appsLoading.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val choices = ContextProfile.entries.map { it to it.title }
     val schedule by viewModel.prefs.profileSchedule(active)
         .collectAsState(ProfileSchedule.defaults(active))
-    val hidden by viewModel.prefs.hiddenApps(active).collectAsState(emptySet())
     val alertsEnabled by viewModel.prefs.contextNotificationsEnabled.collectAsState(false)
     val alertProfiles by viewModel.prefs.contextNotificationProfiles.collectAsState(emptySet())
     val dndProfiles by viewModel.prefs.contextDndProfiles.collectAsState(emptySet())
     val hasDndAccess by viewModel.hasDndAccess.collectAsState(false)
-    var showAllApps by remember(active) { mutableStateOf(false) }
     fun openDndAccessSettings() {
         runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
             .onFailure {
@@ -308,54 +318,6 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             OutlinedButton(onClick = { openDndAccessSettings() }) { Text("Allow Do Not Disturb access") }
         }
     }
-
-    SettingsSection("Apps visible in ${active.title}") {
-        Text(
-            "Hidden apps are removed from this profile’s home screen and app drawer.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (appsLoading) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(12.dp))
-                Text("Loading apps…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else if (apps.isEmpty()) {
-            Text(
-                "No launchable apps are available on this device.",
-                modifier = Modifier.padding(vertical = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            val visibleApps = if (showAllApps) apps else apps.take(16)
-            visibleApps.forEach { app ->
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = app.key !in hidden,
-                        onCheckedChange = { isVisible -> viewModel.setAppHidden(active, app.key, !isVisible) }
-                    )
-                    Text(app.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                }
-            }
-        }
-        if (!appsLoading && apps.size > 16) {
-            TextButton(onClick = { showAllApps = !showAllApps }) {
-                Text(if (showAllApps) "Show fewer apps" else "Show all ${apps.size} apps")
-            }
-        }
-    }
 }
 
 // --------------------------------------------------------------- appearance
@@ -366,8 +328,10 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
     val gridRows by viewModel.prefs.gridRows.collectAsState(5)
     val drawerColumns by viewModel.prefs.drawerColumns.collectAsState(4)
+    val drawerPresentation by viewModel.prefs.drawerPresentation.collectAsState(DrawerPresentation.LIST)
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(48)
     val showLabels by viewModel.prefs.showLabels.collectAsState(true)
+    val widgetsEnabled by viewModel.prefs.widgetsEnabled.collectAsState(true)
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
     val scope = rememberCoroutineScope()
 
@@ -392,8 +356,21 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
         SliderRow(stringResource(R.string.pref_grid_rows), gridRows, 3f..8f) {
             scope.launch { viewModel.prefs.setGridRows(it.roundToInt()) }
         }
-        SliderRow(stringResource(R.string.pref_drawer_columns), drawerColumns, 3f..7f) {
-            scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
+        ChoiceRow(
+            label = stringResource(R.string.pref_drawer_presentation),
+            selected = stringResource(
+                if (drawerPresentation == DrawerPresentation.LIST) R.string.drawer_presentation_list
+                else R.string.drawer_presentation_grid
+            ),
+            options = listOf(
+                DrawerPresentation.LIST to stringResource(R.string.drawer_presentation_list),
+                DrawerPresentation.GRID to stringResource(R.string.drawer_presentation_grid)
+            )
+        ) { scope.launch { viewModel.prefs.setDrawerPresentation(it) } }
+        if (drawerPresentation == DrawerPresentation.GRID) {
+            SliderRow(stringResource(R.string.pref_drawer_columns), drawerColumns, 3f..7f) {
+                scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
+            }
         }
         SliderRow(stringResource(R.string.pref_icon_size), iconSizeDp, 36f..72f, suffix = " dp") {
             scope.launch { viewModel.prefs.setIconSizeDp(it.roundToInt()) }
@@ -403,6 +380,172 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
         }
         SwitchRow(stringResource(R.string.pref_show_labels), showLabels) {
             scope.launch { viewModel.prefs.setShowLabels(it) }
+        }
+        SwitchRow(
+            label = stringResource(R.string.pref_widgets),
+            checked = widgetsEnabled,
+            subtitle = stringResource(R.string.pref_widgets_desc)
+        ) { scope.launch { viewModel.prefs.setWidgetsEnabled(it) } }
+    }
+}
+
+// ------------------------------------------------------------- apps & search
+
+@Composable
+private fun DrawerSection(viewModel: SettingsViewModel) {
+    val categories by viewModel.prefs.drawerCategoriesEnabled.collectAsState(true)
+    val suggestions by viewModel.prefs.suggestionsEnabled.collectAsState(true)
+    val hiddenInSearch by viewModel.prefs.hiddenInSearch.collectAsState(false)
+    val hiddenLock by viewModel.prefs.hiddenLock.collectAsState(false)
+    val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
+    val hidden by remember(activeProfile) { viewModel.prefs.hiddenApps(activeProfile) }.collectAsState(emptySet())
+    val apps by viewModel.apps.collectAsState()
+    val appsLoading by viewModel.appsLoading.collectAsState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val keyguard = remember { context.getSystemService(KeyguardManager::class.java) }
+    var managerOpen by remember { mutableStateOf(false) }
+    var managerQuery by remember { mutableStateOf("") }
+
+    val unlockLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) managerOpen = true
+    }
+    val openManager: () -> Unit = {
+        managerQuery = ""
+        if (!hiddenLock) {
+            managerOpen = true
+        } else {
+            val intent = keyguard?.createConfirmDeviceCredentialIntent(
+                context.getString(R.string.hidden_unlock_title),
+                context.getString(R.string.pref_hidden_lock_desc)
+            )
+            if (intent == null) {
+                Toast.makeText(context, R.string.hidden_no_lock, Toast.LENGTH_SHORT).show()
+            } else {
+                runCatching { unlockLauncher.launch(intent) }.onFailure {
+                    Toast.makeText(context, R.string.hidden_locked, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    SettingsSection(stringResource(R.string.section_drawer)) {
+        Text(
+            stringResource(R.string.pref_pinned_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SwitchRow(
+            label = stringResource(R.string.pref_drawer_categories),
+            checked = categories,
+            subtitle = stringResource(R.string.pref_drawer_categories_desc)
+        ) { scope.launch { viewModel.prefs.setDrawerCategoriesEnabled(it) } }
+        SwitchRow(
+            label = stringResource(R.string.pref_suggestions),
+            checked = suggestions,
+            subtitle = stringResource(R.string.pref_suggestions_desc)
+        ) { scope.launch { viewModel.prefs.setSuggestionsEnabled(it) } }
+        SwitchRow(
+            label = stringResource(R.string.pref_hidden_search),
+            checked = hiddenInSearch && !hiddenLock,
+            enabled = !hiddenLock,
+            subtitle = stringResource(
+                if (hiddenLock) R.string.pref_hidden_search_locked else R.string.pref_hidden_search_desc
+            )
+        ) { scope.launch { viewModel.prefs.setHiddenInSearch(it) } }
+        SwitchRow(
+            label = stringResource(R.string.pref_hidden_lock),
+            checked = hiddenLock,
+            subtitle = stringResource(R.string.pref_hidden_lock_desc)
+        ) { enabled ->
+            if (enabled && keyguard?.isDeviceSecure != true) {
+                Toast.makeText(context, R.string.hidden_no_lock, Toast.LENGTH_SHORT).show()
+            } else {
+                scope.launch {
+                    if (enabled) viewModel.prefs.setHiddenInSearch(false)
+                    viewModel.prefs.setHiddenLock(enabled)
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.hidden_manage_summary, hidden.size, activeProfile.title),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedButton(onClick = openManager, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.hidden_manage))
+        }
+        OutlinedButton(onClick = {
+            scope.launch {
+                viewModel.clearLaunchHistory()
+                Toast.makeText(context, R.string.pref_history_cleared, Toast.LENGTH_SHORT).show()
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.pref_clear_history))
+        }
+    }
+
+    if (managerOpen) {
+        Dialog(onDismissRequest = { managerOpen = false }) {
+            Card(
+                shape = RoundedCornerShape(RolexCorners.large),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        stringResource(R.string.hidden_manage_title, activeProfile.title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = managerQuery,
+                        onValueChange = { managerQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.search_hint)) }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val filteredApps = remember(apps, managerQuery) { AppMatcher.filter(apps, managerQuery) }
+                    when {
+                        appsLoading -> CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                        filteredApps.isEmpty() -> Text(
+                            stringResource(R.string.empty_no_apps),
+                            modifier = Modifier.padding(24.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        else -> LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                            items(filteredApps, key = { it.key.serialize() }) { app ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            app.key.packageName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Checkbox(
+                                        checked = app.key in hidden,
+                                        onCheckedChange = { checked ->
+                                            viewModel.setAppHidden(activeProfile, app.key, checked)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = { managerOpen = false },
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text(stringResource(R.string.edit_done)) }
+                }
+            }
         }
     }
 }
@@ -421,13 +564,7 @@ private fun GestureSection(viewModel: SettingsViewModel) {
         )
         Spacer(Modifier.height(10.dp))
 
-        val options = listOf(
-            GestureAction.None to stringResource(R.string.gesture_none),
-            GestureAction.OpenDrawer to stringResource(R.string.gesture_open_drawer),
-            GestureAction.OpenSearch to stringResource(R.string.gesture_open_search),
-            GestureAction.OpenSettings to stringResource(R.string.gesture_open_settings),
-            GestureAction.OpenWallpaperPicker to stringResource(R.string.gesture_open_wallpaper)
-        )
+        val options = GestureAction.BUILT_IN.map { it to gestureActionLabel(it) }
         for (kind in GestureKind.entries) {
             val current by viewModel.prefs.gesture(kind).collectAsState(kind.default)
             ChoiceRow(
@@ -450,6 +587,22 @@ private fun kindLabel(kind: GestureKind): String = stringResource(
         GestureKind.SWIPE_LEFT -> R.string.gesture_swipe_left
         GestureKind.SWIPE_RIGHT -> R.string.gesture_swipe_right
         GestureKind.PINCH_IN -> R.string.gesture_pinch_in
+    }
+)
+
+@Composable
+private fun gestureActionLabel(action: GestureAction): String = stringResource(
+    when (action) {
+        GestureAction.None -> R.string.gesture_none
+        GestureAction.OpenDrawer -> R.string.gesture_open_drawer
+        GestureAction.OpenSearch -> R.string.gesture_open_search
+        GestureAction.OpenSettings -> R.string.gesture_open_settings
+        GestureAction.OpenWallpaperPicker -> R.string.gesture_open_wallpaper
+        GestureAction.EnterEditMode -> R.string.gesture_edit_mode
+        GestureAction.OpenStudio -> R.string.gesture_open_studio
+        GestureAction.NextContextProfile -> R.string.gesture_next_context
+        GestureAction.VoiceCommand -> R.string.gesture_voice
+        is GestureAction.OpenApp -> R.string.gesture_open_app
     }
 )
 
@@ -522,6 +675,60 @@ private fun PrivacySection() {
 }
 
 @Composable
+private fun BackupSection(
+    viewModel: SettingsViewModel,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit
+) {
+    val state by viewModel.backupState.collectAsState()
+    SettingsSection(stringResource(R.string.section_backup)) {
+        Text(
+            text = stringResource(R.string.backup_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onExportBackup,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.backup_export)) }
+        OutlinedButton(
+            onClick = onImportBackup,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.backup_import)) }
+        if (state.busy) {
+            Row(
+                Modifier.padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.backup_working),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        state.message?.let { message ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    message,
+                    modifier = Modifier.weight(1f).padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { viewModel.consumeBackupMessage() }) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AboutSection() {
     SettingsSection(stringResource(R.string.section_about)) {
         Text(
@@ -576,6 +783,7 @@ private fun SwitchRow(
     label: String,
     checked: Boolean,
     subtitle: String? = null,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -593,7 +801,7 @@ private fun SwitchRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

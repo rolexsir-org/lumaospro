@@ -17,6 +17,7 @@ import com.rolexm.launcher.launcher.CellConfig
 import com.rolexm.launcher.launcher.IconLoader
 import com.rolexm.launcher.launcher.model.DrawerAction
 import com.rolexm.launcher.launcher.model.DrawerModel
+import com.rolexm.launcher.launcher.model.DrawerPresentation
 import com.rolexm.launcher.launcher.model.DrawerRow
 
 /** Colours and type for drawer headers and list rows. */
@@ -39,6 +40,7 @@ data class DrawerRowStyle(
  */
 class DrawerAdapter(
     private val cellConfig: () -> CellConfig,
+    private val presentation: () -> DrawerPresentation,
     private val rowStyle: () -> DrawerRowStyle,
     private val iconLoader: IconLoader,
     private val density: Int,
@@ -49,7 +51,7 @@ class DrawerAdapter(
 
     override fun getItemViewType(position: Int): Int = when (getItem(position)) {
         is DrawerRow.Header -> TYPE_HEADER
-        is DrawerRow.App -> TYPE_APP
+        is DrawerRow.App -> if (presentation() == DrawerPresentation.LIST) TYPE_APP_LIST else TYPE_APP
         is DrawerRow.Shortcut, is DrawerRow.Action -> TYPE_ROW
     }
 
@@ -63,6 +65,7 @@ class DrawerAdapter(
         return when (viewType) {
             TYPE_HEADER -> HeaderHolder(inflater.inflate(R.layout.item_drawer_header, parent, false) as TextView)
             TYPE_ROW -> RowHolder(inflater.inflate(R.layout.item_drawer_row, parent, false))
+            TYPE_APP_LIST -> AppCellViewHolder(inflater.inflate(R.layout.item_drawer_app, parent, false))
             else -> AppCellViewHolder(inflater.inflate(R.layout.item_app, parent, false))
         }
     }
@@ -73,7 +76,10 @@ class DrawerAdapter(
         when (holder) {
             is HeaderHolder -> {
                 row as DrawerRow.Header
-                holder.text.text = DrawerModel.headerText(row.title, style.headerCaps)
+                val title = if (row.id == DrawerModel.SECTION_PINNED) {
+                    holder.text.context.getString(R.string.drawer_pinned)
+                } else row.title
+                holder.text.text = DrawerModel.headerText(title, style.headerCaps)
                 holder.text.setTextColor(style.headerColor)
                 holder.text.letterSpacing = style.headerTracking
                 style.headerTypeface?.let { holder.text.typeface = it }
@@ -134,5 +140,6 @@ class DrawerAdapter(
         const val TYPE_HEADER = 0
         const val TYPE_APP = 1
         const val TYPE_ROW = 2
+        const val TYPE_APP_LIST = 3
     }
 }

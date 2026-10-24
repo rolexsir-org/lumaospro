@@ -58,10 +58,12 @@ object BackupCodec {
         "text_scale" to ValueType.FLOAT,
         // Drawer & privacy
         "drawer_sort" to ValueType.STRING,
+        "drawer_presentation" to ValueType.STRING,
         "drawer_categories" to ValueType.BOOLEAN,
         "suggestions_enabled" to ValueType.BOOLEAN,
         "hidden_search" to ValueType.BOOLEAN,
         "hidden_lock" to ValueType.BOOLEAN,
+        "widgets_enabled" to ValueType.BOOLEAN,
         // Performance
         "profile_override" to ValueType.STRING,
         "auto_optimize" to ValueType.BOOLEAN,
@@ -79,6 +81,7 @@ object BackupCodec {
         "home_layout_" to ValueType.STRING,
         "schedule_" to ValueType.STRING,
         "hidden_apps_" to ValueType.STRING,
+        "pinned_apps_" to ValueType.STRING,
         "gesture_" to ValueType.STRING,
         "profile_theme_" to ValueType.STRING
     )

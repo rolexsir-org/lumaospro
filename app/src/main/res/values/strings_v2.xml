@@ -8,6 +8,8 @@
     <string name="toast_context_switched">Switched to %1$s</string>
 
     <!-- Drawer -->
+    <string name="search_clear_description">Clear search</string>
+    <string name="drawer_pinned">Pinned</string>
     <string name="drawer_sort_description">Sort apps</string>
     <string name="drawer_chip_all">All</string>
     <string name="drawer_chip_frequent">Frequent</string>
@@ -38,6 +40,8 @@
     <string name="action_remove_widget">Remove widget</string>
     <string name="action_remove_from_dock">Remove from dock</string>
     <string name="action_remove_from_folder_short">Remove from folder</string>
+    <string name="action_pin_app">Pin to top of drawer</string>
+    <string name="action_unpin_app">Unpin from drawer</string>
     <string name="action_hide_app">Hide in %1$s</string>
     <string name="toast_app_hidden">%1$s hidden. Unhide it in Settings.</string>
 
@@ -90,6 +94,7 @@
     <string name="gesture_open_studio">Open Studio</string>
     <string name="gesture_next_context">Next context</string>
     <string name="gesture_voice">Voice command</string>
+    <string name="gesture_open_app">Open app</string>
 
     <!-- Settings tabs & Studio -->
     <string name="tab_studio">Studio</string>
@@ -97,6 +102,7 @@
     <string name="studio_themes">Themes</string>
     <string name="studio_apply">Apply</string>
     <string name="studio_revert">Revert</string>
+    <string name="studio_reset">Reset Studio defaults</string>
     <string name="studio_applied">Applied</string>
     <string name="studio_unsaved">Unsaved changes</string>
     <string name="studio_switching">Light and dark</string>
@@ -160,6 +166,10 @@
 
     <!-- Settings: drawer & privacy -->
     <string name="section_drawer">App drawer</string>
+    <string name="pref_drawer_presentation">Drawer layout</string>
+    <string name="drawer_presentation_list">Vertical list</string>
+    <string name="drawer_presentation_grid">Icon grid</string>
+    <string name="pref_pinned_hint">Long-press an app in the drawer to pin or unpin it. Pins are separate for each context.</string>
     <string name="pref_drawer_categories">Category chips</string>
     <string name="pref_drawer_categories_desc">Uses the category each app declares. Apps without one are listed under Other.</string>
     <string name="pref_suggestions">Learn from my launches</string>
@@ -174,6 +184,10 @@
     <string name="hidden_locked">Hidden apps are locked</string>
     <string name="hidden_unlock">Unlock</string>
     <string name="hidden_no_lock">Set a screen lock in Android settings to use this protection.</string>
+    <string name="pref_hidden_search_locked">Turn off hidden-app protection to include hidden apps in search.</string>
+    <string name="hidden_manage">Manage hidden apps</string>
+    <string name="hidden_manage_title">App visibility · %1$s</string>
+    <string name="hidden_manage_summary">%1$d hidden in %2$s. Checked apps are hidden.</string>
 
     <!-- Backup -->
     <string name="section_backup">Backup and restore</string>
@@ -185,6 +199,10 @@
     <string name="backup_restored">Restored %1$d settings</string>
     <string name="backup_restored_skipped">Restored %1$d settings, skipped %2$d unknown</string>
     <string name="backup_restore_failed">Restore failed: %1$s</string>
+    <string name="backup_too_large">Backup is too large. Choose a ROLEXM backup smaller than 4 MB.</string>
+    <string name="backup_working">Reading or writing the selected document…</string>
+    <string name="backup_confirm_generic">Your current settings and home layouts, including widget placements, will be replaced. Launch history is not imported.</string>
+    <string name="action_dismiss">Dismiss</string>
     <string name="backup_confirm_title">Replace current setup?</string>
     <string name="backup_confirm_body">Your current settings and home layouts will be replaced by the backup from %1$s.</string>
     <string name="backup_confirm_restore">Restore</string>

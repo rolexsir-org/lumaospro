@@ -46,6 +46,7 @@ fun HomePreview(
     preset: HomePreset,
     dock: DockStyle,
     icons: List<ImageBitmap>,
+    dockIcons: List<ImageBitmap>,
     wallpaper: WallpaperSeeds?,
     timeText: String,
     dateText: String,
@@ -150,7 +151,6 @@ fun HomePreview(
                     Offset(inset, dockY), Size(w - inset * 2, dockH), CornerRadius(radius), style = Stroke(unit * 0.3f)
                 )
             }
-            val dockIcons = icons.drop(12).take(4).ifEmpty { icons.take(4) }
             val dockCell = (w - inset * 2) / 4f
             val dockIcon = min(dockCell * 0.6f, dockH * 0.62f)
             dockIcons.forEachIndexed { i, img ->

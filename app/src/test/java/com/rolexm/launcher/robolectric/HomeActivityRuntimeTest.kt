@@ -69,6 +69,7 @@ class HomeActivityRuntimeTest {
         assertNotNull(activity.findViewById<android.view.View>(R.id.drawer_top_pad))
         assertNotNull(activity.findViewById<RecyclerView>(R.id.drawer_grid))
         assertNotNull(activity.findViewById<EditText>(R.id.search_field))
+        assertNotNull(activity.findViewById<android.widget.ImageButton>(R.id.search_clear))
         assertNotNull(activity.findViewById<TextView>(R.id.empty_view))
         assertNotNull(activity.findViewById<AlphaIndexView>(R.id.alpha_index))
         activity.findViewById<android.view.View>(R.id.drawer_scrim).also { assertNotNull(it) }
