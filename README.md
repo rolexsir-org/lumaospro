@@ -140,8 +140,41 @@ com.lumaos.pro.launcher
 ├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), StartupStats, formatting
 ├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
 ├── onboarding/      OnboardingActivity (Compose)
-└── ui/              Palette, ThemeMode, LumaSpacing/LumaCorners
+└── ui/              DesignTokens, ThemeMode compatibility, shared theme engine
+    └── theme/       ThemeRepository, ThemeEngine, contrast, atmosphere, presets
 ```
+
+### Appearance and theme system
+
+Aurora, Zen, and Void are LumaOS Pro's signature themes, resolved by one
+shared engine for the View-based home, drawer, folders, menus, hosted-widget
+frames, and Compose settings/Studio:
+
+- **Aurora** — midnight navy and obsidian surfaces, icy blue accents, and a
+  slow, restrained polar glow.
+- **Zen** — quiet paper neutrals, sage and blue-grey accents, clear text
+  hierarchy, and a soft daylight lift.
+- **Void** — indigo depth with cyan and magenta signals, fine grid detail, and
+  reduced highlight intensity.
+
+Obsidian, Graphite, and Chroma remain available as additional palettes. To
+preserve existing settings and backups, Zen and Void retain the historical
+`porcelain` and `vector` storage keys; the IDs are not rewritten or used to reset
+the home layout. Theme selection persists through DataStore and does not change
+app placement, folders, widget IDs/configuration, icon-pack choice, or unrelated
+preferences. The Studio keeps custom color/type/icon/backdrop overrides when a
+preset changes. New installs follow Android's system appearance, choosing
+Aurora for dark mode and Zen for light. Scheduled and context-profile switching
+remain available.
+
+The Studio previews the user's installed app icons and Android wallpaper color
+seeds. Android exposes wallpaper colors here, not the wallpaper image, so that
+preview uses a clearly approximate gradient; the actual launcher continues to
+show the system wallpaper when Wallpaper is selected. Home widgets are hosted
+through Android's real `AppWidgetHost` and their provider apps. There is no
+weather/calendar aggregation source in this build, and LumaOS Pro cannot
+redesign Android-controlled surfaces such as the notification shade, Quick
+Settings, lock screen, or navigation UI.
 
 ### Context profiles
 

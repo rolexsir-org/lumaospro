@@ -104,7 +104,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
 
     // --- Appearance -------------------------------------------------------
 
-    val themeMode: Flow<ThemeMode> = read(Keys.THEME_MODE) { ThemeMode.LIGHT.storageKey }
+    val themeMode: Flow<ThemeMode> = read(Keys.THEME_MODE) { ThemeMode.SYSTEM.storageKey }
         .map { ThemeMode.fromStorageKey(it) }
 
     /**
@@ -119,7 +119,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 ThemeMode.SYSTEM -> p[Keys.THEME_SWITCHING] = ThemeSwitching.SYSTEM.storageKey
                 ThemeMode.LIGHT, ThemeMode.DARK -> {
                     val pairKey = if (mode == ThemeMode.LIGHT) Keys.THEME_LIGHT_ID else Keys.THEME_DARK_ID
-                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.GRAPHITE
+                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.AURORA
                     val id = ThemeId.fromStorageKey(p[pairKey]) ?: fallback
                     p[Keys.THEME_ID] = id.storageKey
                     p[Keys.THEME_SWITCHING] = ThemeSwitching.FIXED.storageKey
@@ -155,10 +155,9 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     /**
      * The full appearance configuration, read in one pass over the snapshot.
      *
-     * Users of 0.1 had only a light/dark/system switch; when no 0.2 theme has
-     * been chosen yet that choice is mapped onto the new presets (light ->
-     * Porcelain, dark -> Graphite, system -> the pair following the system), so
-     * nobody's home screen changes character on upgrade.
+     * Users of 0.1 had only a light/dark/system switch. Explicit legacy light
+     * and dark choices keep their familiar presets; new installs follow the
+     * system and use the Aurora/Zen pair. Preset storage keys stay stable.
      */
     val themeSettings: Flow<ThemeSettings> = dataStore.data
         .catch { e ->
@@ -179,7 +178,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         }
         val themeId = explicitId ?: when (legacy) {
             ThemeMode.LIGHT -> ThemeId.PORCELAIN
-            else -> ThemeId.GRAPHITE
+            ThemeMode.DARK -> ThemeId.GRAPHITE
+            else -> ThemeId.AURORA
         }
         val profileThemes = ContextProfile.entries.mapNotNull { profile ->
             ThemeId.fromStorageKey(p[profileThemeKey(profile)])?.let { profile to it }
@@ -188,7 +188,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
             themeId = themeId,
             switching = switching,
             lightThemeId = ThemeId.fromStorageKey(p[Keys.THEME_LIGHT_ID]) ?: ThemeId.PORCELAIN,
-            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.GRAPHITE,
+            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.AURORA,
             darkWindow = DarkWindow.decode(p[Keys.THEME_DARK_WINDOW]),
             accentOverride = p[Keys.ACCENT_OVERRIDE],
             backgroundOverride = p[Keys.BACKGROUND_OVERRIDE],

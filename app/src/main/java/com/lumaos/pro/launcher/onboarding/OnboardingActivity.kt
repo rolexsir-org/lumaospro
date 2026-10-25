@@ -5,18 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,8 +35,6 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.settings.LumaOSTheme
-import com.lumaos.pro.launcher.ui.Palettes
-import com.lumaos.pro.launcher.ui.ThemeMode
 import kotlinx.coroutines.launch
 
 /**
@@ -72,17 +69,18 @@ class OnboardingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        val themes = (application as LumaApp).core.themes
         setContent {
-            val themeMode by prefs.themeMode.collectAsState(ThemeMode.LIGHT)
-            val palette = Palettes.forMode(themeMode, isSystemInDarkTheme())
-            DisposableEffect(palette.isDark) {
-                WindowCompat.getInsetsController(window, window.decorView).apply {
-                    isAppearanceLightStatusBars = !palette.isDark
-                    isAppearanceLightNavigationBars = !palette.isDark
+            val theme by themes.theme.collectAsState()
+            val textScale by prefs.textScale.collectAsState(1.0f)
+            LumaOSTheme(theme = theme, textScale = textScale) {
+                DisposableEffect(theme.isDark) {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !theme.isDark
+                        isAppearanceLightNavigationBars = !theme.isDark
+                    }
+                    onDispose { }
                 }
-                onDispose { }
-            }
-            LumaOSTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

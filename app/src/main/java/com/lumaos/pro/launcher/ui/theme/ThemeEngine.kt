@@ -62,10 +62,10 @@ data class DarkWindow(val startMinute: Int, val endMinute: Int) {
 
 /** Everything the user has chosen about appearance. Persisted by LumaPrefs. */
 data class ThemeSettings(
-    val themeId: ThemeId = ThemeId.GRAPHITE,
+    val themeId: ThemeId = ThemeId.AURORA,
     val switching: ThemeSwitching = ThemeSwitching.SYSTEM,
     val lightThemeId: ThemeId = ThemeId.PORCELAIN,
-    val darkThemeId: ThemeId = ThemeId.GRAPHITE,
+    val darkThemeId: ThemeId = ThemeId.AURORA,
     val darkWindow: DarkWindow = DarkWindow.DEFAULT,
     val accentOverride: Int? = null,
     val backgroundOverride: Int? = null,
@@ -89,6 +89,12 @@ data class ThemeSettings(
     /** Same overrides, pinned to one preset (used for Studio previews). */
     fun pinned(id: ThemeId): ThemeSettings =
         copy(themeId = id, switching = ThemeSwitching.FIXED, profileThemes = emptyMap())
+
+    /**
+     * Select a global preset without discarding custom colors, typography,
+     * icon treatment, backdrop, or per-profile choices.
+     */
+    fun withPreset(id: ThemeId): ThemeSettings = copy(themeId = id, switching = ThemeSwitching.FIXED)
 }
 
 data class ThemeEnvironment(

@@ -283,57 +283,68 @@ object ThemePresets {
         cornerScale = 1.0f
     )
 
-    val VECTOR = ThemeSpec(
+    /**
+     * Void keeps the historic `vector` storage key so existing preferences and
+     * exported backups retain their selected theme across this visual refresh.
+     */
+    val VOID = ThemeSpec(
         id = ThemeId.VECTOR,
-        displayName = "Vector",
-        tagline = "Cyber instrumentation: fine lines, signal colour used sparingly.",
+        displayName = "Void",
+        tagline = "Indigo depth, cyan light, and a controlled magenta signal.",
         dark = true,
         amoled = false,
-        background = 0xFF05070D.toInt(),
-        accent = 0xFF3DF2E0.toInt(),
-        secondary = 0xFFFF4D9D.toInt(),
-        neutralTint = 0xFF3D6BFF.toInt(),
-        neutralChroma = 0.028,
+        background = 0xFF080815.toInt(),
+        accent = 0xFF69E2F2.toInt(),
+        secondary = 0xFFE28BCB.toInt(),
+        neutralTint = 0xFF5857B8.toInt(),
+        neutralChroma = 0.032,
         typography = TypeStyle.MONO,
         iconShape = IconShape.OCTAGON,
         iconStyle = IconStyle.PLATE,
         atmosphere = Atmosphere.GRID,
         surfaceStyle = SurfaceStyle.GLASS,
         defaultBackdrop = Backdrop.THEME,
-        cornerScale = 0.55f
+        cornerScale = 0.68f
     )
+
+    /** Backwards-compatible source name; the persisted ID is still `vector`. */
+    val VECTOR: ThemeSpec get() = VOID
 
     val AURORA = ThemeSpec(
         id = ThemeId.AURORA,
         displayName = "Aurora",
-        tagline = "Polar night with slow, drifting light.",
+        tagline = "Midnight glass, brushed with a cool polar-blue glow.",
         dark = true,
         amoled = false,
-        background = 0xFF060A14.toInt(),
-        accent = 0xFF6EE7B7.toInt(),
-        secondary = 0xFFA78BFA.toInt(),
-        neutralTint = 0xFF5B7BB5.toInt(),
-        neutralChroma = 0.024,
+        background = 0xFF080D1A.toInt(),
+        accent = 0xFF9AD3FF.toInt(),
+        secondary = 0xFFC5DDF4.toInt(),
+        neutralTint = 0xFF5B7592.toInt(),
+        neutralChroma = 0.016,
         typography = TypeStyle.PRECISION,
         iconShape = IconShape.SQUIRCLE,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.AURORA,
         surfaceStyle = SurfaceStyle.GLASS,
         defaultBackdrop = Backdrop.THEME,
-        cornerScale = 1.25f
+        cornerScale = 1.12f
     )
 
-    val PORCELAIN = ThemeSpec(
+    /**
+     * Zen keeps the historic `porcelain` storage key for preference/backup
+     * compatibility while presenting the new signature identity.
+     */
+    val ZEN = ThemeSpec(
         id = ThemeId.PORCELAIN,
-        displayName = "Porcelain",
-        tagline = "Warm minimal light. Serif time, ink-on-paper contrast.",
+        displayName = "Zen",
+        tagline = "Quiet paper neutrals, soft sage, and blue-grey clarity.",
         dark = false,
         amoled = false,
-        background = 0xFFF4F2EC.toInt(),
-        accent = 0xFF3F5B45.toInt(),
-        secondary = 0xFFA3654A.toInt(),
-        neutralTint = 0xFF8C8A7E.toInt(),
-        neutralChroma = 0.010,
+        background = 0xFFF2F4F1.toInt(),
+        accent = 0xFF526B60.toInt(),
+        secondary = 0xFF637E87.toInt(),
+        neutralTint = 0xFF83918A.toInt(),
+        neutralChroma = 0.008,
         typography = TypeStyle.SERIF,
         iconShape = IconShape.ROUNDED,
         iconStyle = IconStyle.PLATE,
@@ -342,6 +353,9 @@ object ThemePresets {
         defaultBackdrop = Backdrop.THEME,
         cornerScale = 1.1f
     )
+
+    /** Backwards-compatible source name; the persisted ID is still `porcelain`. */
+    val PORCELAIN: ThemeSpec get() = ZEN
 
     /** Seeds are replaced by wallpaper colours at runtime; these apply when none are available. */
     val CHROMA = ThemeSpec(
@@ -364,7 +378,14 @@ object ThemePresets {
         cornerScale = 1.0f
     )
 
-    val ALL: List<ThemeSpec> = listOf(OBSIDIAN, GRAPHITE, VECTOR, AURORA, PORCELAIN, CHROMA)
+    /** Three signature identities shown first in Studio. */
+    val SIGNATURE: List<ThemeSpec> = listOf(AURORA, ZEN, VOID)
+
+    /** Existing specialist palettes remain available; no saved theme is discarded. */
+    val ADDITIONAL: List<ThemeSpec> = listOf(OBSIDIAN, GRAPHITE, CHROMA)
+
+    /** All selectable presets, including the retained specialist palettes. */
+    val ALL: List<ThemeSpec> = SIGNATURE + ADDITIONAL
 
     fun of(id: ThemeId): ThemeSpec = ALL.first { it.id == id }
 
@@ -372,6 +393,10 @@ object ThemePresets {
     val ACCENT_SWATCHES: List<Int> = listOf(
         0xFFB5C5A9.toInt(), // LumaOS Pro sage
         0xFFE2B66B.toInt(), // amber
+        0xFF9AD3FF.toInt(), // Aurora ice
+        0xFF69E2F2.toInt(), // Void cyan
+        0xFFE28BCB.toInt(), // Void magenta
+        0xFF526B60.toInt(), // Zen sage
         0xFF3DF2E0.toInt(), // signal cyan
         0xFF6EE7B7.toInt(), // aurora green
         0xFF8AB4F8.toInt(), // sky
@@ -386,11 +411,14 @@ object ThemePresets {
     /** Curated background swatches for the THEME backdrop. */
     val BACKGROUND_SWATCHES: List<Int> = listOf(
         0xFF000000.toInt(),
+        0xFF080D1A.toInt(), // Aurora midnight
+        0xFF080815.toInt(), // Void indigo
         0xFF101214.toInt(),
         0xFF0B1220.toInt(),
         0xFF14110F.toInt(),
         0xFF0F1A14.toInt(),
         0xFF1A1020.toInt(),
+        0xFFF2F4F1.toInt(), // Zen paper
         0xFFF4F2EC.toInt(),
         0xFFEEF1F5.toInt(),
         0xFFF3EDE4.toInt()

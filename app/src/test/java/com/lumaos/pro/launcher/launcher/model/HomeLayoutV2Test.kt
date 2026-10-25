@@ -59,6 +59,60 @@ class HomeLayoutV2Test {
         assertEquals(listOf(key("x"), key("y"), key("b")), (dropped.page(0)[0] as HomeItem.Folder).children)
     }
 
+    @Test fun `default dock seeding fills an empty layout`() {
+        val seeded = HomeLayoutOps.seedDockIfEmpty(HomeLayout.EMPTY, listOf(key("phone"), key("browser")))
+
+        assertEquals(listOf(app("phone"), app("browser")), seeded.dock)
+        assertTrue(seeded.page(0).isEmpty())
+    }
+
+    @Test fun `default dock seeding never replaces a customized layout`() {
+        val customized = HomeLayout(pages = listOf(listOf(app("mail"))))
+
+        assertSame(customized, HomeLayoutOps.seedDockIfEmpty(customized, listOf(key("phone"))))
+    }
+
+    @Test fun `adding to dock refuses an app already on home or inside a folder`() {
+        val onHome = HomeLayout(pages = listOf(listOf(app("mail"))))
+        assertSame(onHome, HomeLayoutOps.addToDock(onHome, key("mail")))
+
+        val inFolder = HomeLayout(pages = listOf(listOf(
+            HomeItem.Folder("f", "Tools", listOf(key("mail"), key("calendar")))
+        )))
+        assertSame(inFolder, HomeLayoutOps.addToDock(inFolder, key("mail")))
+    }
+
+    @Test fun `moving an app into the dock removes a legacy duplicate instead of making another`() {
+        val duplicate = HomeLayout(
+            dock = listOf(app("mail")),
+            pages = listOf(listOf(app("mail"), app("calendar")))
+        )
+
+        val moved = HomeLayoutOps.moveHomeToDock(duplicate, 0, 0)
+
+        assertEquals(listOf<HomeItem>(app("mail")), moved.dock)
+        assertEquals(listOf<HomeItem>(app("calendar")), moved.page(0))
+    }
+
+    @Test fun `moving a dock app home removes a legacy duplicate instead of making another`() {
+        val duplicate = HomeLayout(
+            dock = listOf(app("mail")),
+            pages = listOf(listOf(app("mail"), app("calendar")))
+        )
+
+        val moved = HomeLayoutOps.moveDockToHome(duplicate, 0)
+
+        assertTrue(moved.dock.isEmpty())
+        assertEquals(listOf<HomeItem>(app("mail"), app("calendar")), moved.page(0))
+    }
+
+    @Test fun `a folder move with a duplicate member is rejected without losing its contents`() {
+        val folder = HomeItem.Folder("f", "Tools", listOf(key("mail"), key("calendar")))
+        val layout = HomeLayout(dock = listOf(app("calendar")), pages = listOf(listOf(folder)))
+
+        assertSame(layout, HomeLayoutOps.moveHomeToDock(layout, 0, 0))
+    }
+
     @Test fun `dock accepts apps up to its limit but never widgets`() {
         val widget = HomeItem.Widget(3, "p/c", 2)
         val l = HomeLayout(pages = listOf(listOf(widget, app("a"))))

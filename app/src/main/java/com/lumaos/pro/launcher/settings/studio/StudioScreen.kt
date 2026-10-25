@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.settings.studio
 import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,6 +69,7 @@ import com.lumaos.pro.launcher.settings.SettingsViewModel
 import com.lumaos.pro.launcher.settings.StudioConfiguration
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
 import com.lumaos.pro.launcher.ui.LumaCorners
+import com.lumaos.pro.launcher.ui.LumaSizes
 import com.lumaos.pro.launcher.ui.LumaSpacing
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
@@ -76,6 +79,7 @@ import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
+import com.lumaos.pro.launcher.ui.theme.ThemeSpec
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import java.text.SimpleDateFormat
@@ -136,7 +140,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             .padding(horizontal = LumaSpacing.screenHorizontal, vertical = LumaSpacing.screenVertical),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+        Column(Modifier.widthIn(max = LumaSizes.studioPreviewMaxWidth).fillMaxWidth()) {
             Text(stringResource(R.string.studio_preview_label), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(LumaSpacing.elementGap))
             Card(
@@ -166,6 +170,13 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (resolved.backdrop == Backdrop.WALLPAPER) {
+                Text(
+                    stringResource(R.string.studio_wallpaper_preview_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (resolved.id == ThemeId.CHROMA && wallpaper == null) {
                 Text(
                     stringResource(R.string.studio_no_wallpaper_colors),
@@ -200,73 +211,37 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
 
             StudioSection(stringResource(R.string.studio_themes)) {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ThemePresets.ALL.forEach { spec ->
-                        val selected = draft.theme.themeId == spec.id
-                        Card(
-                            modifier = Modifier
-                                .width(136.dp)
-                                .height(88.dp)
-                                .clip(RoundedCornerShape(LumaCorners.card))
-                                .clickable {
-                                    draft = draft.copy(
-                                        theme = draft.theme.copy(
-                                            themeId = spec.id,
-                                            switching = ThemeSwitching.FIXED,
-                                            accentOverride = null,
-                                            backgroundOverride = null,
-                                            typography = null,
-                                            iconShape = null,
-                                            iconStyle = null,
-                                            backdrop = null
-                                        )
-                                    )
-                                }
-                                .semantics {
-                                    role = Role.RadioButton
-                                    this.selected = selected
-                                    contentDescription = "${spec.displayName}. ${spec.tagline}"
-                                },
-                            shape = RoundedCornerShape(LumaCorners.card),
-                            border = BorderStroke(
-                                if (selected) 2.dp else 1.dp,
-                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                            ),
-                            colors = CardDefaults.cardColors(containerColor = Color(spec.background)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                        ) {
-                            Box(
-                                Modifier.fillMaxSize().background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            Color(spec.background),
-                                            Color(ColorMath.withAlpha(spec.secondary, 0.24f)),
-                                            Color(ColorMath.withAlpha(spec.accent, 0.34f))
-                                        )
-                                    )
-                                ).padding(12.dp)
-                            ) {
-                                Text(
-                                    spec.displayName,
-                                    modifier = Modifier.align(Alignment.BottomStart),
-                                    color = Color(ThemeEngine.bestTextOn(spec.background)),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
+                ThemePresetRow(
+                    heading = stringResource(R.string.studio_theme_signature),
+                    presets = ThemePresets.SIGNATURE,
+                    selectedId = draft.theme.themeId,
+                    onSelected = { id -> draft = draft.copy(theme = draft.theme.withPreset(id)) }
+                )
+                Spacer(Modifier.height(LumaSpacing.sectionGap))
+                ThemePresetRow(
+                    heading = stringResource(R.string.studio_theme_additional),
+                    presets = ThemePresets.ADDITIONAL,
+                    selectedId = draft.theme.themeId,
+                    onSelected = { id -> draft = draft.copy(theme = draft.theme.withPreset(id)) }
+                )
+                Spacer(Modifier.height(LumaSpacing.elementGap))
                 val selectedSpec = ThemePresets.of(draft.theme.themeId)
                 Text(
                     selectedSpec.tagline,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                draft.theme.profileThemes[activeProfile]?.let { profileTheme ->
+                    Text(
+                        stringResource(
+                            R.string.studio_profile_theme_precedence,
+                            activeProfile.title,
+                            ThemePresets.of(profileTheme).displayName
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             StudioSection(stringResource(R.string.studio_switching)) {
@@ -291,13 +266,13 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     StudioChoice(
                         label = stringResource(R.string.studio_light_theme),
                         selected = ThemePresets.of(draft.theme.lightThemeId).displayName,
-                        options = ThemeId.entries.toList(),
+                        options = ThemePresets.ALL.map { it.id },
                         onSelected = { draft = draft.copy(theme = draft.theme.copy(lightThemeId = it)) }
                     )
                     StudioChoice(
                         label = stringResource(R.string.studio_dark_theme),
                         selected = ThemePresets.of(draft.theme.darkThemeId).displayName,
-                        options = ThemeId.entries.toList(),
+                        options = ThemePresets.ALL.map { it.id },
                         onSelected = { draft = draft.copy(theme = draft.theme.copy(darkThemeId = it)) }
                     )
                 }
@@ -450,7 +425,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                         label = profile.title,
                         selected = draft.theme.profileThemes[profile]?.let { ThemePresets.of(it).displayName }
                             ?: stringResource(R.string.studio_profile_theme_none),
-                        options = listOf<ThemeId?>(null) + ThemeId.entries,
+                        options = listOf<ThemeId?>(null) + ThemePresets.ALL.map { it.id },
                         optionLabel = {
                             it?.let { id -> ThemePresets.of(id).displayName }
                                 ?: stringResource(R.string.studio_profile_theme_none)
@@ -480,6 +455,104 @@ private fun StudioSection(title: String, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
+private fun ThemePresetRow(
+    heading: String,
+    presets: List<ThemeSpec>,
+    selectedId: ThemeId,
+    onSelected: (ThemeId) -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            heading,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(LumaSpacing.compactGap))
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(LumaSpacing.elementGap)
+        ) {
+            presets.forEach { spec ->
+                ThemePresetCard(
+                    spec = spec,
+                    selected = selectedId == spec.id,
+                    onClick = { onSelected(spec.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(LumaCorners.card)
+    val textColor = Color(ThemeEngine.bestTextOn(spec.background))
+    Card(
+        modifier = Modifier
+            .size(width = LumaSizes.studioThemeCardWidth, height = LumaSizes.studioThemeCardHeight)
+            .clip(shape)
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                role = Role.RadioButton
+                this.selected = selected
+                contentDescription = "${spec.displayName}. ${spec.tagline}"
+            },
+        shape = shape,
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) Color(spec.accent) else MaterialTheme.colorScheme.outline
+        ),
+        colors = CardDefaults.cardColors(containerColor = Color(spec.background)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(spec.background),
+                            Color(ColorMath.withAlpha(spec.secondary, 0.10f)),
+                            Color(ColorMath.withAlpha(spec.accent, 0.08f))
+                        )
+                    )
+                )
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(spec.accent, spec.secondary, spec.neutralTint).forEach { swatch ->
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(Color(swatch))
+                            .border(1.dp, textColor.copy(alpha = 0.28f), CircleShape)
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    spec.displayName,
+                    color = textColor,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    spec.tagline,
+                    color = textColor.copy(alpha = 0.82f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun <T> StudioChoice(
     label: String,
     selected: String,
@@ -495,7 +568,10 @@ private fun <T> StudioChoice(
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(8.dp))
         Box {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 220.dp)) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.widthIn(max = 220.dp).heightIn(min = LumaSizes.minimumTouchTarget)
+            ) {
                 Text(selected, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -527,6 +603,7 @@ private fun SwatchRow(
     defaultLabel: String,
     onSelected: (Int?) -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -537,14 +614,14 @@ private fun SwatchRow(
             val chosen = selected == color
             Box(
                 Modifier
-                    .size(44.dp)
+                    .size(LumaSizes.minimumTouchTarget)
                     .clip(CircleShape)
                     .background(Color(color))
                     .clickable { onSelected(color) }
                     .semantics {
                         role = Role.RadioButton
                         this.selected = chosen
-                        contentDescription = ColorMath.toHex(color)
+                        contentDescription = context.getString(R.string.studio_color_option_description, ColorMath.toHex(color))
                     },
                 contentAlignment = Alignment.Center
             ) {

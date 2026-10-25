@@ -97,6 +97,22 @@ object DrawerModel {
     const val SECTION_ALL = "all"
     const val SECTION_RESULTS = "results"
 
+    /**
+     * Keeps the selected chip in sync with the filters currently offered by
+     * Settings and the installed-app snapshot. A filter whose chip disappeared
+     * must not leave the drawer silently stuck on an empty, unresettable view.
+     */
+    fun availableFilter(
+        selected: DrawerFilter,
+        categories: List<DrawerCategory>,
+        categoriesEnabled: Boolean,
+        frequentEnabled: Boolean
+    ): DrawerFilter = when (selected) {
+        DrawerFilter.All -> DrawerFilter.All
+        DrawerFilter.Frequent -> if (frequentEnabled) DrawerFilter.Frequent else DrawerFilter.All
+        is DrawerFilter.Category -> if (categoriesEnabled && selected.category in categories) selected else DrawerFilter.All
+    }
+
     fun build(input: Input): Output {
         val query = input.query.trim()
         val visible = input.apps.filterNot { it.key in input.hidden }

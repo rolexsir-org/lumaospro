@@ -65,6 +65,7 @@ class DrawerController(
         fun onFilterSelected(filter: DrawerFilter)
         fun onSortSelected(sort: DrawerSort)
         fun launchFirst(rows: List<DrawerRow>): Boolean
+        fun retryApps()
         fun showSortMenu(anchor: View, current: DrawerSort)
     }
 
@@ -77,6 +78,7 @@ class DrawerController(
         private set
     private var buckets: List<Pair<Char, Int>> = emptyList()
     private var currentRows: List<DrawerRow> = emptyList()
+    private var retryAvailable = false
     var currentSort: DrawerSort = DrawerSort.ALPHABETICAL
 
     private val spring = SpringAnimator(0f, valueThreshold = 0.0015f) { p -> applyProgress(p) }
@@ -117,6 +119,9 @@ class DrawerController(
             }
         })
         scrim.setOnClickListener { close() }
+        emptyView.setOnClickListener { if (retryAvailable) host.retryApps() }
+        emptyView.isClickable = false
+        emptyView.isFocusable = false
         sortButton.setOnClickListener { host.showSortMenu(it, currentSort) }
     }
 
@@ -221,15 +226,24 @@ class DrawerController(
 
     // ------------------------------------------------------------- content
 
-    fun submit(output: DrawerModel.Output, adapter: DrawerAdapter, loading: Boolean, query: String) {
+    fun submit(
+        output: DrawerModel.Output,
+        adapter: DrawerAdapter,
+        loading: Boolean,
+        query: String,
+        refreshFailed: Boolean = false
+    ) {
         currentRows = output.rows
         buckets = output.buckets
         adapter.submitList(output.rows)
         alphaIndex.letters = output.buckets.map { it.first }
         alphaIndex.visibility = if (output.buckets.size > 3 && query.isBlank()) View.VISIBLE else View.GONE
-        emptyView.visibility = if (output.rows.isEmpty()) View.VISIBLE else View.GONE
+        val empty = output.rows.isEmpty()
+        emptyView.visibility = if (empty) View.VISIBLE else View.GONE
+        updateRetryAvailability(empty && !loading && refreshFailed)
         emptyView.text = when {
             loading -> context.getString(R.string.drawer_loading_apps)
+            refreshFailed -> context.getString(R.string.drawer_retry_apps)
             query.isNotBlank() -> context.getString(R.string.empty_no_results, query)
             else -> context.getString(R.string.empty_no_apps)
         }
@@ -242,18 +256,19 @@ class DrawerController(
 
     fun bindChips(categories: List<DrawerCategory>, selected: DrawerFilter, showFrequent: Boolean, enabled: Boolean) {
         chips.removeAllViews()
-        if (!enabled) {
-            chipsScroll.visibility = View.GONE
-            return
-        }
+        val visibleFilter = DrawerModel.availableFilter(selected, categories, enabled, showFrequent)
+        if (visibleFilter != selected) host.onFilterSelected(visibleFilter)
+
+        // The setting controls category chips only. Keep All and Frequent
+        // available so hiding categories never strands the user in a filtered view.
         val entries = ArrayList<Pair<String, DrawerFilter>>()
         entries += context.getString(R.string.drawer_chip_all) to DrawerFilter.All
         if (showFrequent) entries += context.getString(R.string.drawer_chip_frequent) to DrawerFilter.Frequent
-        categories.forEach { entries += it.title to DrawerFilter.Category(it) }
+        if (enabled) categories.forEach { entries += it.title to DrawerFilter.Category(it) }
         val theme = host.theme()
         val c = theme.colors
         for ((label, filter) in entries) {
-            val chosen = filter == selected
+            val chosen = filter == visibleFilter
             chips.addView(TextView(context).apply {
                 text = label
                 gravity = Gravity.CENTER
@@ -282,6 +297,25 @@ class DrawerController(
         chipsScroll.visibility = if (searchField.text.isBlank() && entries.size > 1) View.VISIBLE else View.GONE
     }
 
+    private fun updateRetryAvailability(available: Boolean, forceStyle: Boolean = false) {
+        if (!forceStyle && retryAvailable == available) return
+        retryAvailable = available
+        emptyView.isClickable = available
+        emptyView.isFocusable = available
+        if (!available) {
+            emptyView.background = null
+            return
+        }
+        val theme = host.theme()
+        val c = theme.colors
+        val radius = theme.corner(18f) * density
+        emptyView.background = ThemedDrawables.ripple(
+            c.ripple,
+            ThemedDrawables.surface(c.surface2, radius, c.outline, 1),
+            radius
+        )
+    }
+
     fun applyTheme(theme: ResolvedTheme, translucency: Boolean) {
         val c = theme.colors
         val radius = theme.corner(28f) * density
@@ -304,6 +338,7 @@ class DrawerController(
         title.typeface = Typefaces.title(theme.typography)
         subtitle.setTextColor(c.onSurfaceMuted)
         emptyView.setTextColor(c.onSurfaceMuted)
+        updateRetryAvailability(retryAvailable, forceStyle = true)
         alphaIndex.setAccentColor(c.accent)
     }
 

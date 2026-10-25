@@ -72,13 +72,13 @@ fun LumaOSTheme(
 /** 0.1-compatible entry point (light/dark/system), mapped onto the 0.2 presets. */
 @Composable
 fun LumaOSTheme(
-    themeMode: ThemeMode = ThemeMode.LIGHT,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     textScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
     val dark = themeMode.resolveDark(isSystemInDarkTheme())
     val theme = ThemeEngine.resolve(
-        ThemeSettings().pinned(if (dark) ThemeId.GRAPHITE else ThemeId.PORCELAIN),
+        ThemeSettings().pinned(if (dark) ThemeId.AURORA else ThemeId.PORCELAIN),
         ThemeEnvironment(systemDark = dark, minuteOfDay = 0)
     )
     LumaOSTheme(theme = theme, textScale = textScale, content = content)

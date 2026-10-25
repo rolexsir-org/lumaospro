@@ -103,6 +103,7 @@ import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.settings.SettingsActivity
+import com.lumaos.pro.launcher.ui.LumaMotion
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.IconShapes
@@ -753,7 +754,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
                 launch {
                     viewModel.isLoading.collect { loading ->
-                        if (!loading && !appsLoadedOnce) {
+                        if (!loading && !viewModel.appRefreshFailed.value && !appsLoadedOnce) {
                             appsLoadedOnce = true
                             val apps = viewModel.apps.value
                             if (profile.preloadIcons && apps.isNotEmpty()) {
@@ -767,8 +768,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 }
 
                 launch {
-                    combine(viewModel.drawer, viewModel.isLoading, viewModel.query) { out, loading, q -> Triple(out, loading, q) }
-                        .collect { (out, loading, q) -> drawer.submit(out, drawerAdapter, loading, q) }
+                    combine(
+                        combine(viewModel.drawer, viewModel.isLoading, viewModel.query) { out, loading, q ->
+                            Triple(out, loading, q)
+                        },
+                        viewModel.appRefreshFailed
+                    ) { state, refreshFailed -> state to refreshFailed }
+                        .collect { (state, refreshFailed) ->
+                            drawer.submit(state.first, drawerAdapter, state.second, state.third, refreshFailed)
+                        }
                 }
 
                 launch {
@@ -911,7 +919,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun applyTheme(target: ResolvedTheme, animate: Boolean) {
         val from = appliedTheme
-        backdrop.setTheme(target, if (animate) 420L else 0L)
+        backdrop.setTheme(target, if (animate) LumaMotion.themeChangeMillis else 0L)
         backdrop.setEffects(effects.ambientMotion, effects.ambientFps, effects.atmosphereDetail)
         updateWallpaperFlag(target)
         if (animate && from != null) {
@@ -1306,6 +1314,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     override fun onDrawerClosed() = Unit
+    override fun retryApps() = viewModel.refreshApps()
     override fun onQueryChanged(query: String) = viewModel.setQuery(query)
     override fun onFilterSelected(filter: DrawerFilter) = viewModel.setFilter(filter)
     override fun onSortSelected(sort: DrawerSort) = viewModel.setSort(sort)
@@ -1490,7 +1499,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 entries += MenuEntry(M_OPEN, getString(R.string.action_open_folder), R.drawable.ic_rx_folder)
                 if (!isDock) entries += MenuEntry(M_EDIT_HOME, getString(R.string.action_edit_home), R.drawable.ic_rx_move)
                 if (isDock) entries += MenuEntry(M_TO_HOME, getString(R.string.action_move_to_home), R.drawable.ic_rx_home_add)
-                else entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock)
+                else if (viewModel.hasDockSpace()) {
+                    entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock)
+                }
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_folder), R.drawable.ic_rx_remove, destructive = true, group = 1)
                 menu().show(anchor, name, entries) { e ->
                     when (e.id) {
@@ -1536,12 +1547,20 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
         when (context) {
             MenuContext.DRAWER -> {
-                entries += MenuEntry(M_ADD_HOME, getString(R.string.action_add_to_home), R.drawable.ic_rx_home_add, group = 1)
-                entries += MenuEntry(M_ADD_DOCK, getString(R.string.action_add_to_dock), R.drawable.ic_rx_dock, group = 1)
+                // The layout model keeps each app in one location. Don't offer
+                // ignored duplicates or a dock action when the dock has no space.
+                if (viewModel.canAddToHome(key)) {
+                    entries += MenuEntry(M_ADD_HOME, getString(R.string.action_add_to_home), R.drawable.ic_rx_home_add, group = 1)
+                }
+                if (viewModel.canAddToDock(key)) {
+                    entries += MenuEntry(M_ADD_DOCK, getString(R.string.action_add_to_dock), R.drawable.ic_rx_dock, group = 1)
+                }
             }
             MenuContext.HOME -> {
                 if (!edit.isActive) entries += MenuEntry(M_EDIT_HOME, getString(R.string.action_edit_home), R.drawable.ic_rx_move, group = 1)
-                entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock, group = 1)
+                if (viewModel.hasDockSpace()) {
+                    entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock, group = 1)
+                }
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_from_home), R.drawable.ic_rx_remove, group = 1)
             }
             MenuContext.DOCK -> {

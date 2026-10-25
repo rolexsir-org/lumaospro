@@ -15,6 +15,9 @@ import android.provider.Settings
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.util.LumaLog
 
+/** Result of an installed-app enumeration; false means [apps] is only the last known snapshot. */
+data class AppRefreshResult(val apps: List<AppEntry>, val successful: Boolean)
+
 /**
  * The authoritative source of installed, launchable apps.
  *
@@ -26,34 +29,50 @@ import com.lumaos.pro.launcher.core.util.LumaLog
  *     Android 11, so LumaOS Pro does not need QUERY_ALL_PACKAGES.
  *  2. It gives per-profile results and the correctly themed icon for free.
  *
- * This class does no caching of its own; icons are cached by [IconCache].
+ * The last complete app snapshot is retained across transient system-service
+ * failures; rendered icons are cached separately by [IconCache].
  */
-class AppRepository(private val context: Context) {
+class AppRepository(
+    private val context: Context,
+    /** Injectable query for deterministic tests; production uses LauncherApps below. */
+    private val activityListQuery: (() -> List<LauncherActivityInfo>)? = null
+) {
 
-    private val launcherApps: LauncherApps =
+    private val launcherApps: LauncherApps by lazy {
         context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+    }
 
     private val userHandle: UserHandle = Process.myUserHandle()
 
     @Volatile
     private var snapshot: Map<ComponentKey, LauncherActivityInfo> = emptyMap()
 
+    /** Last complete list, retained if the system service temporarily fails. */
+    @Volatile
+    private var lastEntries: List<AppEntry> = emptyList()
+
     /**
      * Reads the launchable activity list. Must be called off the main thread:
      * on a device with several hundred apps this is a binder-heavy call.
+     *
+     * A failed binder/security query is not the same as a successful empty
+     * result. Callers that remove stale layout entries must only do so after a
+     * complete enumeration; otherwise a transient system-service failure could
+     * erase the user's home layout and launch history.
      */
     @Suppress("MissingPermission")
-    fun refresh(): List<AppEntry> {
+    @Synchronized
+    fun refreshSnapshot(): AppRefreshResult {
         val infos = try {
-            launcherApps.getActivityList(null, userHandle)
+            activityListQuery?.invoke() ?: launcherApps.getActivityList(null, userHandle)
         } catch (e: SecurityException) {
             LumaLog.e("Not permitted to enumerate apps", e)
-            emptyList<LauncherActivityInfo>()
+            return AppRefreshResult(lastEntries, successful = false)
         } catch (e: RuntimeException) {
             // LauncherApps is a system service; a dead binder here must not take
-            // down the home screen.
+            // down the home screen or turn every installed app into an uninstall.
             LumaLog.e("LauncherApps query failed", e)
-            emptyList<LauncherActivityInfo>()
+            return AppRefreshResult(lastEntries, successful = false)
         }
 
         val entries = ArrayList<AppEntry>(infos.size)
@@ -70,9 +89,14 @@ class AppRepository(private val context: Context) {
             )
             map[key] = info
         }
+        val sorted = AppMatcher.sort(entries).toList()
         snapshot = map
-        return AppMatcher.sort(entries)
+        lastEntries = sorted
+        return AppRefreshResult(sorted, successful = true)
     }
+
+    /** Compatibility helper for consumers that only need the latest known list. */
+    fun refresh(): List<AppEntry> = refreshSnapshot().apps
 
     /** Decodes an icon at [density]. Returns null if the app is gone. */
     fun iconFor(key: ComponentKey, density: Int): Drawable? =

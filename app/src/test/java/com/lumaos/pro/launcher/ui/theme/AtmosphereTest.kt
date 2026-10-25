@@ -46,6 +46,17 @@ class AtmosphereTest {
         assertNotEquals(a, b)
     }
 
+    @Test fun `signature theme highlights remain restrained`() {
+        fun strongestGlow(id: ThemeId): Float = AtmospherePlan
+            .layers(theme(id), 0.18f, true)
+            .filterIsInstance<AtmosphereLayer.Glow>()
+            .maxOf { ColorMath.alpha(it.color) / 255f }
+
+        assertTrue("Aurora glow", strongestGlow(ThemeId.AURORA) <= 0.15f)
+        assertTrue("Zen glow", strongestGlow(ThemeId.PORCELAIN) <= 0.11f)
+        assertTrue("Void glow", strongestGlow(ThemeId.VECTOR) <= 0.11f)
+    }
+
     @Test fun `grid segments stay inside the floor area`() {
         val segs = AtmospherePlan.gridSegments(0.74f, 0.5f)
         assertEquals(0, segs.size % 4)

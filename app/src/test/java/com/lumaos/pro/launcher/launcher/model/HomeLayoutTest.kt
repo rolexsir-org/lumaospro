@@ -123,6 +123,7 @@ class HomeLayoutCodecTest {
 
     private val camera = ComponentKey("com.camera", "com.camera.Main")
     private val clock = ComponentKey("com.clock", "com.clock.Main")
+    private val maps = ComponentKey("com.maps", "com.maps.Main")
 
     @Test
     fun `round trips an empty layout`() {
@@ -134,8 +135,8 @@ class HomeLayoutCodecTest {
     @Test
     fun `round trips apps, folders and the dock`() {
         var layout = HomeLayoutOps.addToDock(HomeLayout.EMPTY, camera)
-        layout = HomeLayoutOps.addToHome(layout, camera)
         layout = HomeLayoutOps.addToHome(layout, clock)
+        layout = HomeLayoutOps.addToHome(layout, maps)
         layout = HomeLayoutOps.createFolder(layout, 0, 0, 1, "folder-1")
 
         val decoded = HomeLayoutCodec.decode(HomeLayoutCodec.encode(layout))

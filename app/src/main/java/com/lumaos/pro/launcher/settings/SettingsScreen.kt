@@ -324,7 +324,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
 
 @Composable
 private fun AppearanceSection(viewModel: SettingsViewModel) {
-    val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.LIGHT)
+    val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
     val gridRows by viewModel.prefs.gridRows.collectAsState(5)
     val drawerColumns by viewModel.prefs.drawerColumns.collectAsState(4)

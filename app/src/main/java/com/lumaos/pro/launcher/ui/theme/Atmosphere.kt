@@ -88,31 +88,32 @@ object AtmospherePlan {
             }
             Atmosphere.AURORA -> {
                 val mix = ColorMath.lerp(c.accent, c.secondary, 0.5f)
-                out += AtmosphereLayer.Glow(0.26f + 0.08f * sin(t), 0.26f + 0.03f * cos(t), 0.72f,
-                    ColorMath.withAlpha(c.accent, 0.30f), 0.42f)
-                out += AtmosphereLayer.Glow(0.78f - 0.07f * sin(t + 1.9f), 0.36f + 0.02f * sin(t * 2), 0.62f,
-                    ColorMath.withAlpha(c.secondary, 0.24f), 0.48f)
-                out += AtmosphereLayer.Glow(0.50f + 0.05f * cos(t + 0.7f), 0.56f + 0.04f * sin(t + 2.4f), 0.85f,
-                    ColorMath.withAlpha(mix, 0.14f), 0.32f)
+                out += AtmosphereLayer.Glow(0.26f + 0.06f * sin(t), 0.26f + 0.025f * cos(t), 0.72f,
+                    ColorMath.withAlpha(c.accent, 0.14f), 0.42f)
+                out += AtmosphereLayer.Glow(0.78f - 0.05f * sin(t + 1.9f), 0.36f + 0.018f * sin(t * 2), 0.62f,
+                    ColorMath.withAlpha(c.secondary, 0.10f), 0.48f)
+                out += AtmosphereLayer.Glow(0.50f + 0.035f * cos(t + 0.7f), 0.56f + 0.03f * sin(t + 2.4f), 0.85f,
+                    ColorMath.withAlpha(mix, 0.065f), 0.32f)
                 out += AtmosphereLayer.VerticalFade(0.62f, 1f, ColorMath.withAlpha(c.background, 0f),
                     ColorMath.withAlpha(c.background, 0.72f))
             }
             Atmosphere.GRID -> {
                 val horizon = 0.74f
-                out += AtmosphereLayer.Glow(0.5f, horizon, 0.58f, ColorMath.withAlpha(c.accent, 0.16f), 0.32f)
-                out += AtmosphereLayer.Glow(0.86f, 0.10f, 0.36f, ColorMath.withAlpha(c.secondary, 0.08f))
+                out += AtmosphereLayer.Glow(0.5f, horizon, 0.58f, ColorMath.withAlpha(c.accent, 0.10f), 0.32f)
+                out += AtmosphereLayer.Glow(0.86f, 0.10f, 0.36f, ColorMath.withAlpha(c.secondary, 0.055f))
                 if (detail) {
-                    out += AtmosphereLayer.Lines(gridSegments(horizon, phase), ColorMath.withAlpha(c.accent, 0.10f), 1f)
+                    out += AtmosphereLayer.Lines(gridSegments(horizon, phase), ColorMath.withAlpha(c.accent, 0.07f), 1f)
                     out += AtmosphereLayer.Lines(floatArrayOf(0f, horizon, 1f, horizon),
-                        ColorMath.withAlpha(c.accent, 0.28f), 1f)
+                        ColorMath.withAlpha(c.accent, 0.16f), 1f)
                 }
                 out += AtmosphereLayer.VerticalFade(0f, 0.30f, ColorMath.withAlpha(c.background, 0.55f),
                     ColorMath.withAlpha(c.background, 0f))
             }
             Atmosphere.HALO -> {
-                out += AtmosphereLayer.Glow(0.12f, 0.02f, 0.95f, ColorMath.withAlpha(ColorMath.WHITE, 0.62f), 0.9f)
-                out += AtmosphereLayer.Glow(0.96f, 0.98f, 0.70f, ColorMath.withAlpha(c.accent, 0.08f), 0.8f)
-                out += AtmosphereLayer.Glow(0.90f + 0.02f * sin(t), 0.18f, 0.40f, ColorMath.withAlpha(c.secondary, 0.06f))
+                // A soft daylight lift rather than a white bloom over the whole surface.
+                out += AtmosphereLayer.Glow(0.12f, 0.02f, 0.95f, ColorMath.withAlpha(c.secondary, 0.10f), 0.9f)
+                out += AtmosphereLayer.Glow(0.96f, 0.98f, 0.70f, ColorMath.withAlpha(c.accent, 0.045f), 0.8f)
+                out += AtmosphereLayer.Glow(0.90f + 0.015f * sin(t), 0.18f, 0.40f, ColorMath.withAlpha(c.secondary, 0.035f))
             }
             Atmosphere.TINT -> {
                 out += AtmosphereLayer.Glow(0.15f, 0.05f, 0.80f, ColorMath.withAlpha(c.accent, 0.18f), 0.7f)
