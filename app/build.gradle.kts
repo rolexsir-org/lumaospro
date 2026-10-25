@@ -9,9 +9,9 @@ plugins {
 // ---------------------------------------------------------------------------
 // Signing.
 // Release signing is driven by an optional, gitignored keystore.properties file:
-//   storeFile=keystore/rolexm-upload.jks
+//   storeFile=keystore/lumaos-pro-upload.jks
 //   storePassword=...
-//   keyAlias=rolexm
+//   keyAlias=lumaos-pro-upload
 //   keyPassword=...
 // Without complete credentials, release outputs remain unsigned. They are not
 // uploadable to Play; never silently sign a production variant with a debug key.
@@ -35,11 +35,11 @@ if (keystoreProps.isNotEmpty()) {
 }
 
 android {
-    namespace = "com.rolexm.launcher"
+    namespace = "com.lumaos.pro.launcher"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.rolexm.launcher"
+        applicationId = "com.lumaos.pro.launcher"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -54,7 +54,7 @@ android {
             create("release") {
                 // rootProject.file, not file(): inside the module's android {}
                 // block, file() resolves relative to app/, so a path written as
-                // "keystore/rolexm.jks" would look for app/keystore/rolexm.jks.
+//                 "keystore/lumaos-pro-upload.jks" would look for app/keystore/lumaos-pro-upload.jks.
                 storeFile = keystoreProps["storeFile"]?.let { rootProject.file(it as String) }
                 storePassword = keystoreProps["storePassword"] as String?
                 keyAlias = keystoreProps["keyAlias"] as String?

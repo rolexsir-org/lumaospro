@@ -1,9 +1,9 @@
-# Project ROLEXM
+# Project LumaOS Pro
 
 A standalone, lightweight Android launcher and performance platform for older
 and low-resource phones.
 
-ROLEXM runs its own launcher logic, resource monitoring and optimization
+LumaOS Pro runs its own launcher logic, resource monitoring and optimization
 routines. It does not depend on Brave, another launcher, or a third-party
 optimizer to function.
 
@@ -13,24 +13,24 @@ optimizer to function.
 
 ```bash
 ./build.sh assembleDebug      # debuggable APK, installs alongside other launchers
-./build.sh test               # 141 tests (101 logic + 40 Robolectric runtime)
+./build.sh test               # JVM unit + Robolectric regression suite
 ./build.sh lint               # Android lint
 ./build.sh assembleRelease    # minified APK; release signing is never debug-key fallback
 ./build.sh bundleRelease      # Android App Bundle for Play (requires upload-key signing)
 ```
 
 `build.sh` provisions the JDK 17 / Gradle / Android SDK toolchain into
-`~/.cache/rolexm-toolchain` on first run (the sandbox ships only JDK 11 and no
+`~/.cache/lumaos-toolchain` on first run (the sandbox ships only JDK 11 and no
 Android SDK). The toolchain lives outside the repo so it never bloats the
 project snapshot.
 
-The 39 runtime tests execute the app's **real** code on the JVM via Robolectric,
-inflating the actual layouts and driving `HomeActivity` through its lifecycle.
-No emulator is required and none is possible in this environment (no KVM, no
-nested virtualisation). See §"Running the code without a device" below for
-exactly what that proves and what it does not.
+The Robolectric suite exercises the app's **real** Android-dependent code on
+the JVM, including inflating the actual layouts and driving `HomeActivity`
+through its lifecycle. No emulator is required for those tests. They do not
+replace a fresh build, lint run, or testing on physical devices; see
+§"Running the code without a device" below for the scope and limits.
 
-On first launch ROLEXM offers to become the default launcher. Skipping is a
+On first launch LumaOS Pro offers to become the default launcher. Skipping is a
 first-class outcome — it stays fully usable as an app, and the choice remains
 available in Settings at any time.
 
@@ -39,10 +39,10 @@ available in Settings at any time.
 ```bash
 ./build.sh assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell monkey -p com.rolexm.launcher.debug 1
+adb shell monkey -p com.lumaos.pro.launcher.debug 1
 ```
 
-The debug build uses the separate application ID `com.rolexm.launcher.debug`.
+The debug build uses the separate application ID `com.lumaos.pro.launcher.debug`.
 For a release APK, run `./build.sh assembleRelease`; install
 `app/build/outputs/apk/release/app-release.apk`. Release variants are unsigned
 unless valid local upload-key credentials are configured; they are never signed
@@ -52,25 +52,34 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 
 ### Google Play release checklist
 
-- The project now targets Android 16 / API 36. Google Play requires new mobile
-  apps and updates submitted from August 31, 2026 to target API 36 or higher
-  ([current target API policy](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)).
-- Upload the signed AAB and enroll in Play App Signing. `bundleRelease` does not
-  sign with a debug key; without a valid upload key it will not produce an
-  uploadable signed release.
+- The project targets Android 16 / API 36. Recheck the target-API requirement
+  at submission time; Google Play's policy requires API 36 for submissions from
+  August 31, 2026 ([current policy](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)).
+- The Home activity has both HOME and LAUNCHER entry points: users can choose
+  LumaOS Pro as their default launcher or open it normally from the app drawer/Play
+  Store. Verify both flows from a fresh install.
+- Build a signed AAB from the current source, enroll in Play App Signing, and
+  verify the package identity and signature. `bundleRelease` never falls back
+  to a debug key; without a valid upload key the output is not uploadable.
 - Complete the Play Console Data safety form and provide a public privacy-policy
-  URL. Google requires both even for apps declaring no data collection
-  ([Data safety requirements](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)).
-  ROLEXM's in-app privacy summary describes local launcher/diagnostics data and
-  Android backup behavior, but it is not a substitute for the publisher's
-  reviewed policy and Play Console disclosures. This repository has no
-  publisher contact details or public policy URL, so those must be supplied by
-  the app owner; none are fabricated here.
-- Review the supplied 512 × 512 icon and 1024 × 500 feature graphic in
-  `store-assets/`. Capture real screenshots from verified devices, confirm the
-  application ID, increment `versionCode` for each upload, and complete Play's
-  review and testing requirements. These artwork files are not device
-  screenshots, and a local build is not Play approval.
+  URL ([Data safety requirements](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)).
+  `PRIVACY_POLICY_DRAFT.md` is a publisher-review draft with placeholders,
+  not a publishable policy. LumaOS Pro stores preferences, layouts, launch history
+  and diagnostics locally; Android backup may transfer some of this data.
+  Optional voice commands hand audio to the installed Android speech-recognition
+  app, which may process it on-device or remotely under its own policy. Add the
+  final public policy URL and publisher contact in Play Console and the app once
+  supplied; reconcile the wording with the final Data safety answers.
+- Complete the store listing (including publisher/support contact, app-content
+  declarations and real screenshots captured from verified devices). Review
+  the supplied 512 × 512 icon and 1024 × 500 feature graphic in `store-assets/`;
+  those brand assets are not application screenshots.
+- The publisher selected **LumaOS Pro** as the replacement brand; app labels,
+  package namespace, and listing artwork have been updated in source. Confirm
+  `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
+  clearance before first upload. Increment `versionCode` on each later update
+  and follow any account-specific Play testing gates shown in Console. The new
+  name and package have not been independently cleared.
 
 ---
 
@@ -78,13 +87,32 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 
 | | |
 |---|---|
-| Application ID | `com.rolexm.launcher` |
+| Application ID | `com.lumaos.pro.launcher` (provisional; verify availability before first upload) |
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
 | Version | 0.1.0 (versionCode 1) |
-| UI | Views for the hot path, Jetpack Compose for settings & diagnostics; clean light theme by default |
+| UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
+
+### Move data from the older test build
+
+The selected rebrand keeps `com.lumaos.pro.launcher`. Android treats it as a
+different app from older `com.rolexm.launcher` and
+`com.rolexm.launcher.debug` installs, so the old
+app cannot be updated in place and Android does not let the new app read the old
+app's private storage. To move settings and layouts:
+
+1. In the old test app, open **Settings → Backup and restore → Export backup**
+   and save the JSON file somewhere accessible (for example, Downloads or a
+   cloud drive you control).
+2. Install LumaOS Pro, open **Settings → Backup and restore → Restore backup**,
+   and select that file. The new app accepts the old backup format.
+3. Confirm the restored layout and settings before uninstalling the old test
+   app.
+
+Manual backup does not include widgets or launch history. This is the supported
+migration path while retaining the new application ID; it is not automatic.
 
 ---
 
@@ -96,10 +124,10 @@ surface for eight objects with no distinct scoping rules, which conflicts with
 the project's own "minimise overhead" rule.
 
 ```
-com.rolexm.launcher
-├── core/            RolexApp, RolexCore, RolexLog, RoleHelper
+com.lumaos.pro.launcher
+├── core/            LumaApp, LumaCore, LumaLog, RoleHelper
 │   ├── apps/        AppRepository (LauncherApps), IconCache, DefaultDockResolver
-│   ├── prefs/       RolexPrefs — DataStore, every setting
+│   ├── prefs/       LumaPrefs — DataStore, every setting
 │   ├── model/       ComponentKey
 │   └── util/
 ├── launcher/        HomeActivity, LauncherViewModel, adapters, IconLoader
@@ -110,9 +138,9 @@ com.rolexm.launcher
 │                    StartupTracker, FrameStats
 ├── optimizer/       Optimizer — the four supported actions
 ├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), StartupStats, formatting
-├── settings/        SettingsActivity, SettingsScreen, DashboardScreen (Compose)
+├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
 ├── onboarding/      OnboardingActivity (Compose)
-└── ui/              Palette, ThemeMode, RolexSpacing/RolexCorners
+└── ui/              Palette, ThemeMode, LumaSpacing/LumaCorners
 ```
 
 ### Context profiles
@@ -131,12 +159,12 @@ and after reboot or wall-clock/time-zone changes; there is no polling service or
 exact-alarm permission. Overlaps resolve deterministically as Sleep, Work,
 Study, then Personal. Context selection and all schedule/layout/visibility data
 remain on-device. Optional voice commands use Android's installed recognition
-activity to switch profiles or open apps; ROLEXM does not retain transcripts.
+activity to switch profiles or open apps; LumaOS Pro does not retain transcripts.
 
 Optional context-change notifications are controlled by a master switch and a
 per-profile preference, and request Android's notification permission only when
 enabled. Per-profile Do Not Disturb is also opt-in: Android Notification Policy
-Access is granted by the user in system Settings, and ROLEXM restores the prior
+Access is granted by the user in system Settings, and LumaOS Pro restores the prior
 interruption filter when leaving a DND profile when it still owns that filter.
 These features do not alter other apps' notification settings.
 
@@ -146,7 +174,7 @@ No location or calendar data is accessed by the current implementation.
 ### Why Views for the home screen and Compose for settings
 
 The home screen is created and drawn on every single return to the desktop, on
-the weakest hardware ROLEXM targets. A static XML tree with a `RecyclerView`
+the weakest hardware LumaOS Pro targets. A static XML tree with a `RecyclerView`
 binds in one pass with no runtime composition to schedule. Compose is used for
 settings and diagnostics, where the screens are state-driven, opened
 deliberately, and the flexibility is worth the runtime.
@@ -160,7 +188,7 @@ both rebuild the same screen from the same source.
 
 ---
 
-## What ROLEXM measures (and what it refuses to fake)
+## What LumaOS Pro measures (and what it refuses to fake)
 
 Every reading on the diagnostics screen is a `Reading<T>` with one of three
 states, rendered with a visible badge:
@@ -174,7 +202,7 @@ states, rendered with a visible badge:
 
 | Metric | Source | Notes |
 |---|---|---|
-| ROLEXM process memory | `ActivityManager.getProcessMemoryInfo` | PSS in KB |
+| LumaOS Pro process memory | `ActivityManager.getProcessMemoryInfo` | PSS in KB |
 | Startup | `SystemClock.uptimeMillis()` | `Application.onCreate` → first **populated** home frame. Not a cold-start figure: process fork happens before any app code can run, and there is no public API for it. |
 | Frame rendering | `Choreographer.FrameCallback` | Slow = >1.5 refresh periods; frozen = >700 ms (Android vitals definitions). Period derived from the real panel refresh rate. |
 | Battery | sticky `ACTION_BATTERY_CHANGED` | Current draw reported as absent when the device omits it, never as 0 |
@@ -188,22 +216,22 @@ can complete perfectly and show no improvement, and the dashboard says so
 
 ## The optimizer: scope is stated, never implied
 
-ROLEXM touches only its own process, caches and databases. Every action carries
+LumaOS Pro touches only its own process, caches and databases. Every action carries
 a visible "Scope: …" line.
 
 | Action | Scope |
 |---|---|
-| Trim icon cache | ROLEXM's own memory |
-| Clear ROLEXM cache | ROLEXM's own files |
-| Compact diagnostics database | ROLEXM's own database |
-| Re-apply performance profile | ROLEXM's own settings |
+| Trim icon cache | LumaOS Pro's own memory |
+| Clear LumaOS Pro cache | LumaOS Pro's own files |
+| Compact diagnostics database | LumaOS Pro's own database |
+| Re-apply performance profile | LumaOS Pro's own settings |
 
-**ROLEXM does not** — and cannot legitimately — stop other apps, clear other
+**LumaOS Pro does not** — and cannot legitimately — stop other apps, clear other
 apps' caches, control CPU governors, change system animation scale, or reclaim
 system RAM. It also does not ask for the permissions that would be needed to
 attempt any of that.
 
-An emergency reset restores the default profile and clears ROLEXM's caches and
+An emergency reset restores the default profile and clears LumaOS Pro's caches and
 history. It deliberately keeps the home layout, dock, folders and appearance
 settings: a reset that rearranged the user's home screen would be worse than
 the problem it solves.
@@ -227,11 +255,16 @@ option is absent — see the note in `GestureAction.kt`.
 ## Privacy
 
 - No account, backend, analytics, advertising SDK, or app network permission.
-  ROLEXM itself does not upload app-list or diagnostics data.
+  LumaOS Pro itself does not upload app-list or diagnostics data.
 - Installed app labels/icons are read from Android for launcher display and
-  search. Preferences, home layout, and diagnostics are stored locally.
+  search. Preferences, home layout, launch history and diagnostics are stored
+  locally.
 - Android cloud backup may transfer preferences and layout. Device-to-device
   transfer also includes diagnostics history; cloud backup excludes it.
+- Voice commands are optional and user-triggered. LumaOS Pro delegates recognition
+  to the installed Android speech-recognition app; that provider may process
+  audio locally or remotely under its own privacy policy. LumaOS Pro receives the
+  recognized text to carry out the command and does not retain transcripts.
 - The merged manifest requests `REQUEST_DELETE_PACKAGES` for the user-confirmed
   uninstall action. `QUERY_ALL_PACKAGES` is not requested; app discovery uses
   Android's `LauncherApps` API and the declared launcher-intent query.
@@ -240,13 +273,12 @@ option is absent — see the note in `GestureAction.kt`.
 
 ## Running the code without a device
 
-A real Android emulator is **not possible** in this workspace: there is no
-`/dev/kvm`, no nested virtualisation, no `qemu` and no `adb`. Rather than accept
-"it has never run", 39 of the tests run the app's genuine code on the JVM under
-Robolectric 4.16.1 (SDK 34), with `isIncludeAndroidResources = true` so the real
-merged resources are used.
+The JVM test suite uses Robolectric 4.16.1 (SDK 34), with
+`isIncludeAndroidResources = true` so tests can use the merged Android
+resources. These automated checks are useful but are not a substitute for a
+fresh current-source build, lint run, or physical-device validation.
 
-They prove:
+When run, they cover:
 
 - `activity_home.xml` is valid, and every `R.id` that Kotlin touches exists in
   the layout **and is the expected view type** — the most common launcher crash
@@ -258,12 +290,15 @@ They prove:
   queries behave, including the history cap and `vacuum()`
 - the optimizer deletes real files and reports the real byte count
 
-They do **not** prove appearance, performance, or real-device behaviour.
-Robolectric runs the code but draws no pixels and measures no jank. **Install
-`app-release.apk` on a real phone to validate those.**
+They do **not** prove appearance, performance, or OEM-specific behaviour.
+Robolectric draws no pixels and measures no jank. Build the current source and
+validate it on supported physical devices before release; no verified APK/AAB
+is checked into this repository.
 
 ## Known limitations
 
-See [BUILD_REPORT.md](BUILD_REPORT.md) for the full list, including features
-deferred from this pass (home-screen widgets, ROLEXM Shield, Brave bridge) and
-the verification boundary.
+LumaOS Pro Shield, a Brave integration, and location/calendar/physical-activity
+context triggers are not part of this release. Home-screen widgets are
+implemented, but their provider consent, configuration and interaction still
+need real-device validation. See [BUILD_REPORT.md](BUILD_REPORT.md) for the
+release verification boundary.

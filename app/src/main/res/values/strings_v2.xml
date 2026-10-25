@@ -49,8 +49,8 @@
     <string name="folder_close_description">Close folder</string>
     <string name="folder_name_description">Folder name</string>
     <string name="folder_opened">%1$s folder opened</string>
-    <string name="smart_folder_hint">Updates itself from apps you open with ROLEXM. History stays on this device.</string>
-    <string name="smart_folder_empty">Nothing here yet. Open a few apps from ROLEXM and they will appear.</string>
+    <string name="smart_folder_hint">Updates itself from apps you open with LumaOS Pro. History stays on this device.</string>
+    <string name="smart_folder_empty">Nothing here yet. Open a few apps from LumaOS Pro and they will appear.</string>
     <string name="smart_add_frequent">Add smart folder: Frequent</string>
     <string name="smart_add_recent">Add smart folder: Recent</string>
     <string name="smart_add_new">Add smart folder: New apps</string>
@@ -118,7 +118,7 @@
     <string name="studio_theme_default">Theme default</string>
     <string name="studio_backdrop">Backdrop</string>
     <string name="studio_backdrop_wallpaper">Wallpaper</string>
-    <string name="studio_backdrop_theme">ROLEXM atmosphere</string>
+    <string name="studio_backdrop_theme">LumaOS Pro atmosphere</string>
     <string name="studio_typography">Typography</string>
     <string name="studio_icons">Icons</string>
     <string name="studio_icon_shape">Shape</string>
@@ -173,7 +173,7 @@
     <string name="pref_drawer_categories">Category chips</string>
     <string name="pref_drawer_categories_desc">Uses the category each app declares. Apps without one are listed under Other.</string>
     <string name="pref_suggestions">Learn from my launches</string>
-    <string name="pref_suggestions_desc">Suggested apps, Frequent, Most used sorting and smart folders use launches made through ROLEXM only. Stored on this device, never sent anywhere.</string>
+    <string name="pref_suggestions_desc">Suggested apps, Frequent, Most used sorting and smart folders use launches made through LumaOS Pro only. Stored on this device, never sent anywhere.</string>
     <string name="pref_clear_history">Clear launch history</string>
     <string name="pref_history_cleared">Launch history cleared</string>
     <string name="pref_hidden_search">Find hidden apps in search</string>
@@ -199,7 +199,7 @@
     <string name="backup_restored">Restored %1$d settings</string>
     <string name="backup_restored_skipped">Restored %1$d settings, skipped %2$d unknown</string>
     <string name="backup_restore_failed">Restore failed: %1$s</string>
-    <string name="backup_too_large">Backup is too large. Choose a ROLEXM backup smaller than 4 MB.</string>
+    <string name="backup_too_large">Backup is too large. Choose a LumaOS Pro backup smaller than 4 MB.</string>
     <string name="backup_working">Reading or writing the selected document…</string>
     <string name="backup_confirm_generic">Your current settings and home layouts, including widget placements, will be replaced. Launch history is not imported.</string>
     <string name="action_dismiss">Dismiss</string>

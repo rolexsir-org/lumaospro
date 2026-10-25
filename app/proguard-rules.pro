@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# ROLEXM release shrink rules
+# LumaOS Pro release shrink rules
 # ---------------------------------------------------------------------------
 
 # Application entry point is referenced from the manifest only.
--keep class com.rolexm.launcher.core.RolexApp { <init>(); }
+-keep class com.lumaos.pro.launcher.core.LumaApp { <init>(); }
 
 # Activities are started by name from the manifest / intents.
 -keep public class * extends android.app.Activity
@@ -18,16 +18,16 @@
 -keep class * extends androidx.work.ListenableWorker { *; }
 
 # Any model type written to DataStore or diagnostics must keep its members.
--keepclassmembers class com.rolexm.launcher.**.model.** { *; }
+-keepclassmembers class com.lumaos.pro.launcher.**.model.** { *; }
 
 # Choreographer callbacks are installed from Kotlin; keep the lambda targets.
--keepclassmembers class com.rolexm.launcher.intelligence.** {
+-keepclassmembers class com.lumaos.pro.launcher.intelligence.** {
     *** *(...);
 }
 
-# Remove our debug logging from release builds. RolexLog already compiles out
+# Remove our debug logging from release builds. LumaLog already compiles out
 # via BuildConfig.DEBUG at the call site; this is the backstop.
--assumenosideeffects class com.rolexm.launcher.core.util.RolexLog {
+-assumenosideeffects class com.lumaos.pro.launcher.core.util.LumaLog {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);

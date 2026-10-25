@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ROLEXM build entry point.
+# LumaOS Pro build entry point.
 #
 # The Android SDK / Gradle / JDK toolchain lives outside the persisted
 # workspace (under ~/.cache) so it never inflates the project snapshot. This
@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-TOOLS="$HOME/.cache/rolexm-toolchain"
+TOOLS="$HOME/.cache/lumaos-toolchain"
 
 if [ ! -f "$TOOLS/env.sh" ]; then
   echo "==> toolchain missing, provisioning"

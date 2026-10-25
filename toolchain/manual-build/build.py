@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-ROLEXM release builder — manual toolchain pipeline (no Gradle/AGP required).
+HISTORICAL sandbox builder — NOT an approved production-release pipeline.
 
-Assembles a signed Play-uploadable AAB (and universal APK) using:
-  aapt2 (npm aaptjs3) + kotlinc 2.2.21 + Compose compiler plugin (npm kotlin-compiler)
-  + D8/R8 (npm @drxiaozhi/minapk) + bundletool (npm bundletoolheavy)
-  + Temurin JRE 21 (pypi jdk4py) + android-36.jar (github Sable/android-platforms)
-  + androidx/Compose libraries resolved from vendored Gradle caches (see resolve.py).
+This custom path bypasses Gradle/AGP, may resolve library versions that differ
+from the current catalog, does not apply the app's configured R8/resource
+shrinking, and does not replace current tests, lint, or device verification.
+Do not use its outputs for public Play release. Use the current Gradle release
+configuration and have the project owner verify all resulting artifacts.
 
-Phases:  libs -> manifest -> resources -> codegen -> kotlin -> dex -> aab -> apk -> verify
+The script remains for historical provenance/recovery only. Phases:
+  libs -> manifest -> resources -> codegen -> kotlin -> dex -> aab -> apk -> verify
 """
 import json, os, re, shutil, subprocess, sys, zipfile
 import xml.etree.ElementTree as ET
@@ -36,11 +37,11 @@ BUNDLETOOL = os.path.join(NPM, "bundletoolheavy/bundletoolfile/bundletool-all-1.
 SIGNJS = os.path.join(ROOT, "toolchain/manual-build/sign.mjs")
 ANDROID_JAR = os.path.join(CACHE, "android-36.jar")
 
-KEYSTORE = os.path.join(ROOT, "keystore/rolexm-upload.jks")
+KEYSTORE = os.path.join(ROOT, "keystore/lumaos-pro-upload.jks")
 KEYSTORE_PROPS = os.path.join(ROOT, "keystore.properties")
-KEY_ALIAS = "rolexm"
+KEY_ALIAS = "lumaos-pro-upload"
 
-APP_ID = "com.rolexm.launcher"
+APP_ID = "com.lumaos.pro.launcher"
 VERSION_CODE = 1
 VERSION_NAME = "0.1.0"
 MIN_SDK = 26
@@ -532,9 +533,9 @@ def phase_keystore():
     sh([KEYTOOL, "-genkeypair", "-storetype", "JKS", "-keystore", KEYSTORE, "-alias", KEY_ALIAS,
         "-keyalg", "RSA", "-keysize", "4096", "-validity", "36500",
         "-storepass", pw, "-keypass", pw,
-        "-dname", "CN=ROLEXM Release Upload, O=ROLEXM, C=IN"])
+        "-dname", "CN=LumaOS Pro Release Upload, O=LumaOS Pro, C=IN"])
     with open(KEYSTORE_PROPS, "w") as f:
-        f.write(f"storeFile=keystore/rolexm-upload.jks\nstorePassword={pw}\nkeyAlias={KEY_ALIAS}\nkeyPassword={pw}\n")
+        f.write(f"storeFile=keystore/lumaos-pro-upload.jks\nstorePassword={pw}\nkeyAlias={KEY_ALIAS}\nkeyPassword={pw}\n")
     os.chmod(KEYSTORE_PROPS, 0o600)
     print("generated upload keystore:", KEYSTORE, "(credentials in keystore.properties)")
 
