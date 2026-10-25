@@ -5,8 +5,8 @@
 > answers, and publish this policy at a stable public URL before release.
 
 **Effective date:** [YYYY-MM-DD]  
-**Publisher:** [LEGAL PUBLISHER NAME]  
-**Privacy/support contact:** [PUBLIC CONTACT EMAIL]  
+**Publisher:** [saqibtantray]  
+**Privacy/support contact:** [sytmrx.dev@gmail.com]  
 **Public policy URL:** [URL TO BE ASSIGNED AFTER HOSTING]
 
 ## Overview
@@ -87,9 +87,7 @@ additional end-to-end encryption is made.
 
 ## Children's privacy and intended audience
 
-[Publisher: confirm the intended age group and whether the app is directed to
-children. Update this section and Play Console audience/Families declarations
-before publication.]
+[personalised for everyone]
 
 ## Changes to this policy
 
@@ -98,12 +96,9 @@ current version and effective date will be available at the public URL above.
 
 ## Contact
 
-For privacy questions or requests, contact **[PUBLIC CONTACT EMAIL]** and
+For privacy questions or requests, contact [sytmrx.dev@gmail.com] and
 identify the app as LumaOS Pro. The publisher will handle requests under the
 privacy laws applicable to the publisher and the user.
 
 ---
 
-**Publisher release check:** remove this notice and all bracketed fields only
-after the policy has been legally reviewed, hosted publicly, and reconciled with
-the app version and Play Console Data safety form.
