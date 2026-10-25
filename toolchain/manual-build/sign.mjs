@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sign the ROLEXM AAB (JAR v1 scheme) and APK (v1+v2+v3, zipaligned)
+// Sign the LumaOS Pro AAB (JAR v1 scheme) and APK (v1+v2+v3, zipaligned)
 // using the pure-JS apk_sign_ts library. Reads keystore.properties.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

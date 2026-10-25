@@ -14,19 +14,19 @@ a debug key or reuse a private app-signing key as the upload key.
 
    ```bash
    keytool -genkeypair -v \
-     -keystore keystore/rolexm-upload.jks \
+     -keystore keystore/lumaos-pro-upload.jks \
      -storetype JKS \
      -keyalg RSA -keysize 2048 -validity 10000 \
-     -alias rolexm-upload
+     -alias lumaos-pro-upload
    ```
 
 2. Create the gitignored repository-root `keystore.properties` file with the
    values below. Use the passwords entered above and keep the file private:
 
    ```properties
-   storeFile=keystore/rolexm-upload.jks
+   storeFile=keystore/lumaos-pro-upload.jks
    storePassword=YOUR_LOCAL_STORE_PASSWORD
-   keyAlias=rolexm-upload
+   keyAlias=lumaos-pro-upload
    keyPassword=YOUR_LOCAL_KEY_PASSWORD
    ```
 

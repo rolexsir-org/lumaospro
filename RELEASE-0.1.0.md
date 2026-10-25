@@ -1,85 +1,59 @@
-# ROLEXM 0.1.0 — Google Play release artifacts
+# LumaOS Pro 0.1.0 — release preparation status
 
-**Date:** 2026-10-22
-**versionCode:** 1 · **versionName:** 0.1.0 · **applicationId:** `com.rolexm.launcher`
-**minSdk:** 26 · **targetSdk:** 36 · **compileSdk:** 36
+**Status: NOT RELEASE-READY.** This is a preparation checklist, not evidence of a
+verified release or Play approval. The current repository does not contain a
+verified APK or AAB.
 
-## Deliverables
+## Configured application identity
 
-| File | Size | SHA-256 |
-|---|---|---|
-| `dist/app-release.aab` | 19.17 MB | `dc275b02109f93b11083eea6934e9ee0e2407c19e16f5f673086ebff20cf7bf1` |
-| `dist/app-release.apk` | 19.47 MB | `fae44e0776ffe75cf69e597dfa2c631aac1c22ea20af62e2f68172f138400ec5` |
-
-Also generated: `dist/SHA256SUMS`.
-
-- **`app-release.aab`** — Android App Bundle for Google Play upload (Console → new release → upload AAB).
-- **`app-release.apk`** — the same build packaged as a single universal APK (aligned, signed v2+v3) for direct install/testing (`adb install`).
-
-Both are signed with the same **upload key** (see Signing below). The app is a *home-screen launcher*:
-`HomeActivity` registers `MAIN` + `HOME` + `DEFAULT` (by design there is no `LAUNCHER`-category
-activity, so `aapt2 dump badging` shows no `launchable-activity` — that is expected).
-
-## Signing (Play App Signing)
-
-- Upload keystore: `keystore/rolexm-upload.jks` (JKS, RSA 4096, validity 100 years, alias `rolexm`)
-- Credentials: `keystore.properties` (gitignored — **back both files up somewhere safe**)
-- Signer: `CN=ROLEXM Release Upload, O=ROLEXM, C=IN`
-
-Upload the AAB to Play Console and enroll in **Play App Signing** (Play then manages the
-app-signing key and re-signs APKs served to devices). This key is your *upload key* — if you
-lose it, Play Console can reset it; if you lose it *and* never enrolled, the app cannot be updated.
-
-## Verification performed
-
-| Check | Result |
+| Setting | Value |
 |---|---|
-| `bundletool validate` (AAB structure) | **pass** |
-| AAB JAR signature (`META-INF/MANIFEST.MF` digests) | **96/96 entries match**, `CERT.SF` + `CERT.RSA` present |
-| APK signature (com.android.apksig 8.13.0 `ApkVerifier`) | **verified — v2 ✓ v3 ✓** (v1 present with 95/95 matching digests; apksig reports v1 as non-authoritative alongside v2, which is fine for minSdk 26) |
-| `aapt2 dump badging` | package `com.rolexm.launcher`, versionCode 1, versionName 0.1.0, minSdk 26, targetSdk 36, compileSdk 36, label `ROLEXM`, adaptive icon present, permissions: `REQUEST_DELETE_PACKAGES`, `RECEIVE_BOOT_COMPLETED`, `POST_NOTIFICATIONS` |
-| AAB content layout | `BundleConfig.pb`, `base/manifest/AndroidManifest.xml` (proto), `base/resources.pb`, `base/res/` (91 files), `base/dex/classes.dex` + `classes2.dex`, signed `META-INF` |
-| Dex content probes | app (`com.rolexm.launcher`, `R$*`, `BuildConfig`), Compose, androidx.core, kotlinx-coroutines, androidx.datastore all present |
+| Application ID | `com.lumaos.pro.launcher` (provisional; verify availability before first upload) |
+| versionCode / versionName | `1` / `0.1.0` |
+| minSdk | 26 (Android 8.0) |
+| targetSdk / compileSdk | 36 (Android 16) |
+| Play package | Android App Bundle (`bundleRelease`) |
 
-## Library versions used (vs `gradle/libs.versions.toml` pins)
+Confirm the application ID is available and is the permanent package name before
+creating the Play listing. `versionCode` 1 is appropriate only for the first
+upload; increment it for every later release.
 
-The build environment (see `toolchain/manual-build/README.md`) has no access to Maven
-repositories; the dependency closure was resolved from vendored Gradle caches of public GitHub
-projects. Exact pins were used wherever the bytes were available:
+## Artifact and signing status
 
-| Library | Pinned | Built | Note |
-|---|---|---|---|
-| androidx.core:core-ktx | 1.13.1 | **1.13.1** | exact |
-| androidx.recyclerview:recyclerview | 1.3.2 | **1.3.2** | exact |
-| androidx.activity:activity-compose | 1.9.2 | **1.9.2** | exact |
-| androidx.datastore:datastore-preferences | 1.1.1 | **1.1.1** | exact |
-| kotlinx-coroutines-android | 1.8.1 | 1.9.0 | 1.8.1 binaries absent from all sources; 1.9.0 is API-compatible |
-| androidx.compose.ui / material3 | 1.7.8 / 1.3.2 | 1.7.0 / 1.3.0 | nearest complete coherent set available |
-| androidx.lifecycle | 2.8.7 | 2.8.3 (+ `lifecycle-common-jvm` 2.9.4 jar) | patch-level difference |
-| Kotlin | 2.2.21 | **2.2.21** | exact (compiler + Compose compiler plugin + stdlib) |
-| R8/D8 (dexing) | — | 8.13.6 | AGP 8.13's own R8, extracted from `com.android.tools.build:builder` |
+- No `dist/app-release.aab`, `dist/app-release.apk`, or current Gradle output is
+  present in this checkout. `dist/SHA256SUMS` previously referenced missing
+  binaries and has been removed rather than presented as valid checksums.
+- No upload keystore or `keystore.properties` is present. Release signing is
+  intentionally optional and never falls back to the debug key.
+- The old artifact report described a separate manual build with dependency
+  substitutions and without R8/resource shrinking. Its reported hashes cannot
+  be checked against files in this checkout and must not be used as current
+  release evidence.
 
-## Build differences vs `./build.sh bundleRelease`
+When preparing a release, configure a dedicated upload key using
+[keystore/README.md](keystore/README.md), build the AAB from the current Gradle
+source with `./build.sh bundleRelease`, then independently verify its package
+identity, version, signature, and checksum. Enroll in Play App Signing and keep
+secure backups of the upload key. Do not commit the private key, credentials,
+APK, or AAB.
 
-Built with the manual pipeline in `toolchain/manual-build/` (aapt2 → kotlinc + Compose plugin →
-d8 → AAB assembly → JAR signing), because this environment cannot download Gradle/JDK/SDK/AGP
-from their usual hosts, and the sandbox blocks JVM child-process execution (which Gradle/AGP and
-bundletool's `build-apks` require). Consequences vs a stock AGP release build:
+## Remaining release gates
 
-1. **Not R8-minified / not resource-shrunk** — dex is debug-style unminified (app remains fully
-   functional; size is larger than a minified build). `isMinifyEnabled`/`isShrinkResources` from
-   `app/build.gradle.kts` were not applied. Can be layered later with R8 + the keep rules already
-   generated (`aapt2-keep.pro`) and each AAR's embedded `proguard.txt`.
-2. **Unit tests / lint not run** (require Robolectric/AGP; not possible offline).
-3. `BuildConfig` is generated by hand with the same fields AGP would emit
-   (`DEBUG=false`, `APPLICATION_ID`, `BUILD_TYPE="release"`, `VERSION_CODE=1`, `VERSION_NAME="0.1.0"`).
-4. Library `R` classes are generated from the linked resource table (non-transitive, same IDs).
+1. Run a fresh current-source test suite, lint, debug/release build, and AAB
+   verification. These checks were deliberately not run as part of the current
+   changes; they are left to the project owner for testing and release.
+2. Install from a Play internal/closed test track on physical devices. Validate
+   first launch and onboarding, both app-drawer and Home-role entry points,
+   widgets, backups, accessibility, notifications, profile schedules, and
+   performance on representative low-memory hardware.
+3. Complete Play App Signing, Data safety, app-content and rating declarations,
+   developer/support contact details, the public privacy-policy URL, and the
+   store listing. Capture real screenshots; the supplied icon and feature
+   graphic are not screenshots.
+4. Confirm trademark clearance for the selected LumaOS Pro brand and verify
+   that `com.lumaos.pro.launcher` is available before creating the Play listing.
+   Review account-specific Play testing requirements in Play Console.
 
-## How to rebuild
-
-```bash
-python3 .cache/deps/resolve.py        # re-resolve library closure from vendored caches
-python3 toolchain/manual-build/build.py all
-```
-
-Pipeline notes and tool provenance: `toolchain/manual-build/README.md`.
+See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
+[README.md](README.md) for the project and privacy behavior. A local successful
+build is not Play approval.

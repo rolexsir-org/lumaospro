@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ROLEXM</string>
-    <string name="title_settings">ROLEXM Settings</string>
+    <string name="app_name">LumaOS Pro</string>
+    <string name="title_settings">LumaOS Pro Settings</string>
     <string name="title_settings_tab">Settings</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_welcome">ROLEXM</string>
+    <string name="onboarding_welcome">LumaOS Pro</string>
     <string name="onboarding_subtitle">A calm, lightweight home for your day.</string>
     <string name="onboarding_contexts">Work, Study, Personal, and Sleep spaces with on-device schedules and layouts.</string>
     <string name="onboarding_set_default">Set as default launcher</string>
     <string name="onboarding_skip">Not now</string>
-    <string name="onboarding_privacy_note">You can change this at any time in ROLEXM Settings. ROLEXM has no account or app server. Android backup may transfer launcher settings if enabled.</string>
+    <string name="onboarding_privacy_note">You can change this at any time in LumaOS Pro Settings. LumaOS Pro has no account or app server. Android backup may transfer launcher settings if enabled.</string>
 
     <!-- Home -->
     <string name="home_clock_description">Current time</string>
     <string name="home_search_description">Search installed apps</string>
     <string name="home_settings_description">Launcher settings</string>
     <string name="voice_command_description">Use a voice command to switch profile or open an app</string>
-    <string name="voice_command_prompt">Say “switch to Work” or “open Calendar”</string>
+    <string name="voice_command_prompt">Android speech recognition will process your voice. Say “switch to Work” or “open Calendar”.</string>
     <string name="voice_command_unavailable">No speech recognition service is available</string>
     <string name="voice_command_unrecognized">Try “switch to Work” or “open [app name]”</string>
     <string name="voice_command_app_not_found">I couldn’t find that app</string>
-    <string name="context_notification_title">ROLEXM switched to %1$s</string>
+    <string name="context_notification_title">LumaOS Pro switched to %1$s</string>
     <string name="context_notification_body">Your launcher layout and app visibility have been updated.</string>
     <string name="context_notification_channel">Context changes</string>
-    <string name="context_notification_summary">ROLEXM context-change alerts</string>
+    <string name="context_notification_summary">LumaOS Pro context-change alerts</string>
     <string name="dnd_access_unavailable">This device does not expose Notification Policy Access settings.</string>
     <string name="notification_settings_unavailable">This device does not expose app notification settings.</string>
     <string name="home_empty_hint">Swipe up to explore your apps</string>
@@ -81,10 +81,10 @@
     <string name="profile_visual_desc">Richer transitions and larger caches. Uses more memory.</string>
     <string name="pref_profile_auto">Choose automatically from device capability</string>
     <string name="pref_profile_auto_detail">Automatic (currently %1$s tier: %2$d MB RAM, %3$d cores).</string>
-    <string name="profile_scope_note">Adjust ROLEXM’s own animation and icon-caching behavior.</string>
+    <string name="profile_scope_note">Adjust LumaOS Pro’s own animation and icon-caching behavior.</string>
 
     <string name="pref_auto_optimize">Allow automatic maintenance</string>
-    <string name="pref_auto_optimize_desc">Lets ROLEXM trim its own caches when they grow, subject to a cooldown.</string>
+    <string name="pref_auto_optimize_desc">Lets LumaOS Pro trim its own caches when they grow, subject to a cooldown.</string>
 
     <string name="gesture_swipe_up">Swipe up</string>
     <string name="gesture_swipe_down">Swipe down</string>
@@ -93,7 +93,7 @@
     <string name="gesture_none">Do nothing</string>
     <string name="gesture_open_drawer">Open app drawer</string>
     <string name="gesture_open_search">Open search</string>
-    <string name="gesture_open_settings">Open ROLEXM settings</string>
+    <string name="gesture_open_settings">Open LumaOS Pro settings</string>
     <string name="gesture_open_wallpaper">Change wallpaper</string>
     <string name="gesture_note">Choose what each gesture does on the home screen.</string>
 
@@ -101,7 +101,7 @@
     <string name="dash_title">Diagnostics</string>
     <string name="dash_measurements">Measurements</string>
     <string name="dash_profile_card">Profile</string>
-    <string name="dash_process_memory">ROLEXM process memory</string>
+    <string name="dash_process_memory">LumaOS Pro process memory</string>
     <string name="dash_startup">Launcher start to populated home screen</string>
     <string name="dash_startup_none">No completed start recorded yet</string>
     <string name="dash_startup_hint">Open the home screen once to record a measurement.</string>
@@ -124,8 +124,8 @@
     <string name="dash_low_ram">The system classifies this as a low-RAM device.</string>
     <string name="dash_engine">Engine</string>
     <string name="dash_engine_active">Sampling (every %1$ds)</string>
-    <string name="dash_engine_paused">Paused — ROLEXM is not visible</string>
-    <string name="dash_engine_note">No background work runs while ROLEXM is not visible.</string>
+    <string name="dash_engine_paused">Paused — LumaOS Pro is not visible</string>
+    <string name="dash_engine_note">No background work runs while LumaOS Pro is not visible.</string>
     <string name="dash_recent_actions">Recent optimization actions</string>
     <string name="dash_history_loading">Loading recent activity…</string>
     <string name="dash_no_actions">No actions recorded yet.</string>
@@ -137,8 +137,8 @@
     <string name="dash_setting">Setting</string>
 
     <!-- Dashboard: maintenance -->
-    <string name="dash_actions_title">ROLEXM maintenance</string>
-    <string name="dash_actions_note">Every action below affects ROLEXM’s own memory, files or database. None of them stop other apps, clear other apps’ caches, or change system settings.</string>
+    <string name="dash_actions_title">LumaOS Pro maintenance</string>
+    <string name="dash_actions_note">Every action below affects LumaOS Pro’s own memory, files or database. None of them stop other apps, clear other apps’ caches, or change system settings.</string>
     <string name="dash_scope">Scope: %1$s</string>
     <string name="dash_run_now">Run now</string>
     <string name="opt_running">Running…</string>
@@ -148,8 +148,8 @@
     <string name="dash_pss_neutral"> · no measurable change in PSS</string>
     <string name="dash_reset_title">Reset optimizations?</string>
     <string name="dash_reset_action">Reset</string>
-    <string name="opt_emergency_reset">Reset ROLEXM optimizations</string>
-    <string name="opt_emergency_reset_desc">Restores the default profile and clears ROLEXM’s caches and optimization history. Your home layout, dock and settings are kept.</string>
+    <string name="opt_emergency_reset">Reset LumaOS Pro optimizations</string>
+    <string name="opt_emergency_reset_desc">Restores the default profile and clears LumaOS Pro’s caches and optimization history. Your home layout, dock and settings are kept.</string>
 
     <!-- Dashboard: history -->
     <string name="dash_completed">Completed</string>
@@ -160,15 +160,15 @@
     <string name="dash_pss_higher"> · PSS %1$.1f MB higher</string>
 
     <!-- Home role -->
-    <string name="role_status_default">ROLEXM is the default launcher</string>
-    <string name="role_status_not_default">ROLEXM is not the default launcher</string>
+    <string name="role_status_default">LumaOS Pro is the default launcher</string>
+    <string name="role_status_not_default">LumaOS Pro is not the default launcher</string>
     <string name="role_current_default">Current default: %1$s</string>
     <string name="role_set_default">Set as default launcher</string>
     <string name="role_switch_away">Switch to another launcher</string>
-    <string name="role_switch_away_desc">Opens the system launcher picker so you can hand the Home role back safely. ROLEXM stays installed and your settings are kept.</string>
+    <string name="role_switch_away_desc">Opens the system launcher picker so you can hand the Home role back safely. LumaOS Pro stays installed and your settings are kept.</string>
 
     <!-- Privacy -->
-    <string name="privacy_summary">ROLEXM reads app names and icons to build your launcher and stores preferences and diagnostics locally. Android backup may transfer your home layout and settings; device-to-device transfer can include diagnostics history. ROLEXM has no account, analytics, advertising SDK, or app server and does not send this data itself.</string>
+    <string name="privacy_summary">LumaOS Pro reads app names and icons to build your launcher and stores preferences, home layouts, launch history and diagnostics locally. Android backup may transfer your settings and layouts; device-to-device transfer can include diagnostics history. If you use voice commands, Android hands audio to the speech-recognition app on your device, which may process it on-device or remotely under its own privacy policy. LumaOS Pro receives recognized text to carry out the command and does not retain transcripts. LumaOS Pro has no account, analytics, advertising SDK, app server or app network permission and does not send this data itself.</string>
 
     <string name="about_version">Version %1$s (%2$d)</string>
 

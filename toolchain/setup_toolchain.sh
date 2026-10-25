@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Project ROLEXM — sandbox toolchain provisioning
+# Project LumaOS Pro — sandbox toolchain provisioning
 # Installs JDK 17, Gradle, and a minimal Android SDK.
 # Everything lives under $TOOLS (.cache) so it is excluded from workspace
 # snapshots and never bloats the persisted project source.
 set -euo pipefail
 
-TOOLS="${TOOLS:-$HOME/.cache/rolexm-toolchain}"
+TOOLS="${TOOLS:-$HOME/.cache/lumaos-toolchain}"
 mkdir -p "$TOOLS"
 cd "$TOOLS"
 

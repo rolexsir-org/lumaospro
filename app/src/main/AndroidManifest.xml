@@ -13,7 +13,7 @@
             official launcher API, which is not subject to package-visibility
             filtering. The <queries> block below covers the remaining
             PackageManager lookups.
-          * KILL_BACKGROUND_PROCESSES / FORCE_STOP - ROLEXM does not terminate
+          * KILL_BACKGROUND_PROCESSES / FORCE_STOP - LumaOS Pro does not terminate
             other applications.
           * Any accessibility or device-admin binding for core features.
     -->
@@ -23,9 +23,10 @@
 
     <!--
         Package visibility (Android 11+). These are declarations, not
-        permissions: they let ROLEXM see only apps that answer these intents.
+        permissions: they let LumaOS Pro see only apps that answer these intents.
           * launcher activities (the app list itself);
-          * web search and the store, for "Search elsewhere" in the drawer;
+          * web search, web browsers, and the store, for dock seeding and
+            "Search elsewhere" in the drawer;
           * icon packs for the major launcher families (appfilter.xml format).
     -->
     <queries>
@@ -35,6 +36,16 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -50,24 +61,29 @@
     </queries>
 
     <application
-        android:name=".core.RolexApp"
+        android:name=".core.LumaApp"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
-        android:theme="@style/Theme.Rolexm"
+        android:theme="@style/Theme.LumaOS"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
         android:largeHeap="false"
         tools:targetApi="31">
 
         <!--
-            The home screen. singleTask + stateNotNeeded + excludeFromRecents are
-            the conventional launcher settings: one instance, no per-instance
-            saved state to restore (the launcher rebuilds from its own store),
-            and no entry in the recent-tasks list.
+            The Home activity is also the regular app entry point. The HOME
+            filter lets Android offer LumaOS Pro as a default launcher; the separate
+            LAUNCHER filter makes it reachable from the app drawer and gives
+            Play Store a normal launch intent. On a first ordinary launch,
+            HomeActivity offers onboarding before the user chooses a role.
+
+            singleTask + stateNotNeeded + excludeFromRecents keep one launcher
+            instance and rebuild it from persisted state rather than a saved view
+            hierarchy.
         -->
         <activity
             android:name=".launcher.HomeActivity"
@@ -78,24 +94,28 @@
             android:excludeFromRecents="true"
             android:resumeWhilePausing="true"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Rolexm.Home">
+            android:theme="@style/Theme.LumaOS.Home">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
         <activity
             android:name=".onboarding.OnboardingActivity"
             android:exported="false"
-            android:theme="@style/Theme.Rolexm.Settings" />
+            android:theme="@style/Theme.LumaOS.Settings" />
 
         <receiver
             android:name=".context.ContextScheduleReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.rolexm.launcher.action.REEVALUATE_CONTEXT" />
+                <action android:name="com.lumaos.pro.launcher.action.REEVALUATE_CONTEXT" />
             </intent-filter>
         </receiver>
 
@@ -114,7 +134,7 @@
             android:exported="false"
             android:label="@string/title_settings"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Rolexm.Settings" />
+            android:theme="@style/Theme.LumaOS.Settings" />
     </application>
 
 </manifest>

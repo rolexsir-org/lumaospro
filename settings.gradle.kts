@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ROLEXM"
+rootProject.name = "LumaOS-Pro"
 include(":app")

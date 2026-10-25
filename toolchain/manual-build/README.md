@@ -1,10 +1,22 @@
-# Manual release pipeline (offline / no-Gradle)
+# Historical manual build pipeline (not for production releases)
 
-`build.py` produces the signed Play AAB + universal APK **without Gradle/AGP**, using tools that
-can be obtained through the hosts reachable in this environment (github.com, registry.npmjs.org,
-pypi.org). It exists because the standard `./build.sh bundleRelease` path cannot download
-Gradle/JDK/SDK/AGP here, and the sandbox blocks JVM child-process execution (Gradle/AGP/bundletool
-`build-apks` all shell out to aapt2 and would fail even with a local Gradle).
+> **Do not use this pipeline for a public Play release.** It is a historical
+> sandbox workaround, not the current release path. It bypasses Gradle/AGP,
+> resolves some libraries from cached third-party builds rather than the exact
+> catalog pins, does not apply the app's R8/resource-shrinking configuration,
+> and does not run the current test/lint/device checks. No output from this
+> pipeline is present or verified in the current checkout. A structurally
+> valid bundle from this script is not sufficient evidence of a production
+> release.
+>
+> Use the current Gradle source and `./build.sh bundleRelease` for release
+> preparation. The owner must run the build, tests, lint, signature checks, and
+> device/Play testing before upload.
+
+The script remains documented only for provenance and recovery of older
+sandbox-generated artifacts. It assembles resources and code without Gradle/AGP
+using cached tools and dependencies; paths and cache contents are environment-
+specific.
 
 ## Phases (`python3 toolchain/manual-build/build.py [all|libs|manifest|resources|codegen|kotlin|dex|aab|apk|verify]`)
 
@@ -45,9 +57,14 @@ artifacts whose `.module` files are missing (`EXTRA_DEPS`).
 
 ## Known limitations
 
-- Dex is **not** R8-minified and resources are not shrunk (see `RELEASE-0.1.0.md`).
-- `bundletool build-apks` cannot run in this sandbox (it spawns aapt2; JVM child processes are
-  blocked), so the APK is packaged directly from the aapt2-linked resources + dex instead of via
-  a universal-splits round-trip. The AAB itself passes `bundletool validate` and is
-  Play-uploadable.
-- AAB signing uses the JAR scheme (what Play expects for bundles).
+- Dex is **not** R8-minified and resources are not shrunk; this does not match
+  the current Gradle release configuration.
+- `bundletool build-apks` could not run in the historical sandbox, so the APK
+  was packaged directly from linked resources and dex instead of through a
+  bundletool universal-splits round-trip.
+- The old report claimed `bundletool validate` passed for a prior AAB, but that
+  binary is absent here. This is historical provenance only; it does not
+  validate current source, Play acceptance, or an artifact in this repository.
+- AAB signing used the JAR scheme. Regardless of that format-level detail, only
+  a newly generated and independently verified current Gradle AAB should be
+  considered for release.

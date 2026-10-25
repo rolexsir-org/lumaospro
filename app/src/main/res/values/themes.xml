@@ -2,12 +2,12 @@
 <resources>
 
     <!--
-        ROLEXM draws its own light/dark palettes in code (see ui.Palette), so it
+        LumaOS Pro draws its own light/dark palettes in code (see ui.Palette), so it
         does not depend on AppCompat or MaterialComponents day/night themes.
         That removes a dependency and keeps resource resolution trivial on slow
         devices. These platform themes only set window chrome.
     -->
-    <style name="Theme.Rolexm" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.LumaOS" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:colorAccent">#0066CC</item>
         <item name="android:colorControlActivated">#0066CC</item>
         <item name="android:statusBarColor">#FFFFFFFF</item>
@@ -17,7 +17,7 @@
     </style>
 
     <!-- Home screen: transparent so the live wallpaper shows through. -->
-    <style name="Theme.Rolexm.Home" parent="Theme.Rolexm">
+    <style name="Theme.LumaOS.Home" parent="Theme.LumaOS">
         <item name="android:windowShowWallpaper">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
@@ -29,7 +29,7 @@
     </style>
 
     <!-- Settings / onboarding: ordinary opaque window. -->
-    <style name="Theme.Rolexm.Settings" parent="Theme.Rolexm">
+    <style name="Theme.LumaOS.Settings" parent="Theme.LumaOS">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
     </style>
