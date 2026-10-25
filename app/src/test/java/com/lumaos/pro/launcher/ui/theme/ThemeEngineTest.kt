@@ -70,6 +70,57 @@ class ThemeEngineTest {
         }
     }
 
+    @Test fun `signature themes use the requested identities without changing stored IDs`() {
+        assertEquals(listOf("Aurora", "Zen", "Void"), ThemePresets.SIGNATURE.map { it.displayName })
+        assertEquals(
+            listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR),
+            ThemePresets.SIGNATURE.map { it.id }
+        )
+        assertEquals(ThemeId.entries.toSet(), ThemePresets.ALL.map { it.id }.toSet())
+        assertEquals("porcelain", ThemePresets.ZEN.id.storageKey)
+        assertEquals("vector", ThemePresets.VOID.id.storageKey)
+        assertEquals(ThemeId.PORCELAIN, ThemeId.fromStorageKey("porcelain"))
+        assertEquals(ThemeId.VECTOR, ThemeId.fromStorageKey("vector"))
+        assertFalse(ThemePresets.ZEN.dark)
+        assertTrue(ThemePresets.AURORA.dark && ThemePresets.VOID.dark)
+        assertNotEquals(ThemePresets.AURORA.background, ThemePresets.VOID.background)
+        assertNotEquals(ThemePresets.AURORA.accent, ThemePresets.VOID.accent)
+    }
+
+    @Test fun `fresh theme defaults follow the system with Aurora and Zen`() {
+        assertEquals(ThemeSwitching.SYSTEM, ThemeSettings().switching)
+        assertEquals(ThemeId.AURORA, ThemeSettings().darkThemeId)
+        assertEquals(ThemeId.PORCELAIN, ThemeSettings().lightThemeId)
+        assertEquals(ThemeId.AURORA, ThemeEngine.resolve(ThemeSettings(), envDark).id)
+        assertEquals(ThemeId.PORCELAIN, ThemeEngine.resolve(ThemeSettings(), envLight).id)
+    }
+
+    @Test fun `selecting a preset preserves custom appearance and context choices`() {
+        val original = ThemeSettings(
+            themeId = ThemeId.GRAPHITE,
+            switching = ThemeSwitching.SCHEDULE,
+            accentOverride = 0xFF58C8E8.toInt(),
+            backgroundOverride = 0xFF11182A.toInt(),
+            typography = TypeStyle.SERIF,
+            iconShape = IconShape.CIRCLE,
+            iconStyle = IconStyle.TINTED,
+            backdrop = Backdrop.THEME,
+            profileThemes = mapOf(ContextProfile.WORK to ThemeId.AURORA)
+        )
+
+        val selected = original.withPreset(ThemeId.VECTOR)
+
+        assertEquals(ThemeId.VECTOR, selected.themeId)
+        assertEquals(ThemeSwitching.FIXED, selected.switching)
+        assertEquals(original.accentOverride, selected.accentOverride)
+        assertEquals(original.backgroundOverride, selected.backgroundOverride)
+        assertEquals(original.typography, selected.typography)
+        assertEquals(original.iconShape, selected.iconShape)
+        assertEquals(original.iconStyle, selected.iconStyle)
+        assertEquals(original.backdrop, selected.backdrop)
+        assertEquals(original.profileThemes, selected.profileThemes)
+    }
+
     @Test fun `mid-tone custom backgrounds get the strongest possible text`() {
         val bg = 0xFFFF4581.toInt()
         val t = ThemeEngine.resolve(ThemeSettings(backgroundOverride = bg).pinned(ThemeId.OBSIDIAN), envDark)

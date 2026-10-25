@@ -100,6 +100,9 @@
     <string name="tab_studio">Studio</string>
     <string name="studio_preview_label">Live preview</string>
     <string name="studio_themes">Themes</string>
+    <string name="studio_theme_signature">Signature themes</string>
+    <string name="studio_theme_additional">More palettes</string>
+    <string name="studio_color_option_description">Color %1$s</string>
     <string name="studio_apply">Apply</string>
     <string name="studio_revert">Revert</string>
     <string name="studio_reset">Reset Studio defaults</string>
@@ -133,8 +136,10 @@
     <string name="studio_contrast">Contrast %1$s:1</string>
     <string name="studio_profile_themes">Context themes</string>
     <string name="studio_profile_theme_none">Use current theme</string>
+    <string name="studio_profile_theme_precedence">%1$s currently uses %2$s; this profile theme takes precedence over the global selection.</string>
     <string name="studio_effects_now">Right now: %1$s</string>
     <string name="studio_wallpaper_hint_estimated">Wallpaper lightness is estimated on this Android version.</string>
+    <string name="studio_wallpaper_preview_note">Android provides wallpaper colors, not the image; this preview uses an approximate gradient.</string>
     <string name="studio_no_wallpaper_colors">Wallpaper colours are not available, so Chroma uses its built-in palette.</string>
 
     <string name="shape_system">Device</string>

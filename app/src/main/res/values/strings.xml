@@ -34,6 +34,7 @@
     <string name="search_hint">Search apps</string>
     <string name="empty_no_apps">No apps found</string>
     <string name="drawer_loading_apps">Loading apps…</string>
+    <string name="drawer_retry_apps">Couldn’t load apps. Tap to try again.</string>
     <string name="empty_no_results">No apps match “%1$s”</string>
 
     <!-- App actions -->

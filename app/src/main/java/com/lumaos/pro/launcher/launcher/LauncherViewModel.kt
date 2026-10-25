@@ -5,8 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.apps.AppCategories
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.apps.AppShortcut
@@ -16,6 +16,8 @@ import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
 import com.lumaos.pro.launcher.core.usage.Frecency
+import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.core.util.RefreshCoalescer
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
 import com.lumaos.pro.launcher.launcher.model.HomeItem
@@ -26,7 +28,6 @@ import com.lumaos.pro.launcher.launcher.model.ShortcutRef
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,7 +57,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     val apps: StateFlow<List<AppEntry>> = _apps
-    private var refreshJob: Job? = null
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
@@ -144,6 +144,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    /** True only when no complete app enumeration has succeeded yet / most recent retry failed. */
+    private val _appRefreshFailed = MutableStateFlow(false)
+    val appRefreshFailed: StateFlow<Boolean> = _appRefreshFailed
+
+    private val refreshCoalescer = RefreshCoalescer(
+        scope = viewModelScope,
+        dispatcher = Dispatchers.IO,
+        onLoadingChanged = { _isLoading.value = it },
+        operation = ::refreshAppsOnce,
+        onFailure = { LumaLog.e("Installed apps could not be refreshed", it) }
+    )
+
     /** Bumps when launch history changes, so smart-folder icons rebind. */
     val historyVersion: StateFlow<Int> = MutableStateFlow(0).also { out ->
         viewModelScope.launch { history.records.collect { out.value = out.value + 1 } }
@@ -172,25 +184,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
-     * Reloads the installed-app list.
-     *
-     * Always off the main thread: LauncherApps.getActivityList is a binder call
-     * per profile and can take hundreds of milliseconds on a loaded device.
+     * Reloads the installed-app list. Requests arriving during a scan are
+     * coalesced into one follow-up scan, so package changes are not lost.
      */
-    fun refreshApps() {
-        // Resume and several package callbacks can arrive together. Coalesce
-        // them rather than racing binder enumeration and default-dock writes.
-        if (refreshJob?.isActive == true) return
-        _isLoading.value = true
-        refreshJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val list = repository.refresh()
-                withContext(Dispatchers.Main) { _apps.value = list }
-                seedDefaultDockIfNeeded(list)
-                pruneUninstalled(list)
-                history.retainOnly(list.mapTo(HashSet()) { it.key })
-            } finally {
-                withContext(Dispatchers.Main) { _isLoading.value = false }
+    fun refreshApps() = refreshCoalescer.request()
+
+    /** Always runs on IO: LauncherApps enumeration is a binder-heavy call. */
+    private suspend fun refreshAppsOnce() {
+        val result = repository.refreshSnapshot()
+        try {
+            if (result.successful) {
+                seedDefaultDockIfNeeded(result.apps)
+                pruneUninstalled(result.apps)
+                history.retainOnly(result.apps.mapTo(HashSet()) { it.key })
+            }
+            // A failed query is not proof that every app was uninstalled. Keep
+            // the layout, dock, and launch history until a full scan succeeds.
+        } finally {
+            withContext(Dispatchers.Main) {
+                _apps.value = result.apps
+                _appRefreshFailed.value = !result.successful
             }
         }
     }
@@ -211,12 +224,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (prefs.layoutSeeded.first()) return
         val keys = DefaultDockResolver.resolve(getApplication(), apps)
         if (keys.isEmpty()) return
-        val seeded = keys.fold(HomeLayout.EMPTY) { acc, key -> HomeLayoutOps.addToDock(acc, key) }
-        persistLayout(seeded)
-        // Keep the original layout as the seed for profiles not customized yet.
-        prefs.setHomeLayoutRaw(HomeLayoutCodec.encode(seeded))
+
+        val profile = activeContextProfile.value
+        val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
+        if (hasLayoutContent(current) || hasLayoutContent(_layout.value)) {
+            // A restored or user-arranged layout wins over first-run defaults.
+            prefs.setLayoutSeeded(true)
+            return
+        }
+        val seeded = HomeLayoutOps.seedDockIfEmpty(current, keys)
+        if (seeded == current) return
+
+        persistLayout(seeded, profile)
+        // Keep the base layout as a seed for profiles not customized yet, but
+        // never replace an existing user's layout with first-run defaults.
+        val base = HomeLayoutCodec.decode(prefs.homeLayoutRaw.first())
+        val seededBase = HomeLayoutOps.seedDockIfEmpty(base, keys)
+        if (seededBase != base) prefs.setHomeLayoutRaw(HomeLayoutCodec.encode(seededBase))
         prefs.setLayoutSeeded(true)
     }
+
+    private fun hasLayoutContent(layout: HomeLayout): Boolean =
+        layout.dock.isNotEmpty() || layout.pages.any { it.isNotEmpty() }
 
     /**
      * Removes home items whose app is gone, and collapses folders that have
@@ -265,6 +294,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun entryFor(key: ComponentKey): AppEntry? = _apps.value.firstOrNull { it.key == key }
 
     fun installedKeys(): Set<ComponentKey> = _apps.value.mapTo(HashSet()) { it.key }
+
+    fun canAddToHome(key: ComponentKey): Boolean = !HomeLayoutOps.containsKey(_layout.value, key)
+
+    fun canAddToDock(key: ComponentKey): Boolean =
+        hasDockSpace() && canAddToHome(key)
+
+    fun hasDockSpace(): Boolean = _layout.value.dock.size < HomeLayout.MAX_DOCK
 
     /** Records a launch made through LumaOS Pro, if the user allows learning. */
     fun recordLaunch(key: ComponentKey) {

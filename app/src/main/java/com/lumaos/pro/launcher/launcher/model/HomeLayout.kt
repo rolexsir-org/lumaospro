@@ -106,9 +106,17 @@ object HomeLayoutOps {
     }
 
     fun addToDock(layout: HomeLayout, key: ComponentKey): HomeLayout {
-        if (layout.dock.any { it is HomeItem.App && it.key == key }) return layout
+        // Match addToHome: an app has one launcher location, not a duplicate
+        // entry in both the home grid and dock.
+        if (containsKey(layout, key)) return layout
         if (layout.dock.size >= HomeLayout.MAX_DOCK) return layout
         return layout.copy(dock = layout.dock + HomeItem.App(key))
+    }
+
+    /** Seeds the first-run dock only when no user content has been arranged yet. */
+    fun seedDockIfEmpty(layout: HomeLayout, keys: List<ComponentKey>): HomeLayout {
+        if (layout.dock.isNotEmpty() || layout.pages.any { it.isNotEmpty() }) return layout
+        return keys.fold(layout) { current, key -> addToDock(current, key) }
     }
 
     fun containsKey(layout: HomeLayout, key: ComponentKey): Boolean =
@@ -117,6 +125,12 @@ object HomeLayoutOps {
     private fun matches(item: HomeItem, key: ComponentKey): Boolean = when (item) {
         is HomeItem.App -> item.key == key
         is HomeItem.Folder -> item.children.contains(key)
+        is HomeItem.Widget, is HomeItem.SmartFolder -> false
+    }
+
+    private fun conflictsWithExistingItem(layout: HomeLayout, item: HomeItem): Boolean = when (item) {
+        is HomeItem.App -> containsKey(layout, item.key)
+        is HomeItem.Folder -> item.children.any { containsKey(layout, it) }
         is HomeItem.Widget, is HomeItem.SmartFolder -> false
     }
 
@@ -154,14 +168,24 @@ object HomeLayoutOps {
     fun moveHomeToDock(layout: HomeLayout, pageIndex: Int, position: Int): HomeLayout {
         val items = layout.page(pageIndex)
         val item = items.getOrNull(position) ?: return layout
-        if (item is HomeItem.Widget || layout.dock.size >= HomeLayout.MAX_DOCK) return layout
+        if (item is HomeItem.Widget) return layout
         val removed = removeFromHome(layout, pageIndex, position)
+        if (conflictsWithExistingItem(removed, item)) {
+            // Old or restored layouts may contain a duplicate. A plain app can
+            // safely be de-duplicated by removing the source cell; a folder is
+            // left untouched because dropping any member would lose data.
+            return if (item is HomeItem.App) removed else layout
+        }
+        if (layout.dock.size >= HomeLayout.MAX_DOCK) return layout
         return removed.copy(dock = removed.dock + item)
     }
 
     fun moveDockToHome(layout: HomeLayout, position: Int, pageIndex: Int = 0): HomeLayout {
         val item = layout.dock.getOrNull(position) ?: return layout
         val removed = removeFromDock(layout, position)
+        if (conflictsWithExistingItem(removed, item)) {
+            return if (item is HomeItem.App) removed else layout
+        }
         return setPage(removed, pageIndex, removed.page(pageIndex) + item)
     }
 

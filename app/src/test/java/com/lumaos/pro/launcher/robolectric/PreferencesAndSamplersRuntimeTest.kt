@@ -4,9 +4,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.test.core.app.ApplicationProvider
-import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
+import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
@@ -17,14 +17,21 @@ import com.lumaos.pro.launcher.intelligence.DeviceCapability
 import com.lumaos.pro.launcher.intelligence.DeviceCapabilityProvider
 import com.lumaos.pro.launcher.intelligence.MemorySampler
 import com.lumaos.pro.launcher.intelligence.ProfileId
+import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.launcher.model.GestureAction
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.HomeLayoutCodec
 import com.lumaos.pro.launcher.launcher.model.HomeLayoutOps
-import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.ui.ThemeMode
+import com.lumaos.pro.launcher.ui.theme.Backdrop
+import com.lumaos.pro.launcher.ui.theme.DarkWindow
+import com.lumaos.pro.launcher.ui.theme.IconShape
+import com.lumaos.pro.launcher.ui.theme.IconStyle
+import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
+import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
@@ -76,7 +83,11 @@ class PreferencesAndSamplersRuntimeTest {
 
     @Test
     fun `settings default sensibly before anything is written`() = runTest {
-        assertEquals(ThemeMode.LIGHT, prefs.themeMode.first())
+        assertEquals(ThemeMode.SYSTEM, prefs.themeMode.first())
+        val theme = prefs.themeSettings.first()
+        assertEquals(ThemeSwitching.SYSTEM, theme.switching)
+        assertEquals(ThemeId.AURORA, theme.darkThemeId)
+        assertEquals(ThemeId.PORCELAIN, theme.lightThemeId)
         assertEquals(true, prefs.showLabels.first())
         assertEquals(1.0f, prefs.textScale.first(), 0f)
         assertEquals(null, prefs.profileOverride.first())
@@ -90,6 +101,52 @@ class PreferencesAndSamplersRuntimeTest {
         assertEquals(ThemeMode.DARK, prefs.themeMode.first())
         prefs.setThemeMode(ThemeMode.LIGHT)
         assertEquals(ThemeMode.LIGHT, prefs.themeMode.first())
+    }
+
+    @Test
+    fun `Studio theme settings persist without changing the saved home or other preferences`() = runTest {
+        val dockApp = ComponentKey("com.example.dock", "com.example.dock.Main")
+        val homeApp = ComponentKey("com.example.home", "com.example.home.Main")
+        val folderApp = ComponentKey("com.example.tools", "com.example.tools.Main")
+        val layout = HomeLayout(
+            dock = listOf(HomeItem.App(dockApp)),
+            pages = listOf(
+                listOf(
+                    HomeItem.App(homeApp),
+                    HomeItem.Folder("utilities", "Utilities", listOf(folderApp)),
+                    HomeItem.Widget(42, "com.example.widget/.Provider", 2)
+                )
+            )
+        )
+        val rawLayout = HomeLayoutCodec.encode(layout)
+        prefs.setHomeLayoutRaw(ContextProfile.PERSONAL, rawLayout)
+        prefs.setGridColumns(6)
+        prefs.setIconPack("com.example.iconpack")
+        prefs.setTextScale(1.2f)
+        prefs.setActiveContextProfile(ContextProfile.WORK)
+
+        val selectedTheme = ThemeSettings(
+            themeId = ThemeId.VECTOR,
+            switching = ThemeSwitching.SCHEDULE,
+            lightThemeId = ThemeId.PORCELAIN,
+            darkThemeId = ThemeId.AURORA,
+            darkWindow = DarkWindow(21 * 60, 7 * 60),
+            accentOverride = 0xFF58C8E8.toInt(),
+            backgroundOverride = 0xFF11182A.toInt(),
+            typography = TypeStyle.MONO,
+            iconShape = IconShape.CIRCLE,
+            iconStyle = IconStyle.TINTED,
+            backdrop = Backdrop.THEME,
+            profileThemes = mapOf(ContextProfile.SLEEP to ThemeId.VECTOR)
+        )
+        prefs.applyThemeSettings(selectedTheme)
+
+        assertEquals(selectedTheme, prefs.themeSettings.first())
+        assertEquals(layout, HomeLayoutCodec.decode(prefs.homeLayoutRaw(ContextProfile.PERSONAL).first()))
+        assertEquals(6, prefs.gridColumns.first())
+        assertEquals("com.example.iconpack", prefs.iconPack.first())
+        assertEquals(1.2f, prefs.textScale.first(), 0f)
+        assertEquals(ContextProfile.WORK, prefs.activeContextProfile.first())
     }
 
     @Test

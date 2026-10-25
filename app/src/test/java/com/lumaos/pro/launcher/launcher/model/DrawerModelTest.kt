@@ -2,6 +2,7 @@ package com.lumaos.pro.launcher.launcher.model
 
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.apps.AppMatcher
+import com.lumaos.pro.launcher.core.apps.DrawerCategory
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -61,6 +62,40 @@ class DrawerModelTest {
         )
         assertEquals(listOf("Chrome"), relaxed.rows.filterIsInstance<DrawerRow.App>().map { it.entry.label })
         assertTrue(relaxed.buckets.isEmpty())
+    }
+
+    @Test
+    fun `disabling category chips keeps available all and frequent filters usable`() {
+        assertEquals(
+            DrawerFilter.Frequent,
+            DrawerModel.availableFilter(
+                DrawerFilter.Frequent, emptyList(), categoriesEnabled = false, frequentEnabled = true
+            )
+        )
+        assertEquals(
+            DrawerFilter.All,
+            DrawerModel.availableFilter(
+                DrawerFilter.Category(DrawerCategory.GAMES), emptyList(),
+                categoriesEnabled = false, frequentEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun `a category removed from the available app set cannot strand the drawer`() {
+        assertEquals(
+            DrawerFilter.All,
+            DrawerModel.availableFilter(
+                DrawerFilter.Category(DrawerCategory.GAMES), listOf(DrawerCategory.PRODUCTIVITY),
+                categoriesEnabled = true, frequentEnabled = true
+            )
+        )
+        assertEquals(
+            DrawerFilter.All,
+            DrawerModel.availableFilter(
+                DrawerFilter.Frequent, emptyList(), categoriesEnabled = true, frequentEnabled = false
+            )
+        )
     }
 
     @Test
