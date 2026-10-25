@@ -28,6 +28,7 @@ import com.lumaos.pro.launcher.ui.theme.AtmospherePlan
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
+import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.ui.theme.WallpaperSeeds
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import kotlin.math.max
@@ -48,6 +49,8 @@ fun HomePreview(
     icons: List<ImageBitmap>,
     dockIcons: List<ImageBitmap>,
     wallpaper: WallpaperSeeds?,
+    /** Bundled wallpaper art for the draft theme, when it has one. */
+    artwork: ImageBitmap? = null,
     timeText: String,
     dateText: String,
     readout: String,
@@ -57,7 +60,7 @@ fun HomePreview(
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            drawBackdrop(theme, wallpaper)
+            drawBackdrop(theme, wallpaper, artwork)
             val c = theme.colors
             val muted = Color(c.homeMuted)
             val unit = w / 100f
@@ -68,7 +71,8 @@ fun HomePreview(
                 color = c.homeForeground
                 typeface = Typefaces.clock(theme.typography)
                 letterSpacing = theme.typography.clockTracking
-                setShadowLayer(unit * 0.8f, 0f, unit * 0.2f, c.homeShadow)
+                // A shadow only where text sits on artwork, mirroring the home screen.
+                if (theme.backdrop.usesArtwork) setShadowLayer(unit * 0.8f, 0f, unit * 0.2f, c.homeShadow)
             }
             val readPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeMuted
@@ -76,6 +80,7 @@ fun HomePreview(
                 letterSpacing = theme.typography.readoutTracking
                 textSize = unit * 3.1f
             }
+            fun readoutText(text: String) = if (theme.typography.readoutCaps) text.uppercase() else text
             when (preset.clock) {
                 ClockStyle.DIAL -> {
                     val r = unit * 8f
@@ -85,22 +90,22 @@ fun HomePreview(
                     clockPaint.textSize = unit * 14f
                     drawContext.canvas.nativeCanvas.drawText(timeText, cx + r + unit * 4f, cy + unit * 2f, clockPaint)
                     readPaint.textSize = unit * 3.2f
-                    drawContext.canvas.nativeCanvas.drawText(dateText, cx + r + unit * 4.4f, cy + unit * 7.5f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readout, unit * 6f, cy + r + unit * 7f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), cx + r + unit * 4.4f, cy + unit * 7.5f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), unit * 6f, cy + r + unit * 7f, readPaint)
                 }
                 ClockStyle.HERO -> {
                     clockPaint.textSize = unit * 21f
                     clockPaint.textAlign = android.graphics.Paint.Align.CENTER
                     readPaint.textAlign = android.graphics.Paint.Align.CENTER
                     drawContext.canvas.nativeCanvas.drawText(timeText, w / 2f, top + unit * 20f, clockPaint)
-                    drawContext.canvas.nativeCanvas.drawText(dateText, w / 2f, top + unit * 27f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readout, w / 2f, top + unit * 32f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), w / 2f, top + unit * 27f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), w / 2f, top + unit * 32f, readPaint)
                 }
                 ClockStyle.COMPACT -> {
                     clockPaint.textSize = unit * 10f
                     drawContext.canvas.nativeCanvas.drawText(timeText, unit * 6f, top + unit * 9f, clockPaint)
-                    drawContext.canvas.nativeCanvas.drawText(dateText, unit * 6f, top + unit * 14f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readout, unit * 6f, top + unit * 19f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), unit * 6f, top + unit * 14f, readPaint)
+                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), unit * 6f, top + unit * 19f, readPaint)
                 }
             }
 
@@ -128,11 +133,14 @@ fun HomePreview(
             // Search pill.
             val pillH = unit * 9f
             val pillY = h - unit * 34f
+            // Same 18 dp-cornered field as the home screen: a rounded rectangle,
+            // not a fully-round pill.
+            val pillRadius = pillH * 0.35f
             drawRoundRect(
                 Color(ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(true) * 0.96f)),
-                Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillH / 2f)
+                Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillRadius)
             )
-            drawRoundRect(Color(c.outline), Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillH / 2f), style = Stroke(unit * 0.25f))
+            drawRoundRect(Color(c.outline), Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillRadius), style = Stroke(unit * 0.25f))
             drawCircle(Color(c.onSurfaceMuted), unit * 1.6f, Offset(unit * 14f, pillY + pillH / 2f), style = Stroke(unit * 0.5f))
             drawRoundRect(Color(c.onSurfaceMuted).copy(alpha = 0.5f), Offset(unit * 19f, pillY + pillH / 2f - unit * 0.6f),
                 Size(w * 0.35f, unit * 1.2f), CornerRadius(unit))
@@ -145,9 +153,15 @@ fun HomePreview(
                 val radius = if (dock == DockStyle.FLOAT) dockH / 2f else unit * 6f * theme.cornerScale
                 drawRoundRect(Color(ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(true) * 0.94f)),
                     Offset(inset, dockY), Size(w - inset * 2, dockH), CornerRadius(radius))
+                // Hairline rim taken from the palette, not a fixed white.
                 drawRoundRect(
-                    Brush.verticalGradient(listOf(Color.White.copy(alpha = if (theme.isDark) 0.16f else 0.7f), Color(c.outlineStrong).copy(alpha = 0.5f)),
-                        startY = dockY, endY = dockY + dockH),
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(ColorMath.lerp(c.surface3, ColorMath.WHITE, if (theme.isDark) 0.10f else 0.45f)),
+                            Color(ColorMath.withAlpha(c.outlineStrong, 0.5f))
+                        ),
+                        startY = dockY, endY = dockY + dockH
+                    ),
                     Offset(inset, dockY), Size(w - inset * 2, dockH), CornerRadius(radius), style = Stroke(unit * 0.3f)
                 )
             }
@@ -170,14 +184,37 @@ private fun DrawScope.drawImageFit(img: ImageBitmap, x: Float, y: Float, size: F
     )
 }
 
-private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSeeds?) {
+private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSeeds?, artwork: ImageBitmap?) {
     val w = size.width
     val h = size.height
     if (theme.backdrop == Backdrop.WALLPAPER) {
         val colors = listOfNotNull(wallpaper?.primary, wallpaper?.secondary, wallpaper?.tertiary)
-            .ifEmpty { listOf(0xFF2B3038.toInt(), 0xFF15171A.toInt()) }
+            // No wallpaper colours reported: stand in with the draft theme's own
+            // surface pair rather than a fixed colour, so the preview stays honest
+            // about "approximate" without inventing a palette.
+            .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
             .map { Color(it) }
         drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
+    }
+    if (theme.backdrop == Backdrop.LUMA && artwork != null) {
+        // Centre-crop with the artwork's focal point, exactly as the home screen does.
+        val art = WallpaperArt.forTheme(theme.id)
+        val focalX = art?.focalX ?: 0.5f
+        val focalY = art?.focalY ?: 0.5f
+        val iw = artwork.width.toFloat()
+        val ih = artwork.height.toFloat()
+        val scale = max(w / iw, h / ih)
+        val dw = iw * scale
+        val dh = ih * scale
+        val left = (w - dw) * focalX
+        val top = (h - dh) * focalY
+        drawImage(
+            artwork,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(artwork.width, artwork.height),
+            dstOffset = IntOffset(left.toInt(), top.toInt()),
+            dstSize = IntSize(dw.toInt(), dh.toInt())
+        )
     }
     for (layer in AtmospherePlan.layers(theme, 0.18f, true)) when (layer) {
         is AtmosphereLayer.Solid -> drawRect(Color(layer.color))

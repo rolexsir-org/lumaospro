@@ -20,6 +20,28 @@ could not be run here.
 
 The current source still needs a fresh lint run; no lint result is claimed here.
 
+## Design-system pass (current branch)
+
+The visual identity is now implemented across typography, iconography, semantic
+colour, wallpaper art, shapes/surfaces, the home composition, widgets,
+micro-interactions and theme switching. See `docs/DESIGN_SYSTEM.md` for the
+reference and `docs/QA_CHECKLIST.md` for verification status.
+
+What was checked in this workspace without a toolchain:
+
+- every resource reference in layouts/values resolves;
+- every `com.lumaos.pro.launcher.*` import resolves to a declared symbol;
+- every `R.*` reference in Kotlin resolves;
+- all `activity_home.xml` ids used by `HomeActivityRuntimeTest` still exist;
+- no reference to the deleted legacy glyph set remains;
+- 45 glyphs, 7 font files, 2 licences and 6 wallpaper WebP files are present and
+  well-formed.
+
+What was **not** run: Kotlin compilation, resource linking, lint, unit tests,
+Robolectric tests, APK/AAB assembly, signing, installation, or any on-device
+visual/performance/accessibility check. This pass must not be described as
+device-verified.
+
 ## Release configuration and Play readiness
 
 - The app is configured for Android 16 / API 36. Google Play's new-app and

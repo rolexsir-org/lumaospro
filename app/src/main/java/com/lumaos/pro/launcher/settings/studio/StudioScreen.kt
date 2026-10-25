@@ -82,6 +82,8 @@ import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSpec
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
+import com.lumaos.pro.launcher.ui.theme.WallpaperArt
+import com.lumaos.pro.launcher.ui.theme.WallpaperArtResources
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -119,10 +121,23 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     ) {
         value = viewModel.loadPreviewIcons(resolved, draft.iconPack, previewDepth)
     }
+    val context = LocalContext.current
+    val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, resolved.id, resolved.backdrop) {
+        value = if (resolved.backdrop == Backdrop.LUMA) {
+            WallpaperArt.forTheme(resolved.id)?.let { art ->
+                runCatching {
+                    val res = WallpaperArtResources.res(art)
+                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                    context.resources.openRawResource(res).use {
+                        android.graphics.BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
+                    }
+                }.getOrNull()
+            }
+        } else null
+    }
     val homeIcons = remember(bitmaps) { bitmaps.home.map { it.asImageBitmap() } }
     val dockIcons = remember(bitmaps) { bitmaps.dock.map { it.asImageBitmap() } }
 
-    val context = LocalContext.current
     val locale = Locale.getDefault()
     val now = remember { Date() }
     val timeText = remember {
@@ -155,6 +170,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     icons = homeIcons,
                     dockIcons = dockIcons,
                     wallpaper = wallpaper,
+                    artwork = artwork,
                     timeText = timeText,
                     dateText = dateText,
                     readout = activeProfile.title,
@@ -304,23 +320,22 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     defaultLabel = stringResource(R.string.studio_theme_default),
                     onSelected = { draft = draft.copy(theme = draft.theme.copy(backgroundOverride = it)) }
                 )
+                val backdropOptions = listOf<Backdrop?>(null, Backdrop.WALLPAPER, Backdrop.THEME) +
+                    listOfNotNull(Backdrop.LUMA.takeIf { WallpaperArt.forTheme(resolved.id) != null })
                 StudioChoice(
                     label = stringResource(R.string.studio_backdrop),
-                    selected = when (draft.theme.backdrop) {
-                        null -> stringResource(R.string.studio_theme_default)
-                        Backdrop.WALLPAPER -> stringResource(R.string.studio_backdrop_wallpaper)
-                        Backdrop.THEME -> stringResource(R.string.studio_backdrop_theme)
-                    },
-                    options = listOf<Backdrop?>(null, Backdrop.WALLPAPER, Backdrop.THEME),
-                    optionLabel = {
-                        when (it) {
-                            null -> stringResource(R.string.studio_theme_default)
-                            Backdrop.WALLPAPER -> stringResource(R.string.studio_backdrop_wallpaper)
-                            Backdrop.THEME -> stringResource(R.string.studio_backdrop_theme)
-                        }
-                    },
+                    selected = backdropLabel(draft.theme.backdrop, resolved.id),
+                    options = backdropOptions,
+                    optionLabel = { backdropLabel(it, resolved.id) },
                     onSelected = { draft = draft.copy(theme = draft.theme.copy(backdrop = it)) }
                 )
+                if (WallpaperArt.forTheme(resolved.id) != null) {
+                    Text(
+                        stringResource(R.string.studio_luma_wallpaper_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             StudioSection(stringResource(R.string.studio_typography)) {
@@ -330,6 +345,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     options = listOf<TypeStyle?>(null) + TypeStyle.entries,
                     optionLabel = { it?.let { value -> typeLabel(value) } ?: stringResource(R.string.studio_theme_default) },
                     onSelected = { draft = draft.copy(theme = draft.theme.copy(typography = it)) }
+                )
+                Text(
+                    stringResource(R.string.studio_typography_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    stringResource(R.string.studio_motion_character, resolved.motionCharacter.name.lowercase()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -544,7 +569,16 @@ private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> U
                     spec.tagline,
                     color = textColor.copy(alpha = 0.82f),
                     style = MaterialTheme.typography.labelSmall,
-                    maxLines = 2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Identity in one line: typeface voice and motion character, so a
+                // card says more than "dark" or "light".
+                Text(
+                    "${spec.typography.character} · ${spec.motionCharacter.name.lowercase()}",
+                    color = textColor.copy(alpha = 0.62f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -655,11 +689,25 @@ private fun TimeButton(label: String, minute: Int, onSelected: (Int) -> Unit) {
 private fun typeLabel(value: TypeStyle): String = stringResource(
     when (value) {
         TypeStyle.PRECISION -> R.string.type_precision
+        TypeStyle.SERENE -> R.string.type_serene
         TypeStyle.GROTESK -> R.string.type_grotesk
         TypeStyle.SERIF -> R.string.type_serif
         TypeStyle.MONO -> R.string.type_mono
     }
 )
+
+/** Backdrop labels, including the bundled LumaOS wallpaper only where one exists. */
+@Composable
+private fun backdropLabel(value: Backdrop?, themeId: ThemeId): String = when (value) {
+    null -> stringResource(R.string.studio_theme_default)
+    Backdrop.WALLPAPER -> stringResource(R.string.studio_backdrop_wallpaper)
+    Backdrop.THEME -> stringResource(R.string.studio_backdrop_theme)
+    Backdrop.LUMA -> if (WallpaperArt.forTheme(themeId) != null) {
+        stringResource(R.string.studio_backdrop_luma)
+    } else {
+        stringResource(R.string.studio_backdrop_theme)
+    }
+}
 
 @Composable
 private fun shapeLabel(value: IconShape): String = stringResource(

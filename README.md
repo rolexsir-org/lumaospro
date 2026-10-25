@@ -116,6 +116,38 @@ migration path while retaining the new application ID; it is not automatic.
 
 ---
 
+## Design system
+
+The launcher has a complete, token-driven visual identity: three signature themes
+(Aurora, Zen, Void) with their own typography, motion, geometry, icon treatment and
+bundled wallpaper, plus three specialist palettes kept for existing users.
+
+| Area | Where it lives | Summary |
+| --- | --- | --- |
+| Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt` | Base + semantic roles, contrast-checked at resolution time |
+| Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 12-role scale, three voices |
+| Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 45 glyphs on one 24 dp grid, 1.75 dp stroke, filled only for selection |
+| Wallpaper | `ui/theme/WallpaperArt.kt`, `drawable-nodpi` | One artwork per signature theme, portrait and landscape, focal-point crop |
+| Shapes | `ui/theme/Components.kt` | Component radii/materials, scaled per theme |
+| Motion | `ui/theme/MotionIdentity.kt` | Subtle / quiet / expressive profiles with hard invariants |
+| Home | `res/layout/activity_home.xml`, `launcher/HomeActivity.kt` | One composition, three materials, widgets framed by the theme |
+| Switching | `ui/theme/ThemeEngine.kt` | One resolver feeding View and Compose surfaces |
+
+* [Design system reference](docs/DESIGN_SYSTEM.md)
+* [Design QA checklist](docs/QA_CHECKLIST.md) — separates static checks performed
+  here from the device verification that is still required
+
+The storage keys `aurora`, `porcelain`, `vector` and the typography keys
+`precision`, `serene`, `grotesk`, `serif`, `mono` are unchanged, so upgrading never
+resets a saved choice.
+
+**Status:** this design-system pass has not been compiled, linted or rendered in
+this workspace (no JDK/Android SDK/device). See the QA checklist for exactly what
+has and has not been verified; do not present these screens as device-verified
+until section D is complete.
+
+---
+
 ## Architecture
 
 Single Gradle module with strict package separation. A multi-module split was

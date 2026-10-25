@@ -30,10 +30,11 @@ class ChronoDialView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    var ringColor: Int = 0x66FFFFFF; set(v) { field = v; invalidate() }
-    var progressColor: Int = 0xFFB5C5A9.toInt(); set(v) { field = v; invalidate() }
-    var batteryColor: Int = 0xCCFFFFFF.toInt(); set(v) { field = v; invalidate() }
-    var markerColor: Int = 0xFFFFFFFF.toInt(); set(v) { field = v; invalidate() }
+    var ringColor: Int = 0; set(v) { field = v; invalidate() }
+    /** Unset until the theme applies a semantic accent; 0 means transparent. */
+    var progressColor: Int = 0; set(v) { field = v; invalidate() }
+    var batteryColor: Int = 0; set(v) { field = v; invalidate() }
+    var markerColor: Int = 0; set(v) { field = v; invalidate() }
 
     var snapshot: ReadoutSnapshot = ReadoutSnapshot()
         set(v) {
@@ -103,6 +104,7 @@ class ChronoDialView @JvmOverloads constructor(
         val progressR = outer * 0.74f
         arcRect.set(cx - progressR, cy - progressR, cx + progressR, cy + progressR)
         paint.strokeWidth = 2.4f * density
+        // The track is derived from the ring colour, so a theme only supplies one hue.
         paint.color = ColorMath.withAlpha(ringColor, 0.35f)
         canvas.drawArc(arcRect, 0f, 360f, false, paint)
         paint.color = progressColor

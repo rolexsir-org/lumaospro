@@ -18,7 +18,9 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -282,13 +284,20 @@ class EditModeController(
         }
         topBar.findViewById<TextView>(R.id.edit_hint)?.apply {
             setTextColor(c.homeMuted)
+            typeface = Typefaces.body(theme.typography)
             setShadowLayer(3f, 0f, 1f, c.homeShadow)
         }
+        val components = LumaComponents.of(theme)
         doneButton.setTextColor(c.onAccent)
         doneButton.typeface = Typefaces.label(theme.typography)
-        doneButton.background = ThemedDrawables.ripple(c.ripple, ThemedDrawables.surface(c.accent, dp(20f).toFloat()), dp(20f).toFloat())
+        doneButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
+        val doneRadius = theme.corner(components.shapes.chipDp) * density
+        doneButton.background = ThemedDrawables.ripple(
+            c.ripple, ThemedDrawables.surface(c.accent, doneRadius), doneRadius
+        )
         toolbar.background = ThemedDrawables.surface(
-            ColorMath.withAlpha(c.surface1, 0.94f), theme.corner(24f) * density, c.outline, 1
+            ColorMath.withAlpha(theme.semantics.dialogSurface, theme.surfaceAlpha(true)),
+            theme.corner(components.shapes.menuDp) * density, theme.semantics.dialogBorder, dp(1f)
         )
         guide.guideColor = ColorMath.withAlpha(c.homeForeground, 0.22f)
         guide.accentColor = c.accent
@@ -296,8 +305,14 @@ class EditModeController(
         for (i in 0 until toolbar.childCount) {
             val item = toolbar.getChildAt(i) as? LinearLayout ?: continue
             (item.getChildAt(0) as? ImageView)?.imageTintList = android.content.res.ColorStateList.valueOf(c.onSurface)
-            (item.getChildAt(1) as? TextView)?.setTextColor(c.onSurfaceMuted)
-            item.background = ThemedDrawables.ripple(c.ripple, null, theme.corner(16f) * density)
+            (item.getChildAt(1) as? TextView)?.apply {
+                setTextColor(c.onSurfaceMuted)
+                typeface = Typefaces.label(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelSmallSp)
+            }
+            item.background = ThemedDrawables.ripple(
+                c.ripple, null, theme.corner(LumaComponents.of(theme).shapes.cellDp) * density
+            )
         }
     }
 
@@ -326,12 +341,12 @@ class EditModeController(
                 setOnClickListener { host.onToolbarAction(action, it) }
                 addView(ImageView(context).apply {
                     setImageDrawable(ContextCompat.getDrawable(context, action.iconRes)?.mutate())
-                    layoutParams = LinearLayout.LayoutParams(dp(22f), dp(22f))
+                    layoutParams = LinearLayout.LayoutParams(dp(24f), dp(24f))
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 })
                 addView(TextView(context).apply {
                     text = context.getString(action.labelRes)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelSmallSp)
                     setPadding(0, dp(4f), 0, 0)
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 })

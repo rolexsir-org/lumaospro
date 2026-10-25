@@ -5,8 +5,7 @@
     The label uses a shadow rather than a background plate: on a wallpaper the
     text must stay legible over arbitrary images, and a shadow is far cheaper to
     draw than a blurred scrim. Inside opaque surfaces the shadow is turned off.
-
-    The cell background (ripple) is set in code from the active theme.
+    The theme supplies the label colour, typeface and ripple at runtime.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -34,16 +33,20 @@
         android:id="@+id/app_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="5dp"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
+        android:fontFamily="@font/inter_medium"
         android:gravity="center"
         android:importantForAccessibility="no"
+        android:includeFontPadding="false"
+        android:letterSpacing="0.005"
+        android:lineSpacingMultiplier="1.12"
         android:maxLines="2"
         android:shadowColor="#B3000000"
         android:shadowDx="0"
         android:shadowDy="1"
         android:shadowRadius="3"
-        android:textColor="#FFFFFF"
+        android:textColor="#FFFFFFFF"
         android:textSize="12sp" />
 
 </LinearLayout>
