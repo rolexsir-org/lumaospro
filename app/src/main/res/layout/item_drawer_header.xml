@@ -3,7 +3,6 @@
     android:id="@+id/drawer_header_text"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:accessibilityHeading="true"
     android:paddingStart="12dp"
     android:paddingTop="14dp"
     android:paddingEnd="12dp"

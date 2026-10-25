@@ -84,6 +84,7 @@ import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
 import com.lumaos.pro.launcher.launcher.home.ReadoutSources
 import com.lumaos.pro.launcher.launcher.home.LumaMenu
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
+import com.lumaos.pro.launcher.launcher.home.WallpaperArtView
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.launcher.model.Chronometer
 import com.lumaos.pro.launcher.launcher.model.ClockStyle
@@ -103,7 +104,8 @@ import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.settings.SettingsActivity
-import com.lumaos.pro.launcher.ui.LumaMotion
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.IconShapes
@@ -112,6 +114,7 @@ import com.lumaos.pro.launcher.ui.theme.ThemeColors
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
+import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.widgets.WidgetHostController
 import com.lumaos.pro.launcher.widgets.WidgetPicker
 import kotlinx.coroutines.flow.Flow
@@ -182,6 +185,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var readouts: ReadoutSources
 
     private lateinit var homeRoot: FrameLayout
+    private lateinit var wallpaperArt: WallpaperArtView
     private lateinit var backdrop: AmbientBackdropView
     private lateinit var desktop: DesktopLayout
     private lateinit var homeHeader: LinearLayout
@@ -248,6 +252,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var orphanSweepDone = false
     private var pendingWidget: WidgetHostController.Pending? = null
     private var themeAnimator: SpringAnimator? = null
+    /** True while colour roles are interpolating; cells are re-bound once at the end. */
+    private var themeAnimating = false
 
     private val density by lazy { resources.displayMetrics.densityDpi }
 
@@ -384,7 +390,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun bindViews() {
         homeRoot = findViewById(R.id.home_root)
+        wallpaperArt = findViewById(R.id.wallpaper_art)
         backdrop = findViewById(R.id.backdrop)
+        wallpaperArt.onUnavailable = {
+            // Restore the theme's own backdrop rather than showing an empty panel.
+            if (theme.backdrop == Backdrop.LUMA) {
+                wallpaperArt.visibility = View.GONE
+                backdrop.setFallbackSolid(true)
+            }
+        }
         desktop = findViewById(R.id.desktop)
         homeHeader = findViewById(R.id.home_header)
         clusterRow = findViewById(R.id.cluster_row)
@@ -467,6 +481,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     theme.colors.accent, dp(1)
                 )
                 override fun handle() = ThemedDrawables.surface(theme.colors.accent, dp(12).toFloat())
+                override fun frame() = widgetFrameDrawable()
+                override fun frameRadiusPx() = theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density
             },
             listener = gridListener
         )
@@ -847,6 +863,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         if (policy.reduced) {
                             themeAnimator?.cancel()
                             themeAnimator = null
+                            themeAnimating = false
                             settleProgress = 1f
                             finishTheme(theme)
                             applyDepth()
@@ -919,17 +936,25 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun applyTheme(target: ResolvedTheme, animate: Boolean) {
         val from = appliedTheme
-        backdrop.setTheme(target, if (animate) LumaMotion.themeChangeMillis else 0L)
+        // Cross-fade on the incoming theme's own clock, not a fixed duration.
+        backdrop.setTheme(target, if (animate) target.motionProfile.themeChangeMs.toLong() else 0L)
         backdrop.setEffects(effects.ambientMotion, effects.ambientFps, effects.atmosphereDetail)
         updateWallpaperFlag(target)
         if (animate && from != null) {
             themeAnimator?.cancel()
+            themeAnimating = true
             val animator = SpringAnimator(0f) { t ->
+                // Re-binding every cell on every animation frame would cost more
+                // than the cross-fade is worth; cells wait for the final frame.
                 applyColors(target.copy(colors = ThemeColors.lerp(from.colors, target.colors, t.coerceIn(0f, 1f))))
             }
             themeAnimator = animator
-            animator.animateTo(1f, MotionTokens.GENTLE, motion) { finishTheme(target) }
+            animator.animateTo(1f, MotionTokens.GENTLE, motion) {
+                themeAnimating = false
+                finishTheme(target)
+            }
         } else {
+            themeAnimating = false
             finishTheme(target)
         }
     }
@@ -945,46 +970,115 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         refreshAll()
     }
 
+    /**
+     * Applies every colour role to the home composition.
+     *
+     * All values come from the resolved theme's semantic palette: text, glyphs,
+     * surfaces, borders, status colours, disabled states and overlays. Nothing
+     * here is a hard-coded colour, so a theme switch (or a custom accent) updates
+     * the whole screen coherently and legibly.
+     */
     private fun applyColors(t: ResolvedTheme) {
         val c = t.colors
+        val s = t.semantics
         val d = resources.displayMetrics.density
-        val wallpaper = t.backdrop == Backdrop.WALLPAPER
+        val comps = LumaComponents.of(t)
+        val shapes = comps.shapes
+        val artwork = t.backdrop.usesArtwork
+        val darkText = !ColorMath.isDark(ColorMath.opaque(c.homeForeground))
+        val scrimSide = if (darkText) ColorMath.WHITE else ColorMath.BLACK
 
-        // System bars follow what is behind them.
-        val lightBars = !ColorMath.isDark(ColorMath.opaque(if (drawerProgress > 0.5f) c.surface0 else homeBaseColor(t)))
+        renderWallpaper(t)
+
+        // System bars follow what is immediately behind them.
+        val behindBars = when {
+            drawerProgress > 0.5f -> c.surface0
+            artwork -> if (darkText) ColorMath.WHITE else ColorMath.BLACK
+            else -> c.background
+        }
+        val lightBars = !ColorMath.isDark(ColorMath.opaque(behindBars))
         WindowCompat.getInsetsController(window, window.decorView).apply {
             isAppearanceLightStatusBars = lightBars
             isAppearanceLightNavigationBars = lightBars
         }
 
+        // Clock block
+        // Shadows only exist to separate text from a photographic backdrop; on the
+        // theme's own solid atmosphere they would just blur the edges.
         homeClock.setTextColor(c.homeForeground)
-        homeClock.setShadowLayer(if (wallpaper) 8f else 4f, 0f, 1f, c.homeShadow)
-        homeDate.setTextColor(ColorMath.withAlpha(c.homeForeground, 0.92f))
-        homeDate.setShadowLayer(5f, 0f, 1f, c.homeShadow)
-        homeContext.setTextColor(c.homeMuted)
-        homeContext.setShadowLayer(4f, 0f, 1f, c.homeShadow)
+        homeClock.setShadowLayer(if (artwork) 10f else 0f, 0f, 1f, c.homeShadow)
+        homeDate.setTextColor(if (artwork) ColorMath.withAlpha(c.homeForeground, 0.90f) else c.homeMuted)
+        homeDate.setShadowLayer(if (artwork) 6f else 0f, 0f, 1f, c.homeShadow)
         homeEmpty.setTextColor(c.homeForeground)
-        homeEmpty.setShadowLayer(4f, 0f, 1f, c.homeShadow)
-        val actionTint = ColorStateList.valueOf(c.homeForeground)
-        findViewById<ImageButton>(R.id.home_search).imageTintList = actionTint
-        findViewById<ImageButton>(R.id.home_settings).imageTintList = actionTint
+        homeEmpty.setShadowLayer(if (artwork) 4f else 0f, 0f, 1f, c.homeShadow)
+        homeEmpty.background = ThemedDrawables.ripple(
+            c.ripple,
+            ThemedDrawables.surface(
+                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.16f else 0.96f),
+                t.corner(shapes.cellDp) * d,
+                ColorMath.withAlpha(scrimSide, 0.18f),
+                dp(1)
+            ),
+            t.corner(shapes.cellDp) * d
+        )
 
-        dial.ringColor = ColorMath.withAlpha(c.homeForeground, 0.42f)
-        dial.progressColor = if (wallpaper) c.homeForeground else c.accent
-        dial.batteryColor = if (wallpaper) c.homeMuted else c.secondary
+        // Header actions: one circular scrim, one tint, one touch target.
+        val actionBackground = ThemedDrawables.ripple(
+            c.ripple,
+            ThemedDrawables.surface(
+                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.14f else 0.90f),
+                dp(24).toFloat(),
+                ColorMath.withAlpha(if (artwork) scrimSide else c.outline, if (artwork) 0.20f else 0.7f),
+                dp(1)
+            ),
+            dp(24).toFloat()
+        )
+        val actionTint = ColorStateList.valueOf(c.homeForeground)
+        listOf(R.id.home_search, R.id.home_settings).forEach { id ->
+            findViewById<ImageButton>(id).apply {
+                background = actionBackground.constantState?.newDrawable(resources)?.mutate()
+                imageTintList = actionTint
+            }
+        }
+
+        // Context chip: a quiet label, not a button that looks like a pill menu.
+        val chipRadius = t.corner(shapes.chipDp) * d
+        homeContext.background = ThemedDrawables.ripple(
+            c.ripple,
+            ThemedDrawables.surface(
+                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.14f else 0.92f),
+                chipRadius,
+                ColorMath.withAlpha(if (artwork) scrimSide else c.outline, if (artwork) 0.18f else 0.7f),
+                dp(1)
+            ),
+            chipRadius
+        )
+        homeContext.setTextColor(c.homeMuted)
+        homeContext.setShadowLayer(if (artwork) 5f else 0f, 0f, 1f, c.homeShadow)
+        homeContext.compoundDrawableTintList = ColorStateList.valueOf(c.homeMuted)
+
+        // Chronometer
+        dial.ringColor = ColorMath.withAlpha(c.homeForeground, 0.38f)
+        dial.progressColor = if (artwork) c.homeForeground else c.accent
+        dial.batteryColor = if (artwork) c.homeMuted else c.secondary
         dial.markerColor = c.homeForeground
 
-        // Search pill: a theme surface with a fine outline.
-        val pillRadius = t.corner(24f) * d
+        // Search bar: the same radius in every theme, so only the material changes.
+        val searchRadius = t.corner(shapes.searchDp) * d
         searchPill.background = ThemedDrawables.ripple(
             c.ripple,
-            ThemedDrawables.surface(ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.96f), pillRadius, c.outline, 1),
-            pillRadius
+            ThemedDrawables.surface(
+                ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.96f),
+                searchRadius,
+                ColorMath.withAlpha(c.outline, comps.surfaces.borderAlpha * 2f),
+                dp(1)
+            ),
+            searchRadius
         )
-        findViewById<ImageView>(R.id.search_pill_icon).imageTintList = ColorStateList.valueOf(c.onSurfaceMuted)
-        findViewById<TextView>(R.id.search_pill_text).setTextColor(c.onSurfaceMuted)
-        findViewById<ImageButton>(R.id.search_pill_voice).imageTintList = ColorStateList.valueOf(c.onSurfaceMuted)
-        findViewById<ImageButton>(R.id.search_pill_settings).imageTintList = ColorStateList.valueOf(c.onSurfaceMuted)
+        findViewById<ImageView>(R.id.search_pill_icon).imageTintList = ColorStateList.valueOf(s.searchIcon)
+        findViewById<TextView>(R.id.search_pill_text).setTextColor(s.searchHint)
+        findViewById<ImageButton>(R.id.search_pill_voice).imageTintList = ColorStateList.valueOf(s.searchIcon)
+        findViewById<ImageButton>(R.id.search_pill_settings).imageTintList = ColorStateList.valueOf(s.searchIcon)
 
         applyDockStyle(t)
         drawer.applyTheme(t, effects.translucency)
@@ -992,80 +1086,163 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(c.onSurface)
         findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(c.onSurface)
 
+        val cellCorner = t.corner(shapes.cellDp) * d
+        // Press feedback follows the theme's motion character, and disappears
+        // entirely under reduced-motion; it never gates the click itself.
+        val pressScale = if (motion.enabled && !motion.reduced) t.motionProfile.pressScale else 1f
+        val pressMs = t.motionProfile.pressMs
         homeCellConfig = homeCellConfig.copy(
             labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow,
-            rippleColor = c.ripple, cornerPx = t.corner(16f) * d
+            rippleColor = c.ripple, cornerPx = cellCorner,
+            placeholderFill = ColorMath.withAlpha(c.homeForeground, 0.10f),
+            placeholderText = ColorMath.withAlpha(c.homeForeground, 0.82f),
+            pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
         dockCellConfig = dockCellConfig.copy(
             labelColor = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else c.onSurface,
             labelShadow = appearance.effectiveDock == DockStyle.MINIMAL, labelShadowColor = c.homeShadow,
-            rippleColor = c.ripple, cornerPx = t.corner(16f) * d
+            rippleColor = c.ripple, cornerPx = cellCorner,
+            placeholderFill = if (appearance.effectiveDock == DockStyle.MINIMAL) ColorMath.withAlpha(c.homeForeground, 0.10f) else s.disabledSurface,
+            placeholderText = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else c.onSurface,
+            pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
-        drawerCellConfig = drawerCellConfig.copy(labelColor = c.onSurface, labelShadow = false, rippleColor = c.ripple, cornerPx = t.corner(16f) * d)
+        drawerCellConfig = drawerCellConfig.copy(
+            labelColor = c.onSurface, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
+            placeholderFill = s.disabledSurface, placeholderText = c.onSurfaceMuted,
+            pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
+        )
         folderCellConfig = drawerCellConfig
+        if (::homeAdapter.isInitialized && !themeAnimating) {
+            homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
+            homeAdapter.refreshWidgetFrames()
+            dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
+            drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
+        }
     }
 
-    private fun homeBaseColor(t: ResolvedTheme): Int =
-        if (t.backdrop == Backdrop.THEME) t.colors.background
-        else if (ColorMath.isDark(ColorMath.opaque(t.colors.homeShadow))) ColorMath.BLACK else ColorMath.WHITE
+    /**
+     * Shows the bundled wallpaper for the active theme, or hides the layer and
+     * lets the system wallpaper / atmosphere show through.
+     *
+     * If an artwork asset cannot be decoded, the home screen restores the theme's
+     * own backdrop instead of leaving an empty black surface.
+     */
+    private fun renderWallpaper(t: ResolvedTheme) {
+        val art = WallpaperArt.forTheme(t.id)
+        val wanted = t.backdrop == Backdrop.LUMA && art != null
+        if (wanted && art != null) {
+            wallpaperArt.visibility = View.VISIBLE
+            backdrop.setFallbackSolid(false)
+            wallpaperArt.show(
+                artwork = art,
+                fallback = t.colors.background,
+                crossfadeMs = if (motion.enabled && !motion.reduced) t.motionProfile.themeChangeMs.toLong() else 0L
+            )
+        } else {
+            wallpaperArt.clear()
+            wallpaperArt.visibility = View.GONE
+            // THEME paints its own solid; WALLPAPER must stay transparent so the
+            // system wallpaper is visible behind the scrims.
+            backdrop.setFallbackSolid(false)
+        }
+    }
 
     private fun applyTypography(t: ResolvedTheme) {
         val style = t.typography
         homeClock.typeface = Typefaces.clock(style)
         homeClock.letterSpacing = style.clockTracking
         homeDate.typeface = Typefaces.readout(style)
-        homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.6f else style.readoutTracking
+        homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.62f else style.readoutTracking
         homeDate.isAllCaps = style.readoutCaps
+        homeDate.textSize = if (style.readoutCaps) 11.5f else 12.5f
         homeContext.typeface = Typefaces.readout(style)
         homeContext.letterSpacing = style.readoutTracking
-        homeEmpty.typeface = Typefaces.label(style)
-        findViewById<TextView>(R.id.search_pill_text).typeface = Typefaces.label(style)
+        homeContext.isAllCaps = style.readoutCaps
+        homeContext.textSize = if (style.readoutCaps) 11f else 12.5f
+        homeEmpty.typeface = Typefaces.body(style)
+        homeEmpty.textSize = LumaTypeScale.bodyMediumSp
+        findViewById<TextView>(R.id.search_pill_text).apply {
+            typeface = Typefaces.body(style)
+            textSize = 15f
+        }
+        findViewById<TextView>(R.id.edit_title).typeface = Typefaces.title(style)
+        findViewById<TextView>(R.id.edit_hint).typeface = Typefaces.body(style)
+        findViewById<TextView>(R.id.edit_done).typeface = Typefaces.label(style)
+        drawer.setSearchTypeface(Typefaces.body(style))
         val label = Typefaces.label(style)
         homeCellConfig = homeCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
         dockCellConfig = dockCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
         drawerCellConfig = drawerCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
         folderCellConfig = drawerCellConfig
+        applyPreset(appearance.preset)
     }
 
     private fun applyDockStyle(t: ResolvedTheme) {
         val c = t.colors
+        val s = t.semantics
         val d = resources.displayMetrics.density
+        val comps = LumaComponents.of(t)
         val lp = dockSurface.layoutParams as ViewGroup.MarginLayoutParams
         when (appearance.effectiveDock) {
             DockStyle.BEZEL -> {
-                lp.marginStart = dp(14); lp.marginEnd = dp(14)
+                lp.marginStart = dp(16); lp.marginEnd = dp(16)
                 dockSurface.background = BezelDrawable(
                     ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.94f),
-                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.16f else 0.7f),
-                    ColorMath.withAlpha(c.outlineStrong, 0.6f),
-                    t.corner(26f) * d, d
+                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.14f else 0.66f),
+                    ColorMath.withAlpha(c.outlineStrong, 0.5f),
+                    t.corner(comps.shapes.dockDp) * d, d
                 )
-                dockSurface.elevation = if (effects.iconDepth) dp(3).toFloat() else 0f
+                dockSurface.elevation = if (effects.iconDepth) dp(comps.surfaces.elevationDp * 0.5f).toFloat() else 0f
             }
             DockStyle.FLOAT -> {
                 lp.marginStart = dp(34); lp.marginEnd = dp(34)
                 dockSurface.background = BezelDrawable(
                     ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency)),
-                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.18f else 0.8f),
-                    ColorMath.withAlpha(c.outlineStrong, 0.5f),
-                    dp(40).toFloat(), d
+                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.16f else 0.76f),
+                    ColorMath.withAlpha(c.outlineStrong, 0.46f),
+                    dp(36).toFloat(), d
                 )
-                dockSurface.elevation = if (effects.iconDepth) dp(10).toFloat() else 0f
+                dockSurface.elevation = if (effects.iconDepth) dp(comps.surfaces.elevationDp).toFloat() else 0f
             }
             DockStyle.MINIMAL -> {
-                lp.marginStart = dp(14); lp.marginEnd = dp(14)
+                lp.marginStart = dp(16); lp.marginEnd = dp(16)
                 dockSurface.background = null
                 dockSurface.elevation = 0f
             }
         }
         dockSurface.layoutParams = lp
+        dockSurface.clipToOutline = appearance.effectiveDock != DockStyle.MINIMAL
+        dockSurface.contentDescription = null
+        // Keep the dock rows' own text legible against whatever plate is used.
+        if (appearance.effectiveDock == DockStyle.MINIMAL) {
+            dockCellConfig = dockCellConfig.copy(labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow)
+        } else {
+            dockCellConfig = dockCellConfig.copy(
+                labelColor = c.onSurface,
+                labelShadow = false,
+                placeholderFill = s.disabledSurface,
+                placeholderText = c.onSurface
+            )
+        }
     }
 
-    /** Hides the wallpaper from composition when LumaOS Pro paints its own backdrop (saves GPU and power). */
+    /** Hides the system wallpaper when LumaOS Pro paints its own backdrop (saves GPU and power). */
     private fun updateWallpaperFlag(t: ResolvedTheme) {
-        if (t.backdrop == Backdrop.THEME) window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-        else window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        if (t.backdrop == Backdrop.WALLPAPER) window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
     }
+
+    /**
+     * The shared widget container: one surface, one border, one radius, so
+     * third-party widgets read as part of the home composition. Provider content
+     * is clipped to the frame but never recoloured.
+     */
+    private fun widgetFrameDrawable() = ThemedDrawables.surface(
+        ColorMath.withAlpha(theme.semantics.widgetSurface, theme.surfaceAlpha(effects.translucency) * 0.92f),
+        theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density,
+        ColorMath.withAlpha(theme.semantics.widgetBorder, 0.72f),
+        dp(1)
+    )
 
     private fun folderStyle(): FolderStyle {
         val c = theme.colors
@@ -1085,10 +1262,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             headerCaps = true,
             headerTracking = 0.12f,
             titleColor = c.onSurface,
+            titleTypeface = Typefaces.body(theme.typography),
             subtitleColor = c.onSurfaceMuted,
+            subtitleTypeface = Typefaces.body(theme.typography),
             iconTint = c.onSurface,
             rippleColor = c.ripple,
-            cornerPx = theme.corner(14f) * resources.displayMetrics.density
+            cornerPx = theme.corner(LumaComponents.of(theme).shapes.cellDp) * resources.displayMetrics.density
         )
     }
 
@@ -1132,11 +1311,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Spatial arrangement for the chosen composition preset. */
     private fun applyPreset(preset: HomePreset) {
+        val voiceClock = theme.typography.clockSizeSp
         val clockSp: Float
         when (preset.clock) {
             ClockStyle.DIAL -> {
                 dial.visibility = View.VISIBLE
-                clockSp = 64f
+                clockSp = voiceClock
                 clockColumn.gravity = Gravity.START
                 homeClock.gravity = Gravity.START
                 homeHeader.gravity = Gravity.START
@@ -1144,14 +1324,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
             ClockStyle.HERO -> {
                 dial.visibility = View.GONE
-                clockSp = 92f
+                clockSp = voiceClock * 1.42f
                 clockColumn.gravity = Gravity.CENTER_HORIZONTAL
                 homeClock.gravity = Gravity.CENTER_HORIZONTAL
                 (homeContext.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL
             }
             ClockStyle.COMPACT -> {
                 dial.visibility = View.GONE
-                clockSp = 44f
+                clockSp = voiceClock * 0.70f
                 clockColumn.gravity = Gravity.START
                 homeClock.gravity = Gravity.START
                 (homeContext.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.START
@@ -1299,7 +1479,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerProgress = progress
         applyDepth()
         val c = theme.colors
-        val lightBars = !ColorMath.isDark(ColorMath.opaque(if (progress > 0.5f) c.surface0 else homeBaseColor(theme)))
+        val behind = when {
+            progress > 0.5f -> c.surface0
+            theme.backdrop.usesArtwork -> if (ColorMath.isDark(ColorMath.opaque(c.homeForeground))) ColorMath.WHITE else ColorMath.BLACK
+            else -> c.background
+        }
+        val lightBars = !ColorMath.isDark(ColorMath.opaque(behind))
         WindowCompat.getInsetsController(window, window.decorView).apply {
             if (isAppearanceLightStatusBars != lightBars) {
                 isAppearanceLightStatusBars = lightBars

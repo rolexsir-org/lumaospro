@@ -27,7 +27,9 @@ data class DrawerRowStyle(
     val headerCaps: Boolean,
     val headerTracking: Float,
     val titleColor: Int,
+    val titleTypeface: Typeface? = null,
     val subtitleColor: Int,
+    val subtitleTypeface: Typeface? = null,
     val iconTint: Int,
     val rippleColor: Int,
     val cornerPx: Float
@@ -83,6 +85,8 @@ class DrawerAdapter(
                 holder.text.setTextColor(style.headerColor)
                 holder.text.letterSpacing = style.headerTracking
                 style.headerTypeface?.let { holder.text.typeface = it }
+                // Heading semantics without requiring API 28 XML attributes.
+                androidx.core.view.ViewCompat.setAccessibilityHeading(holder.text, true)
             }
             is AppCellViewHolder -> {
                 val app = (row as DrawerRow.App).entry
@@ -94,6 +98,11 @@ class DrawerAdapter(
                 holder.itemView.background = ThemedDrawables.ripple(style.rippleColor, null, style.cornerPx)
                 holder.title.setTextColor(style.titleColor)
                 holder.subtitle.setTextColor(style.subtitleColor)
+                style.titleTypeface?.let { holder.title.typeface = it }
+                style.subtitleTypeface?.let { holder.subtitle.typeface = it }
+                holder.action.setImageResource(R.drawable.ic_rx_chevron_right)
+                holder.action.imageTintList = android.content.res.ColorStateList.valueOf(style.iconTint)
+                holder.action.visibility = View.GONE
                 when (row) {
                     is DrawerRow.Shortcut -> {
                         holder.title.text = row.ref.label
@@ -104,6 +113,7 @@ class DrawerAdapter(
                         holder.itemView.contentDescription = "${row.ref.label}, ${row.appLabel} shortcut"
                     }
                     is DrawerRow.Action -> {
+                        holder.action.visibility = View.VISIBLE
                         val ctx = holder.itemView.context
                         val (titleRes, icon) = when (row.action) {
                             DrawerAction.WEB_SEARCH -> R.string.search_web_for to R.drawable.ic_rx_web
@@ -129,6 +139,7 @@ class DrawerAdapter(
         val icon: ImageView = view.findViewById(R.id.row_icon)
         val title: TextView = view.findViewById(R.id.row_title)
         val subtitle: TextView = view.findViewById(R.id.row_subtitle)
+        val action: ImageView = view.findViewById(R.id.row_action)
     }
 
     private object Diff : DiffUtil.ItemCallback<DrawerRow>() {

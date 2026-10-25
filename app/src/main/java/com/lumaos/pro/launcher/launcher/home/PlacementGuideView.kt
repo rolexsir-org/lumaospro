@@ -23,7 +23,8 @@ class PlacementGuideView @JvmOverloads constructor(
     var cellHeight = 0
     var scrollOffset = 0
     var guideColor = 0x40FFFFFF
-    var accentColor = 0xFFB5C5A9.toInt()
+    /** Unset until the theme applies a semantic accent; 0 means transparent. */
+    var accentColor = 0
     var cornerPx = 16f
 
     /** Highlight in this view's coordinates, or null. */

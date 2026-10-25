@@ -26,7 +26,9 @@ import com.lumaos.pro.launcher.launcher.model.DrawerRow
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import kotlin.math.abs
 
@@ -275,16 +277,18 @@ class DrawerController(
                 minHeight = dp(48f)
                 minWidth = dp(48f)
                 setPadding(dp(14f), 0, dp(14f), 0)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
                 typeface = Typefaces.label(theme.typography)
+                letterSpacing = theme.typography.labelTracking
                 setTextColor(if (chosen) c.onAccentContainer else c.onSurfaceMuted)
                 background = ThemedDrawables.ripple(
                     c.ripple,
                     ThemedDrawables.surface(
-                        if (chosen) c.accentContainer else c.surface2, theme.corner(18f) * density,
-                        if (chosen) 0 else c.outline, if (chosen) 0 else 1
+                        if (chosen) c.accentContainer else c.surface2,
+                        theme.corner(LumaComponents.of(theme).shapes.chipDp) * density,
+                        if (chosen) 0 else c.outline, if (chosen) 0 else dp(1f)
                     ),
-                    theme.corner(18f) * density
+                    theme.corner(LumaComponents.of(theme).shapes.chipDp) * density
                 )
                 isSelected = chosen
                 contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, label) else label
@@ -308,7 +312,7 @@ class DrawerController(
         }
         val theme = host.theme()
         val c = theme.colors
-        val radius = theme.corner(18f) * density
+        val radius = theme.corner(LumaComponents.of(theme).shapes.chipDp) * density
         emptyView.background = ThemedDrawables.ripple(
             c.ripple,
             ThemedDrawables.surface(c.surface2, radius, c.outline, 1),
@@ -318,13 +322,16 @@ class DrawerController(
 
     fun applyTheme(theme: ResolvedTheme, translucency: Boolean) {
         val c = theme.colors
-        val radius = theme.corner(28f) * density
+        val shapes = LumaComponents.of(theme).shapes
+        val radius = theme.corner(shapes.sheetDp) * density
         sheet.background = ThemedDrawables.topRounded(
             ColorMath.withAlpha(c.surface0, theme.surfaceAlpha(translucency)), radius
         )
         scrim.setBackgroundColor(c.scrim)
         handle.background = ThemedDrawables.surface(c.outlineStrong, dp(2f).toFloat())
-        searchField.background = ThemedDrawables.surface(c.surface2, theme.corner(18f) * density, c.outline, 1)
+        searchField.background = ThemedDrawables.surface(
+            c.surface1, theme.corner(shapes.searchDp) * density, c.outline, dp(1f)
+        )
         searchField.setTextColor(c.onSurface)
         searchField.setHintTextColor(c.onSurfaceMuted)
         clearButton.imageTintList = android.content.res.ColorStateList.valueOf(c.onSurfaceMuted)
@@ -336,10 +343,19 @@ class DrawerController(
         }
         title.setTextColor(c.onSurface)
         title.typeface = Typefaces.title(theme.typography)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
+        subtitle.typeface = Typefaces.body(theme.typography)
         subtitle.setTextColor(c.onSurfaceMuted)
         emptyView.setTextColor(c.onSurfaceMuted)
+        emptyView.typeface = Typefaces.body(theme.typography)
+        emptyView.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
         updateRetryAvailability(retryAvailable, forceStyle = true)
         alphaIndex.setAccentColor(c.accent)
+    }
+
+    /** Body voice for the search field, kept in step with the theme's typography. */
+    fun setSearchTypeface(face: android.graphics.Typeface) {
+        searchField.typeface = face
     }
 
     fun hideKeyboard() {

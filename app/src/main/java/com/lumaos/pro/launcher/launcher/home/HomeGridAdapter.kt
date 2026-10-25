@@ -60,6 +60,10 @@ class HomeGridAdapter(
         fun rowHeightPx(): Int
         fun editOutline(): Drawable
         fun handle(): Drawable
+        /** Themed frame drawn behind every hosted widget so widgets stay consistent. */
+        fun frame(): Drawable? = null
+        /** Corner radius of that frame, used to clip the provider's content to it. */
+        fun frameRadiusPx(): Float = 0f
     }
 
     val items = ArrayList<HomeItem>()
@@ -186,12 +190,32 @@ class HomeGridAdapter(
         }
     }
 
+    private var widgetFrameBackground: Drawable? = null
+
+    /** Re-applies the themed widget frame after a theme change. */
+    fun refreshWidgetFrames() {
+        widgetFrameBackground = widgetHost?.frame()
+        if (widgetFrameBackground != null) notifyItemRangeChanged(0, itemCount)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun bindWidget(holder: WidgetHolder, item: HomeItem.Widget) {
         val host = widgetHost
         val rowHeight = host?.rowHeightPx() ?: 0
         val height = (rowHeight * item.rows).coerceAtLeast(rowHeight)
         holder.setHeight(height)
+        val frameDrawable = widgetFrameBackground ?: host?.frame()
+        if (host != null && frameDrawable != null) {
+            holder.frame.background = frameDrawable.constantState?.newDrawable(holder.frame.resources)?.mutate()
+            val radius = host.frameRadiusPx()
+            holder.frame.outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, radius)
+                }
+            }
+            holder.frame.clipToOutline = radius > 0f
+        }
+        holder.missing.setTextColor(config().labelColor)
         val view = host?.viewFor(item)
         holder.container.removeAllViews()
         if (view != null) {
@@ -253,6 +277,7 @@ class HomeGridAdapter(
     }
 
     class WidgetHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val frame: FrameLayout = view.findViewById(R.id.widget_frame)
         val container: FrameLayout = view.findViewById(R.id.widget_container)
         val missing: TextView = view.findViewById(R.id.widget_missing)
         val outline: View = view.findViewById(R.id.widget_outline)

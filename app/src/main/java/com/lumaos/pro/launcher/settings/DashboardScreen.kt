@@ -20,6 +20,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,11 +32,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.settings.LocalLumaSemantics
+import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.LumaSpacing
 import com.lumaos.pro.launcher.ui.LumaCorners
 import com.lumaos.pro.launcher.diagnostics.OptimizationEvent
@@ -463,21 +468,45 @@ private fun MetricRow(label: String, value: String, badge: Badge, source: String
     }
 }
 
+/**
+ * Reading provenance badge: colour is never the only signal - the label and an
+ * icon carry the meaning too, so the states survive colour-blindness and
+ * monochrome rendering. Colours come from the semantic palette, not Material's
+ * approximations of it.
+ */
 @Composable
 private fun BadgeChip(badge: Badge) {
-    val (text, color) = when (badge) {
-        Badge.MEASURED -> stringResource(R.string.dash_measured) to MaterialTheme.colorScheme.primary
-        Badge.ESTIMATE -> stringResource(R.string.dash_estimated) to MaterialTheme.colorScheme.tertiary
-        Badge.UNAVAILABLE -> stringResource(R.string.dash_unavailable) to MaterialTheme.colorScheme.error
-        Badge.SETTING -> stringResource(R.string.dash_setting) to MaterialTheme.colorScheme.onSurfaceVariant
+    val semantics = LocalLumaSemantics.current
+    val (text, content, icon) = when (badge) {
+        Badge.MEASURED -> Triple(stringResource(R.string.dash_measured), semantics.successContainer, LumaIcon.SUCCESS)
+        Badge.ESTIMATE -> Triple(stringResource(R.string.dash_estimated), semantics.warningContainer, LumaIcon.WARNING)
+        Badge.UNAVAILABLE -> Triple(stringResource(R.string.dash_unavailable), semantics.dangerContainer, LumaIcon.ERROR)
+        Badge.SETTING -> Triple(stringResource(R.string.dash_setting), semantics.unselectedSurface, LumaIcon.SETTINGS)
     }
-    Surface(color = color.copy(alpha = 0.14f), shape = MaterialTheme.shapes.small) {
-        Text(
-            text = text,
+    val foreground = when (badge) {
+        Badge.MEASURED -> semantics.onSuccessContainer
+        Badge.ESTIMATE -> semantics.onWarningContainer
+        Badge.UNAVAILABLE -> semantics.onDangerContainer
+        Badge.SETTING -> semantics.unselectedContent
+    }
+    Surface(color = Color(content), shape = MaterialTheme.shapes.small) {
+        Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = color
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(icon.res),
+                contentDescription = null,
+                tint = Color(foreground),
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(foreground)
+            )
+        }
     }
 }
 

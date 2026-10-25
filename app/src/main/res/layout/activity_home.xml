@@ -2,13 +2,18 @@
 <!--
     LumaOS Pro home: layered composition, back to front.
 
-      backdrop        theme atmosphere (or wallpaper legibility gradients)
-      desktop         chronometer header, widget/icon grid, search pill, dock
+      wallpaper art   bundled theme wallpaper, centre-cropped (LUMA backdrop)
+      backdrop        legibility scrim + theme atmosphere
+      desktop         clock block, widget/icon grid, search bar, dock
       edit chrome     edit-mode top bar + toolbar (gone until edit mode)
       drawer          scrim + sheet with search, categories, suggestions, A-Z
       overlays        folders and the widget picker are added at runtime
 
+    Sizing follows the design system: 24dp control glyphs inside 48dp targets,
+    a 52dp search field, one 18dp search radius, and one 4dp spacing rhythm.
     Every view id used by HomeActivityRuntimeTest is kept with the same type.
+    Colours shown here are dark-theme fallbacks; HomeActivity applies semantic
+    roles at runtime.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/home_root"
@@ -16,6 +21,11 @@
     android:layout_height="match_parent"
     android:background="@android:color/transparent"
     android:clipChildren="false">
+
+    <com.lumaos.pro.launcher.launcher.home.WallpaperArtView
+        android:id="@+id/wallpaper_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <com.lumaos.pro.launcher.launcher.home.AmbientBackdropView
         android:id="@+id/backdrop"
@@ -33,10 +43,10 @@
             android:id="@+id/home_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="22dp"
-            android:layout_marginTop="18dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
             android:orientation="vertical">
 
             <LinearLayout
@@ -48,9 +58,10 @@
 
                 <com.lumaos.pro.launcher.launcher.home.ChronoDialView
                     android:id="@+id/home_dial"
-                    android:layout_width="68dp"
-                    android:layout_height="68dp"
-                    android:layout_marginEnd="16dp" />
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginEnd="14dp"
+                    android:importantForAccessibility="yes" />
 
                 <LinearLayout
                     android:id="@+id/clock_column"
@@ -63,19 +74,16 @@
                         android:id="@+id/home_clock"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:autoSizeMaxTextSize="64sp"
-                        android:autoSizeMinTextSize="36sp"
-                        android:autoSizeStepGranularity="1sp"
-                        android:autoSizeTextType="uniform"
                         android:contentDescription="@string/home_clock_description"
-                        android:fontFamily="sans-serif-thin"
+                        android:fontFamily="@font/inter_light"
                         android:format12Hour="h:mm"
                         android:format24Hour="HH:mm"
                         android:includeFontPadding="false"
-                        android:letterSpacing="-0.03"
+                        android:letterSpacing="-0.035"
                         android:maxLines="1"
                         android:textColor="#FFFFFFFF"
-                        android:textSize="64sp" />
+                        android:textSize="56sp"
+                        android:textStyle="normal" />
 
                     <TextClock
                         android:id="@+id/home_date"
@@ -85,8 +93,10 @@
                         android:format12Hour="EEEE, MMM d"
                         android:format24Hour="EEEE, d MMM"
                         android:includeFontPadding="false"
-                        android:textColor="#F2FFFFFF"
-                        android:textSize="14sp" />
+                        android:letterSpacing="0.1"
+                        android:textAppearance="@style/TextAppearance.Luma.Overline"
+                        android:textColor="#E6FFFFFF"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -100,7 +110,7 @@
                         android:id="@+id/home_search"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:background="@drawable/bg_home_action"
                         android:contentDescription="@string/home_search_description"
                         android:padding="12dp"
                         android:src="@drawable/ic_rx_search" />
@@ -109,7 +119,8 @@
                         android:id="@+id/home_settings"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_home_action"
                         android:contentDescription="@string/home_settings_description"
                         android:padding="12dp"
                         android:src="@drawable/ic_rx_settings" />
@@ -120,15 +131,22 @@
                 android:id="@+id/home_context"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="?android:attr/selectableItemBackground"
-                android:fontFamily="sans-serif-condensed"
-                android:letterSpacing="0.12"
+                android:layout_marginStart="2dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_context_chip"
+                android:clickable="true"
+                android:drawableEnd="@drawable/ic_rx_chevron_right"
+                android:drawablePadding="6dp"
+                android:focusable="true"
+                android:fontFamily="@font/inter_medium"
+                android:gravity="center_vertical"
+                android:letterSpacing="0.1"
                 android:minHeight="48dp"
                 android:minWidth="64dp"
-                android:gravity="center_vertical"
-                android:text="PERSONAL"
-                android:textColor="#CCFFFFFF"
+                android:paddingStart="12dp"
+                android:paddingEnd="10dp"
+                android:textAppearance="@style/TextAppearance.Luma.Overline"
+                android:textColor="#DFFFFFFF"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -163,12 +181,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:background="?android:attr/selectableItemBackground"
+                android:background="@drawable/bg_home_empty"
                 android:clickable="true"
+                android:drawablePadding="12dp"
                 android:focusable="true"
                 android:gravity="center"
-                android:padding="16dp"
+                android:maxWidth="300dp"
+                android:paddingStart="24dp"
+                android:paddingTop="20dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="20dp"
                 android:text="@string/home_empty_hint"
+                android:textAppearance="@style/TextAppearance.Luma.Body"
                 android:textColor="#E6FFFFFF"
                 android:textSize="14sp"
                 android:visibility="gone" />
@@ -177,23 +201,24 @@
         <LinearLayout
             android:id="@+id/home_search_pill"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginStart="24dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="20dp"
             android:layout_marginTop="6dp"
-            android:layout_marginEnd="24dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_search_pill"
             android:clickable="true"
             android:contentDescription="@string/home_search_description"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="16dp"
-            android:paddingEnd="6dp">
+            android:paddingEnd="4dp">
 
             <ImageView
                 android:id="@+id/search_pill_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:importantForAccessibility="no"
                 android:src="@drawable/ic_rx_search" />
 
@@ -203,8 +228,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:layout_weight="1"
+                android:ellipsize="end"
                 android:importantForAccessibility="no"
+                android:maxLines="1"
                 android:text="@string/search_pill_hint"
+                android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
                 android:textSize="15sp" />
 
             <ImageButton
@@ -213,7 +241,7 @@
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/voice_command_description"
-                android:padding="10dp"
+                android:padding="12dp"
                 android:src="@drawable/ic_rx_voice" />
 
             <ImageButton
@@ -222,7 +250,7 @@
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/home_settings_description"
-                android:padding="10dp"
+                android:padding="12dp"
                 android:src="@drawable/ic_rx_settings"
                 android:visibility="gone" />
         </LinearLayout>
@@ -231,9 +259,9 @@
             android:id="@+id/dock_surface"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
-            android:layout_marginEnd="14dp"
-            android:layout_marginBottom="6dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
             android:paddingStart="6dp"
             android:paddingTop="6dp"
             android:paddingEnd="6dp"
@@ -273,7 +301,9 @@
                 android:id="@+id/edit_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/inter_semibold"
                 android:text="@string/edit_title"
+                android:textAppearance="@style/TextAppearance.Luma.Title"
                 android:textSize="18sp" />
 
             <TextView
@@ -282,21 +312,24 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="@string/edit_hint"
+                android:textAppearance="@style/TextAppearance.Luma.Caption"
                 android:textSize="12sp" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/edit_done"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="48dp"
             android:clickable="true"
             android:focusable="true"
+            android:fontFamily="@font/inter_medium"
             android:gravity="center"
             android:minWidth="88dp"
             android:paddingStart="18dp"
             android:paddingEnd="18dp"
             android:text="@string/edit_done"
-            android:textSize="15sp" />
+            android:textAppearance="@style/TextAppearance.Luma.Label"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <LinearLayout
@@ -349,7 +382,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="20dp"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="8dp"
                 android:layout_marginEnd="8dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -364,15 +397,17 @@
                         android:id="@+id/drawer_title"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
+                        android:fontFamily="@font/inter_semibold"
                         android:text="@string/drawer_title"
-                        android:textColor="#FF1C1C1E"
+                        android:textAppearance="@style/TextAppearance.Luma.TitleLarge"
                         android:textSize="22sp" />
 
                     <TextView
                         android:id="@+id/drawer_subtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:textAppearance="@style/TextAppearance.Luma.Caption"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -382,7 +417,7 @@
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/drawer_sort_description"
-                    android:padding="13dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_rx_sort" />
 
                 <ImageButton
@@ -391,7 +426,7 @@
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/voice_command_description"
-                    android:padding="13dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_rx_voice" />
 
                 <ImageButton
@@ -400,16 +435,16 @@
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/drawer_close_description"
-                    android:padding="13dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_rx_close" />
             </LinearLayout>
 
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginStart="18dp"
-                android:layout_marginTop="4dp"
-                android:layout_marginEnd="18dp"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="20dp"
                 android:layout_marginBottom="8dp">
 
                 <EditText
@@ -426,6 +461,7 @@
                     android:paddingStart="16dp"
                     android:paddingEnd="54dp"
                     android:singleLine="true"
+                    android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
                     android:textColorHint="#FF6E6E73"
                     android:textSize="16sp" />
 
@@ -437,7 +473,7 @@
                     android:layout_marginEnd="2dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/search_clear_description"
-                    android:padding="14dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_rx_close"
                     android:visibility="gone" />
             </FrameLayout>
@@ -448,8 +484,8 @@
                 android:layout_height="wrap_content"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
                 android:scrollbars="none">
 
                 <LinearLayout
@@ -471,9 +507,9 @@
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
                     android:overScrollMode="never"
-                    android:paddingStart="10dp"
+                    android:paddingStart="12dp"
                     android:paddingTop="4dp"
-                    android:paddingEnd="30dp"
+                    android:paddingEnd="28dp"
                     android:paddingBottom="12dp"
                     android:scrollbars="none" />
 
@@ -490,9 +526,11 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:gravity="center"
+                    android:maxWidth="300dp"
                     android:padding="24dp"
                     android:text="@string/empty_no_apps"
-                    android:textSize="15sp"
+                    android:textAppearance="@style/TextAppearance.Luma.Body"
+                    android:textSize="14sp"
                     android:visibility="gone" />
             </FrameLayout>
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Context-profile chip fallback. Runtime radius and colours come from theme tokens. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="14dp" />
+    <solid android:color="#1FFFFFFF" />
+    <stroke android:width="1dp" android:color="#24FFFFFF" />
+</shape>

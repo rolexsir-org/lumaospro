@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Runtime palette counterpart used as the initial A-Z index tint. -->
-    <color name="lumaos_accent">#0066CC</color>
+    <!--
+        Initial values only. HomeActivity replaces the A-Z index tint and every
+        other colour with the resolved theme's semantic roles before the first
+        frame; these exist so the platform can inflate the views.
+        Aurora's accent keeps the initial frame on-palette instead of flashing
+        an unrelated blue.
+    -->
+    <color name="lumaos_accent">#9AD3FF</color>
     <color name="lumaos_scrim">#66000000</color>
 </resources>

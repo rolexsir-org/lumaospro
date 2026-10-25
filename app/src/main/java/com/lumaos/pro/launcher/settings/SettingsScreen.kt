@@ -35,6 +35,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -48,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +59,7 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +75,7 @@ import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.ui.LumaCorners
+import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.LumaSpacing
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.intelligence.ProfileId
@@ -126,19 +130,36 @@ fun SettingsRoot(
     }
 }
 
+/**
+ * One settings section: a quiet category glyph, a title in the theme's heading
+ * voice, its rows, then a divider. The icon is decorative and hidden from
+ * accessibility, because the visible title already names the section.
+ */
 @Composable
-private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsSection(
+    title: String,
+    icon: LumaIcon,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(Modifier.height(LumaSpacing.elementGap))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                painter = painterResource(icon.res),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(LumaSpacing.md))
         content()
-        Spacer(Modifier.height(16.dp))
-        HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outline)
+        Spacer(Modifier.height(LumaSpacing.lg))
+        HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -152,7 +173,7 @@ private fun HomeRoleSection(
 ) {
     val role by viewModel.roleState.collectAsState()
 
-    SettingsSection(stringResource(R.string.section_home_role)) {
+    SettingsSection(stringResource(R.string.section_home_role), LumaIcon.HOME) {
         Text(
             text = stringResource(
                 if (role.isDefault) R.string.role_status_default else R.string.role_status_not_default
@@ -206,7 +227,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             }
     }
 
-    SettingsSection("Context profiles") {
+    SettingsSection(stringResource(R.string.section_context_profiles), LumaIcon.CONTEXT) {
         Text(
             "Each profile has its own home layout and visible apps. Long-press icons on the home screen to arrange the selected profile.",
             style = MaterialTheme.typography.bodySmall,
@@ -280,7 +301,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
 
     }
 
-    SettingsSection("Notifications & focus") {
+    SettingsSection(stringResource(R.string.section_notifications), LumaIcon.PRIVACY) {
         SwitchRow(
             label = "Context change alerts",
             checked = alertsEnabled,
@@ -335,7 +356,7 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
     val scope = rememberCoroutineScope()
 
-    SettingsSection(stringResource(R.string.section_appearance)) {
+    SettingsSection(stringResource(R.string.section_appearance), LumaIcon.APPEARANCE) {
         ChoiceRow(
             label = stringResource(R.string.pref_theme),
             selected = when (themeMode) {
@@ -429,7 +450,7 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
         }
     }
 
-    SettingsSection(stringResource(R.string.section_drawer)) {
+    SettingsSection(stringResource(R.string.section_drawer), LumaIcon.DRAWER) {
         Text(
             stringResource(R.string.pref_pinned_hint),
             style = MaterialTheme.typography.bodySmall,
@@ -556,7 +577,7 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
 private fun GestureSection(viewModel: SettingsViewModel) {
     val scope = rememberCoroutineScope()
 
-    SettingsSection(stringResource(R.string.section_gestures)) {
+    SettingsSection(stringResource(R.string.section_gestures), LumaIcon.GESTURES) {
         Text(
             text = stringResource(R.string.gesture_note),
             style = MaterialTheme.typography.bodySmall,
@@ -615,7 +636,7 @@ private fun PerformanceSection(viewModel: SettingsViewModel) {
     val scope = rememberCoroutineScope()
     val capability = viewModel.capability
 
-    SettingsSection(stringResource(R.string.section_performance)) {
+    SettingsSection(stringResource(R.string.section_performance), LumaIcon.PERFORMANCE) {
         Text(
             text = stringResource(R.string.profile_scope_note),
             style = MaterialTheme.typography.bodySmall,
@@ -665,7 +686,7 @@ private fun PerformanceSection(viewModel: SettingsViewModel) {
 
 @Composable
 private fun PrivacySection() {
-    SettingsSection(stringResource(R.string.section_privacy)) {
+    SettingsSection(stringResource(R.string.section_privacy), LumaIcon.PRIVACY) {
         Text(
             text = stringResource(R.string.privacy_summary),
             style = MaterialTheme.typography.bodyMedium,
@@ -681,7 +702,7 @@ private fun BackupSection(
     onImportBackup: () -> Unit
 ) {
     val state by viewModel.backupState.collectAsState()
-    SettingsSection(stringResource(R.string.section_backup)) {
+    SettingsSection(stringResource(R.string.section_backup), LumaIcon.BACKUP) {
         Text(
             text = stringResource(R.string.backup_desc),
             style = MaterialTheme.typography.bodySmall,
@@ -730,7 +751,9 @@ private fun BackupSection(
 
 @Composable
 private fun AboutSection() {
-    SettingsSection(stringResource(R.string.section_about)) {
+    var showLicenses by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    SettingsSection(stringResource(R.string.section_about), LumaIcon.INFO) {
         Text(
             text = stringResource(
                 R.string.about_version,
@@ -740,6 +763,58 @@ private fun AboutSection() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(Modifier.height(LumaSpacing.sm))
+        Text(
+            text = stringResource(R.string.about_fonts_line),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = { showLicenses = true }) {
+            Text(stringResource(R.string.about_licenses_open))
+        }
+    }
+    if (showLicenses) {
+        // The bundled licences ship in assets; showing them satisfies the OFL
+        // attribution requirement without a network call or a second screen.
+        // Read off the main thread: even a few KB of asset I/O during a scroll
+        // would show up as a dropped frame on the devices this launcher targets.
+        val text by produceState("") {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                listOf("licenses/INTER-OFL.txt", "licenses/SPACE-GROTESK-OFL.txt").joinToString("\n\n") { name ->
+                    runCatching { context.assets.open(name).bufferedReader().use { it.readText() } }
+                        .getOrDefault("")
+                }
+            }
+        }
+        Dialog(onDismissRequest = { showLicenses = false }) {
+            Card(
+                shape = RoundedCornerShape(LumaCorners.dialog),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(Modifier.padding(LumaSpacing.contentPadding)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.about_licenses),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        TextButton(onClick = { showLicenses = false }) {
+                            Text(stringResource(R.string.about_licenses_close))
+                        }
+                    }
+                    Spacer(Modifier.height(LumaSpacing.sm))
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                    )
+                }
+            }
+        }
     }
 }
 

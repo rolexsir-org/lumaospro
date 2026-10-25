@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.apps.AppEntry
+import com.lumaos.pro.launcher.icons.MonogramDrawable
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
 
 /**
@@ -34,7 +35,21 @@ data class CellConfig(
     val labelTracking: Float = 0f,
     /** Theme ripple colour; 0 keeps the platform default background. */
     val rippleColor: Int = 0,
-    val cornerPx: Float = 16f
+    val cornerPx: Float = 16f,
+    /** Monogram plate colour for an app whose icon could not be resolved. */
+    val placeholderFill: Int = 0,
+    /** Monogram letter colour. */
+    val placeholderText: Int = 0,
+    /**
+     * Pressed-state scale. 1 disables the effect (reduced motion, or a theme
+     * whose character does not scale cells). Values below 0.94 read as a glitch,
+     * so the theme tokens never go further.
+     */
+    val pressScale: Float = 1f,
+    val pressMs: Int = 90,
+    /** Icon geometry for the monogram fallback, so it matches the theme's icons. */
+    val iconShape: com.lumaos.pro.launcher.ui.theme.IconShape =
+        com.lumaos.pro.launcher.ui.theme.IconShape.SQUIRCLE
 )
 
 class AppCellViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -90,10 +105,24 @@ class AppEntryAdapter(
                 holder.icon.layoutParams = iconParams
             }
             holder.icon.setImageDrawable(icon)
-            // The placeholder disc only shows while an icon is decoding.
-            holder.icon.background = if (icon == null) {
-                holder.icon.context.getDrawable(R.drawable.bg_icon_placeholder)
-            } else null
+            // While an icon decodes - or when it can never be resolved - the cell
+            // shows the app's initial in the active icon shape rather than a
+            // blank square. The app's own artwork is never recoloured.
+            if (icon == null) {
+                holder.icon.setImageDrawable(
+                    MonogramDrawable(
+                        label = label,
+                        fill = if (config.placeholderFill != 0) config.placeholderFill else 0x33FFFFFF,
+                        textColor = if (config.placeholderText != 0) config.placeholderText else 0xFFFFFFFF.toInt(),
+                        typeface = config.typeface,
+                        shape = config.iconShape,
+                        cornerRadiusPx = config.cornerPx
+                    )
+                )
+                holder.icon.background = null
+            } else {
+                holder.icon.background = null
+            }
 
             val cellParams = holder.itemView.layoutParams
             val targetHeight = config.cellHeightPx ?: ViewGroup.LayoutParams.WRAP_CONTENT
@@ -108,6 +137,7 @@ class AppEntryAdapter(
             config.typeface?.let { holder.label.typeface = it }
             holder.label.letterSpacing = config.labelTracking
             holder.label.visibility = if (config.showLabels) View.VISIBLE else View.GONE
+            attachPressFeedback(holder.itemView, config.pressScale, config.pressMs)
             if (config.labelShadow) {
                 holder.label.setShadowLayer(3f, 0f, 1f, config.labelShadowColor)
             } else {
@@ -121,7 +151,7 @@ class AppEntryAdapter(
             holder.itemView.contentDescription = description
         }
 
-        const val BASE_LABEL_SP = 12f
+        const val BASE_LABEL_SP = com.lumaos.pro.launcher.ui.theme.LumaTypeScale.appLabelSp
         const val SHADOW_COLOR = 0xB3000000.toInt()
     }
 }
@@ -132,4 +162,31 @@ private object AppEntryDiff : DiffUtil.ItemCallback<AppEntry>() {
 
     override fun areContentsTheSame(oldItem: AppEntry, newItem: AppEntry): Boolean =
         oldItem == newItem
+}
+
+/**
+ * Press feedback shared by every cell in the grid, dock, drawer and folders.
+ *
+ * The view shrinks slightly while a finger is down and springs back on release
+ * or cancel; the touch listener returns false so click, long-press and drag
+ * handling keep working. The whole effect is disabled (scale 1) when the user
+ * or the effects policy asks for reduced motion, and it never delays input.
+ */
+private fun attachPressFeedback(view: View, scale: Float, durationMs: Int) {
+    view.scaleX = 1f
+    view.scaleY = 1f
+    if (scale >= 1f || scale < 0.94f) {
+        view.setOnTouchListener(null)
+        return
+    }
+    view.setOnTouchListener { v, event ->
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN ->
+                v.animate().scaleX(scale).scaleY(scale).setDuration(durationMs.toLong()).start()
+            android.view.MotionEvent.ACTION_UP,
+            android.view.MotionEvent.ACTION_CANCEL ->
+                v.animate().scaleX(1f).scaleY(1f).setDuration(durationMs.toLong()).start()
+        }
+        false
+    }
 }

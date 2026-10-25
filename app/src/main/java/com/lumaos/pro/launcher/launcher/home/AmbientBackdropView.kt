@@ -40,6 +40,7 @@ class AmbientBackdropView @JvmOverloads constructor(
     private var fps = 24
     private var detail = true
     private var windowVisible = false
+    private var fallbackSolid = false
     private var phaseOrigin = SystemClock.uptimeMillis()
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
@@ -62,6 +63,17 @@ class AmbientBackdropView @JvmOverloads constructor(
         fadeMs = crossfadeMs
         fadeStart = SystemClock.uptimeMillis()
         rebuild()
+    }
+
+    /**
+     * Paints the theme background even when the plan expects a photographic
+     * surface behind it. Used when a bundled wallpaper cannot be decoded, so the
+     * home screen still has a legible, intentional backdrop.
+     */
+    fun setFallbackSolid(enabled: Boolean) {
+        if (fallbackSolid == enabled) return
+        fallbackSolid = enabled
+        invalidate()
     }
 
     fun setEffects(ambientMotion: Boolean, framesPerSecond: Int, atmosphereDetail: Boolean) {
@@ -94,6 +106,11 @@ class AmbientBackdropView @JvmOverloads constructor(
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0 || h <= 0) return
+        if (fallbackSolid) {
+            paint.shader = null
+            paint.color = theme?.colors?.background ?: ColorMath.BLACK
+            canvas.drawRect(0f, 0f, w, h, paint)
+        }
         val now = SystemClock.uptimeMillis()
         val fade = if (fadeMs <= 0) 1f else ((now - fadeStart) / fadeMs.toFloat()).coerceIn(0f, 1f)
         if (fade < 1f && previous.isNotEmpty()) {

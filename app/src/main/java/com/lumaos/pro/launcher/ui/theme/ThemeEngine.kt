@@ -129,7 +129,15 @@ object ThemeEngine {
         val background = settings.backgroundOverride?.let { ColorMath.opaque(it) } ?: base.background
         val dark = if (settings.backgroundOverride != null) ColorMath.isDark(background) else base.dark
         val accent = settings.accentOverride?.let { ColorMath.opaque(it) } ?: base.accent
-        val backdrop = settings.backdrop ?: base.defaultBackdrop
+        // LUMA is only meaningful for themes with bundled artwork. A backup or
+        // an older preference that asks for it elsewhere falls back to the
+        // theme's own atmosphere instead of a blank backdrop.
+        val requestedBackdrop = settings.backdrop ?: base.defaultBackdrop
+        val backdrop = if (requestedBackdrop == Backdrop.LUMA && WallpaperArt.forTheme(id) == null) {
+            Backdrop.THEME
+        } else {
+            requestedBackdrop
+        }
         val amoled = base.amoled && background == ColorMath.BLACK
         val spec = base.copy(
             dark = dark,
@@ -148,6 +156,7 @@ object ThemeEngine {
             displayName = base.displayName,
             colors = deriveColors(spec, backdrop, env.wallpaper),
             typography = settings.typography ?: base.typography,
+            motionCharacter = base.motionCharacter,
             iconShape = settings.iconShape ?: base.iconShape,
             iconStyle = settings.iconStyle ?: base.iconStyle,
             atmosphere = base.atmosphere,
@@ -272,14 +281,23 @@ object ThemeEngine {
             homeMuted = ColorMath.ensureContrast(muted, bg, 4.5)
             homeShadow = ColorMath.withAlpha(if (spec.dark) ColorMath.BLACK else ColorMath.WHITE, 0.30f)
         } else {
-            // Over an arbitrary wallpaper: pick the text colour from the
-            // wallpaper's own light/dark hint and back it with a shadow.
-            val lightWallpaper = wallpaper?.supportsDarkText ?: false
+            // Over a wallpaper: pick the text colour from the artwork's own
+            // light/dark property (bundled art knows itself; system wallpaper
+            // provides a platform hint when available) and back it with a shadow.
+            val lightWallpaper = if (backdrop == Backdrop.LUMA) {
+                WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+            } else {
+                wallpaper?.supportsDarkText ?: false
+            }
             homeForeground = if (lightWallpaper) 0xFF15171A.toInt() else ColorMath.WHITE
             homeMuted = ColorMath.withAlpha(homeForeground, 0.80f)
-            homeShadow = if (lightWallpaper) ColorMath.withAlpha(ColorMath.WHITE, 0.60f)
+            homeShadow = if (lightWallpaper) ColorMath.withAlpha(ColorMath.WHITE, 0.62f)
             else ColorMath.withAlpha(ColorMath.BLACK, 0.62f)
         }
+        // The semantic status palette is derived from these roles, so a
+        // customised accent automatically produces a matching info colour.
+        // `onSurface`-based roles remain correct because surfaces stay inside
+        // the dark/light crossover guarantees above.
 
         return ThemeColors(
             isDark = spec.dark,

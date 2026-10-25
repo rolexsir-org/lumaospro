@@ -57,23 +57,33 @@ object AtmospherePlan {
     fun layers(theme: ResolvedTheme, phase: Float, detail: Boolean): List<AtmosphereLayer> {
         val c = theme.colors
         val out = ArrayList<AtmosphereLayer>(8)
-        val wallpaper = theme.backdrop == Backdrop.WALLPAPER
+        val artwork = theme.backdrop.usesArtwork
+        val luma = theme.backdrop == Backdrop.LUMA
 
-        if (!wallpaper) out += AtmosphereLayer.Solid(c.background)
+        if (!artwork) out += AtmosphereLayer.Solid(c.background)
 
-        if (wallpaper) {
+        if (artwork) {
             // Legibility only: darken (or lighten) behind the clock and dock.
             // The scrim takes the same side as the text shadow: dark behind
-            // white text, light behind dark text.
+            // white text, light behind dark text. Bundled artwork declares its
+            // own scrim strengths; a system wallpaper uses balanced defaults.
             val darkScrim = ColorMath.isDark(ColorMath.opaque(c.homeShadow))
             val base = if (darkScrim) ColorMath.BLACK else ColorMath.WHITE
-            out += AtmosphereLayer.VerticalFade(0f, 0.34f, ColorMath.withAlpha(base, 0.30f), ColorMath.withAlpha(base, 0f))
-            out += AtmosphereLayer.VerticalFade(0.68f, 1f, ColorMath.withAlpha(base, 0f), ColorMath.withAlpha(base, 0.34f))
+            val art = if (luma) WallpaperArt.forTheme(theme.id) else null
+            val top = art?.scrimTop ?: 0.30f
+            val bottom = art?.scrimBottom ?: 0.34f
+            out += AtmosphereLayer.VerticalFade(0f, 0.34f, ColorMath.withAlpha(base, top), ColorMath.withAlpha(base, 0f))
+            out += AtmosphereLayer.VerticalFade(0.68f, 1f, ColorMath.withAlpha(base, 0f), ColorMath.withAlpha(base, bottom))
             if (theme.atmosphere == Atmosphere.HORIZON) {
                 out += AtmosphereLayer.Glow(0.5f, 1.08f, 0.62f, ColorMath.withAlpha(c.accent, 0.12f), 0.55f)
             }
             if (theme.atmosphere == Atmosphere.TINT) {
                 out += AtmosphereLayer.Glow(0.12f, 0.02f, 0.55f, ColorMath.withAlpha(c.accent, 0.12f), 0.7f)
+            }
+            // A whisper of the theme accent keeps the bundled art and the
+            // surface palette reading as one material without recolouring it.
+            if (luma) {
+                out += AtmosphereLayer.Glow(0.18f, 0.12f, 0.55f, ColorMath.withAlpha(c.accent, 0.06f), 0.8f)
             }
             return out
         }

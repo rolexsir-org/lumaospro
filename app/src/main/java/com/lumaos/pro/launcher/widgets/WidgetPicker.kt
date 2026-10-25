@@ -19,7 +19,9 @@ import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import java.util.concurrent.Executors
 
@@ -46,6 +48,8 @@ class WidgetPicker(
     fun show(providers: List<AppWidgetProviderInfo>, onPick: (AppWidgetProviderInfo) -> Unit) {
         dismiss()
         val c = theme.colors
+        val semantics = theme.semantics
+        val components = LumaComponents.of(theme)
         val pm = context.packageManager
         val ov = FrameLayout(context)
         val scrim = View(context).apply {
@@ -58,7 +62,8 @@ class WidgetPicker(
         val sheet = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = ThemedDrawables.topRounded(
-                ColorMath.withAlpha(c.surface0, theme.surfaceAlpha(effects.translucency)), theme.corner(24f) * density
+                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(effects.translucency)),
+                theme.corner(components.shapes.sheetDp) * density
             )
             setPadding(dp(20f), dp(14f), dp(20f), bottomInset + dp(12f))
             isClickable = true
@@ -66,13 +71,15 @@ class WidgetPicker(
         sheet.addView(TextView(context).apply {
             text = context.getString(R.string.widgets_title)
             setTextColor(c.onSurface)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
             typeface = Typefaces.title(theme.typography)
+            letterSpacing = theme.typography.titleTracking
         })
         sheet.addView(TextView(context).apply {
             text = context.getString(R.string.widgets_subtitle)
             setTextColor(c.onSurfaceMuted)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = Typefaces.body(theme.typography)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
             setPadding(0, dp(2f), 0, dp(10f))
         })
 
@@ -81,8 +88,10 @@ class WidgetPicker(
             list.addView(TextView(context).apply {
                 text = context.getString(R.string.widgets_empty)
                 setTextColor(c.onSurfaceMuted)
-                setPadding(0, dp(24f), 0, dp(24f))
+                typeface = Typefaces.body(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
                 gravity = Gravity.CENTER
+                setPadding(0, dp(24f), 0, dp(24f))
             })
         }
         val grouped = providers.groupBy { it.provider.packageName }.toSortedMap(compareBy {
@@ -93,7 +102,7 @@ class WidgetPicker(
             list.addView(TextView(context).apply {
                 text = if (theme.typography.readoutCaps) appLabel.uppercase() else appLabel
                 setTextColor(c.onSurfaceMuted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelMediumSp)
                 letterSpacing = theme.typography.readoutTracking
                 typeface = Typefaces.readout(theme.typography)
                 setPadding(0, dp(14f), 0, dp(6f))
@@ -127,7 +136,7 @@ class WidgetPicker(
         val preview = ImageView(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(96f), dp(64f)).apply { marginEnd = dp(14f) }
             scaleType = ImageView.ScaleType.FIT_CENTER
-            background = ThemedDrawables.surface(c.surface2, theme.corner(12f) * density)
+            background = ThemedDrawables.surface(c.surface2, theme.corner(components.shapes.controlDp) * density)
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
@@ -144,7 +153,7 @@ class WidgetPicker(
             setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
             isClickable = true
             isFocusable = true
-            background = ThemedDrawables.ripple(c.ripple, null, theme.corner(14f) * density)
+            background = ThemedDrawables.ripple(c.ripple, null, theme.corner(LumaComponents.of(theme).shapes.cellDp) * density)
             contentDescription = context.getString(R.string.widgets_row_description, label, cellsW, cellsH)
             setOnClickListener { onClick() }
             addView(preview)
@@ -153,13 +162,15 @@ class WidgetPicker(
                 addView(TextView(context).apply {
                     text = label
                     setTextColor(c.onSurface)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    typeface = Typefaces.body(theme.typography)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleSmallSp)
                     maxLines = 2
                 })
                 addView(TextView(context).apply {
                     text = context.getString(R.string.widgets_size, cellsW, cellsH)
                     setTextColor(c.onSurfaceMuted)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    typeface = Typefaces.body(theme.typography)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
                 })
             })
         }

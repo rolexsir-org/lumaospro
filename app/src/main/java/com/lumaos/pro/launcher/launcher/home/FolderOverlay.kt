@@ -21,7 +21,9 @@ import com.lumaos.pro.launcher.launcher.CellConfig
 import com.lumaos.pro.launcher.launcher.IconLoader
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 
 /**
@@ -65,6 +67,8 @@ class FolderOverlay(
         closeImmediately()
         val theme = host.theme()
         val c = theme.colors
+        val semantics = theme.semantics
+        val components = LumaComponents.of(theme)
         folderId = id
         originalName = name
 
@@ -80,10 +84,10 @@ class FolderOverlay(
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18f), dp(16f), dp(18f), dp(14f))
             background = ThemedDrawables.surface(
-                ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(host.translucency())),
-                theme.corner(28f) * dpScale, c.outline, 1
+                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(host.translucency())),
+                theme.corner(components.shapes.folderDp) * dpScale, semantics.dialogBorder, dp(1f)
             )
-            elevation = dp(18f).toFloat()
+            elevation = dp(components.surfaces.elevationDp + 6f).toFloat()
             isClickable = true
         }
 
@@ -91,22 +95,25 @@ class FolderOverlay(
             p.addView(TextView(context).apply {
                 text = name
                 setTextColor(c.onSurface)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
+                letterSpacing = theme.typography.titleTracking
                 setPadding(dp(6f), 0, dp(6f), 0)
             })
             p.addView(TextView(context).apply {
                 text = context.getString(R.string.smart_folder_hint)
                 setTextColor(c.onSurfaceMuted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
+                typeface = Typefaces.body(theme.typography)
                 setPadding(dp(6f), dp(2f), dp(6f), dp(8f))
             })
         } else {
             titleField = EditText(context).apply {
                 setText(name)
                 setTextColor(c.onSurface)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
+                letterSpacing = theme.typography.titleTracking
                 background = null
                 setPadding(dp(6f), dp(4f), dp(6f), dp(10f))
                 isSingleLine = true
@@ -146,7 +153,11 @@ class FolderOverlay(
             p.addView(TextView(context).apply {
                 text = context.getString(R.string.smart_folder_empty)
                 setTextColor(c.onSurfaceMuted)
+                typeface = Typefaces.body(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
                 gravity = Gravity.CENTER
+                setCompoundDrawablesRelativeWithIntrinsicBounds(0, R.drawable.ic_rx_folder, 0, 0)
+                compoundDrawablePadding = dp(10f)
                 setPadding(dp(12f), dp(24f), dp(12f), dp(24f))
             })
         }

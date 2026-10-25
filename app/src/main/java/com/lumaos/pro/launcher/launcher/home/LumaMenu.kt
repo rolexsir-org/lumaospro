@@ -17,7 +17,9 @@ import com.lumaos.pro.launcher.effects.EffectsDecision
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 
 /** One row in a [LumaMenu]. */
@@ -52,21 +54,23 @@ class LumaMenu(
 
     fun show(anchor: View, title: String?, entries: List<MenuEntry>, onSelect: (MenuEntry) -> Unit): PopupWindow {
         val c = theme.colors
-        val radius = theme.corner(18f) * density
+        val semantics = theme.semantics
+        val components = LumaComponents.of(theme)
+        val radius = theme.corner(components.shapes.menuDp) * density
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             background = ThemedDrawables.surface(
-                ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(effects.translucency)),
-                radius, c.outline, dp(1f).coerceAtLeast(1)
+                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(effects.translucency)),
+                radius, semantics.dialogBorder, dp(components.sizes.borderDp).coerceAtLeast(1)
             )
-            elevation = dp(14f).toFloat()
+            elevation = dp(components.surfaces.elevationDp + 4f).toFloat()
             minimumWidth = dp(220f)
         }
         val popup = PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true
-        popup.elevation = dp(14f).toFloat()
+        popup.elevation = dp(components.surfaces.elevationDp + 4f).toFloat()
 
         if (!title.isNullOrBlank()) {
             content.addView(TextView(context).apply {
@@ -74,7 +78,7 @@ class LumaMenu(
                 typeface = Typefaces.readout(theme.typography)
                 letterSpacing = theme.typography.readoutTracking
                 setTextColor(c.onSurfaceMuted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelMediumSp)
                 setPadding(dp(14f), dp(8f), dp(14f), dp(6f))
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             })
@@ -114,13 +118,16 @@ class LumaMenu(
         content.pivotY = if (above) h.toFloat() else 0f
         popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
 
-        if (motion.enabled) {
+        if (motion.enabled && !motion.reduced) {
+            // Enters from the theme's own popup scale; Void opens a little larger
+            // than Aurora, and both honour reduced motion by skipping this block.
+            val from = theme.motionProfile.popupScaleFrom
             content.alpha = 0f
-            content.scaleX = 0.92f
-            content.scaleY = 0.92f
+            content.scaleX = from
+            content.scaleY = from
             SpringAnimator(0f) { p ->
                 content.alpha = p.coerceIn(0f, 1f)
-                val s = 0.92f + 0.08f * p
+                val s = from + (1f - from) * p
                 content.scaleX = s
                 content.scaleY = s
             }.animateTo(1f, MotionTokens.SNAPPY, motion)
@@ -140,7 +147,10 @@ class LumaMenu(
             isClickable = true
             isFocusable = true
             contentDescription = entry.label
-            background = ThemedDrawables.ripple(c.ripple, null, theme.corner(12f) * density)
+            background = ThemedDrawables.ripple(
+                c.ripple, null,
+                theme.corner(LumaComponents.of(theme).shapes.controlDp) * density
+            )
             setOnClickListener { onClick() }
             val iconView = ImageView(context).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(22f), dp(22f)).apply { marginEnd = dp(14f) }
@@ -158,8 +168,8 @@ class LumaMenu(
             addView(TextView(context).apply {
                 text = entry.label
                 setTextColor(tint)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                typeface = Typefaces.label(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleSmallSp)
+                typeface = Typefaces.body(theme.typography)
                 maxLines = 2
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             })

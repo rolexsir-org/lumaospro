@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.core
 import android.app.Application
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.intelligence.StartupTracker
+import com.lumaos.pro.launcher.launcher.home.Typefaces
 
 /**
  * LumaOS Pro's application object.
@@ -21,6 +22,9 @@ class LumaApp : Application() {
         // First statement: the startup measurement is anchored here.
         StartupTracker.markProcessInit()
         super.onCreate()
+        // Resolve bundled typefaces from the application context once; the
+        // home screen and every overlay then share the same cached faces.
+        Typefaces.install(this)
         core = LumaCore(this)
         core.start()
         LumaLog.d("Application created")

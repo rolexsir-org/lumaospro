@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A hosted app widget spanning the full grid width; height = rows x cell height. -->
+<!--
+    A hosted app widget spanning the full grid width; height = rows x cell height.
+
+    The frame gives every third-party widget the same corner radius, inset and
+    fallback colour so widgets read as part of the home composition instead of
+    unrelated cards. The provider's own content is clipped to that outline, never
+    recoloured.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -7,19 +14,29 @@
     android:padding="6dp">
 
     <FrameLayout
-        android:id="@+id/widget_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <TextView
-        android:id="@+id/widget_missing"
+        android:id="@+id/widget_frame"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:padding="12dp"
-        android:text="@string/widget_unavailable"
-        android:textSize="13sp"
-        android:visibility="gone" />
+        android:background="@drawable/bg_widget_frame"
+        android:clipToOutline="true"
+        android:padding="8dp">
+
+        <FrameLayout
+            android:id="@+id/widget_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/widget_missing"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="12dp"
+            android:text="@string/widget_unavailable"
+            android:textAppearance="@style/TextAppearance.Luma.Caption"
+            android:textSize="12.5sp"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <!-- Edit mode: outline + resize handle -->
     <View

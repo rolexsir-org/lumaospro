@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LumaOS Pro icon: 24dp grid, 1.75dp stroke, round caps and joins, 3dp optical inset. Tinted at runtime. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3.5,12c2.8,-5.8 5.7,-5.8 8.5,0s5.7,5.8 8.5,0" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

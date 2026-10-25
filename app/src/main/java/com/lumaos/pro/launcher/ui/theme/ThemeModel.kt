@@ -31,34 +31,6 @@ enum class ThemeId(val storageKey: String) {
     }
 }
 
-/** Typographic voice. Families are platform fonts available on every Android 8+ device. */
-enum class TypeStyle(
-    val storageKey: String,
-    /** Typeface family for the large clock numerals. */
-    val clockFamily: String,
-    /** Letter spacing (em) for the clock. */
-    val clockTracking: Float,
-    /** Family for app labels and body text. */
-    val labelFamily: String,
-    val labelTracking: Float,
-    /** Family for small instrument readouts (date, battery, alarm). */
-    val readoutFamily: String,
-    /** Readouts rendered in capitals with open tracking. */
-    val readoutCaps: Boolean,
-    val readoutTracking: Float,
-    /** Family for titles (drawer title, folder names, section headers). */
-    val titleFamily: String
-) {
-    PRECISION("precision", "sans-serif-thin", -0.03f, "sans-serif", 0f, "sans-serif-condensed", true, 0.14f, "sans-serif-light"),
-    GROTESK("grotesk", "sans-serif-medium", -0.055f, "sans-serif-medium", -0.01f, "sans-serif-medium", false, 0.01f, "sans-serif-medium"),
-    SERIF("serif", "serif", -0.03f, "sans-serif", 0f, "serif", false, 0.02f, "serif"),
-    MONO("mono", "monospace", -0.06f, "sans-serif-condensed", 0.02f, "monospace", true, 0.12f, "monospace");
-
-    companion object {
-        fun fromStorageKey(raw: String?): TypeStyle? = entries.firstOrNull { it.storageKey == raw }
-    }
-}
-
 /** Mask applied to every app icon. SYSTEM keeps the device's own adaptive-icon mask. */
 enum class IconShape(val storageKey: String) {
     SYSTEM("system"),
@@ -97,12 +69,24 @@ enum class Atmosphere { NONE, HORIZON, AURORA, GRID, HALO, TINT }
 /** Material of elevated surfaces (drawer sheet, menus, folders, dock). */
 enum class SurfaceStyle { SOLID, TRANSLUCENT, GLASS }
 
-/** What sits behind the home screen. */
+/**
+ * What sits behind the home screen.
+ *
+ * THEME paints LumaOS Pro's own atmosphere (no wallpaper compositing, the
+ * cheapest and most power-efficient choice). WALLPAPER shows the user's system
+ * wallpaper with legibility gradients. LUMA shows the art-directed wallpaper
+ * bundled with the active signature theme, cropped rather than stretched.
+ */
 enum class Backdrop(val storageKey: String) {
     /** The system wallpaper, with legibility gradients only. */
     WALLPAPER("wallpaper"),
     /** LumaOS Pro's own atmospheric background; the wallpaper is not composited. */
-    THEME("theme");
+    THEME("theme"),
+    /** A bundled, art-directed LumaOS wallpaper for the active theme. */
+    LUMA("luma");
+
+    /** True when a photographic surface (system or bundled art) is behind the UI. */
+    val usesArtwork: Boolean get() = this != THEME
 
     companion object {
         fun fromStorageKey(raw: String?): Backdrop? = entries.firstOrNull { it.storageKey == raw }
@@ -124,6 +108,8 @@ data class ThemeSpec(
     /** OKLCH chroma for neutral surfaces (0 = pure grey). */
     val neutralChroma: Double,
     val typography: TypeStyle,
+    /** How this theme moves; see [MotionProfile]. */
+    val motionCharacter: MotionCharacter,
     val iconShape: IconShape,
     val iconStyle: IconStyle,
     val atmosphere: Atmosphere,
@@ -211,6 +197,7 @@ data class ResolvedTheme(
     val displayName: String,
     val colors: ThemeColors,
     val typography: TypeStyle,
+    val motionCharacter: MotionCharacter,
     val iconShape: IconShape,
     val iconStyle: IconStyle,
     val atmosphere: Atmosphere,
@@ -219,6 +206,12 @@ data class ResolvedTheme(
     val cornerScale: Float
 ) {
     val isDark: Boolean get() = colors.isDark
+
+    /** Semantic roles, including status/disabled/overlay colours, derived from [colors]. */
+    val semantics: SemanticColors by lazy(LazyThreadSafetyMode.NONE) { SemanticPalette.of(colors) }
+
+    /** Motion tokens for this theme's character. */
+    val motionProfile: MotionProfile get() = LumaMotionProfiles.of(motionCharacter)
 
     /** Corner radius in dp for a given base radius, scaled by the theme's geometry. */
     fun corner(baseDp: Float): Float = baseDp * cornerScale
@@ -255,6 +248,7 @@ object ThemePresets {
         neutralTint = 0xFFB5C5A9.toInt(),
         neutralChroma = 0.006,
         typography = TypeStyle.PRECISION,
+        motionCharacter = MotionCharacter.SUBTLE,
         iconShape = IconShape.SYSTEM,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.NONE,
@@ -275,6 +269,7 @@ object ThemePresets {
         neutralTint = 0xFF8FA3B5.toInt(),
         neutralChroma = 0.010,
         typography = TypeStyle.GROTESK,
+        motionCharacter = MotionCharacter.SUBTLE,
         iconShape = IconShape.SQUIRCLE,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.HORIZON,
@@ -298,13 +293,14 @@ object ThemePresets {
         secondary = 0xFFE28BCB.toInt(),
         neutralTint = 0xFF5857B8.toInt(),
         neutralChroma = 0.032,
-        typography = TypeStyle.MONO,
+        typography = TypeStyle.GROTESK,
+        motionCharacter = MotionCharacter.EXPRESSIVE,
         iconShape = IconShape.OCTAGON,
         iconStyle = IconStyle.PLATE,
         atmosphere = Atmosphere.GRID,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.THEME,
-        cornerScale = 0.68f
+        defaultBackdrop = Backdrop.LUMA,
+        cornerScale = 0.82f
     )
 
     /** Backwards-compatible source name; the persisted ID is still `vector`. */
@@ -322,12 +318,13 @@ object ThemePresets {
         neutralTint = 0xFF5B7592.toInt(),
         neutralChroma = 0.016,
         typography = TypeStyle.PRECISION,
+        motionCharacter = MotionCharacter.SUBTLE,
         iconShape = IconShape.SQUIRCLE,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.AURORA,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.THEME,
-        cornerScale = 1.12f
+        defaultBackdrop = Backdrop.LUMA,
+        cornerScale = 1.0f
     )
 
     /**
@@ -345,13 +342,14 @@ object ThemePresets {
         secondary = 0xFF637E87.toInt(),
         neutralTint = 0xFF83918A.toInt(),
         neutralChroma = 0.008,
-        typography = TypeStyle.SERIF,
+        typography = TypeStyle.SERENE,
+        motionCharacter = MotionCharacter.QUIET,
         iconShape = IconShape.ROUNDED,
         iconStyle = IconStyle.PLATE,
         atmosphere = Atmosphere.HALO,
         surfaceStyle = SurfaceStyle.SOLID,
-        defaultBackdrop = Backdrop.THEME,
-        cornerScale = 1.1f
+        defaultBackdrop = Backdrop.LUMA,
+        cornerScale = 1.08f
     )
 
     /** Backwards-compatible source name; the persisted ID is still `porcelain`. */
@@ -369,7 +367,8 @@ object ThemePresets {
         secondary = 0xFFE0B8D8.toInt(),
         neutralTint = 0xFF7C9CBF.toInt(),
         neutralChroma = 0.018,
-        typography = TypeStyle.GROTESK,
+        typography = TypeStyle.PRECISION,
+        motionCharacter = MotionCharacter.SUBTLE,
         iconShape = IconShape.SYSTEM,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.TINT,
