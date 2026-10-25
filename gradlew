@@ -1,7 +1,11 @@
 #!/bin/sh
 
+# AGP 8+ throws AndroidLocationsException if both ANDROID_PREFS_ROOT and ANDROID_USER_HOME are set.
+unset ANDROID_PREFS_ROOT
+
+
 #
-# Copyright © 2015-2021 the original author or authors.
+# Copyright © 2015-2021 the original authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +19,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 
 ##############################################################################
 #
@@ -24,28 +30,41 @@
 #
 #   (1) You need a POSIX-compliant shell to run this script. If your /bin/sh is
 #       noncompliant, but you have some other compliant shell such as ksh or
-#       bash, to run this script, type that shell name before the whole
+#       bash, then to run this script, type that shell name before the whole
 #       command line, like:
 #
 #           ksh Gradle
 #
-#       Busybox and similar reduced user space shells might not be fully
-#       POSIX compliant either.
+#       Busybox and similar reduced shells will NOT work, because this script
+#       requires all of these POSIX shell features:
+#         * functions;
+#         * expansions «$var», «${var}», «${var:-default}», «${var+SET}»,
+#           «${var#prefix}», «${var%suffix}», and «$( cmd )»;
+#         * compound commands having a testable exit status, especially «case»;
+#         * various built-in commands including «command», «set», and «ulimit».
 #
-#   (2) If you have a non-standard shell, you may need to change the
-#       command line limit. In some shells, the command line limit is
-#       set by the getconf argument ARG_MAX. Check the output of
-#       'getconf ARG_MAX' and use this as the -n argument to xargs.
-#       For example, if ARG_MAX is 262144, use:
+#   Important for patching:
 #
-#           xargs -n 262144
+#   (2) This script targets any POSIX shell, so it avoids extensions provided
+#       by Bash, Ksh, etc; in particular arrays are avoided.
 #
-#       If you are using a shell with a small command line limit, you can
-#       use the special '@' notation to have xargs pass the arguments in
-#       batches.
+#       The "traditional" practice of packing multiple parameters into a
+#       space-separated string is a well documented source of bugs and security
+#       problems, so this is (mostly) avoided, by progressively accumulating
+#       options in "$@", and eventually passing that to Java.
 #
-#   (3) Make sure that your locale is set to a value that Gradle supports.
-#       Gradle only supports ASCII and UTF-8 encoded locales.
+#       Where the inherited environment variables (DEFAULT_JVM_OPTS, JAVA_OPTS,
+#       and GRADLE_OPTS) rely on word-splitting, this is performed explicitly;
+#       see the in-line comments for details.
+#
+#       There are tweaks for specific operating systems such as AIX, CygWin,
+#       Darwin, MinGW, and NonStop.
+#
+#   (3) This script is generated from the Groovy template
+#       https://github.com/gradle/gradle/blob/HEAD/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
+#       within the Gradle project.
+#
+#       You can find Gradle at https://github.com/gradle/gradle/.
 #
 ##############################################################################
 
@@ -59,15 +78,19 @@ while
     APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
     [ -h "$app_path" ]
 do
-    ls=$( ls -ld -- "$app_path" )
+    ls=$( ls -ld "$app_path" )
     link=${ls#*' -> '}
-    app_path=$( readlink -f -- "$app_path" || echo $link )
+    case $link in             #(
+      /*)   app_path=$link ;; #(
+      *)    app_path=$APP_HOME$link ;;
+    esac
 done
 
 # This is normally unused
 # shellcheck disable=SC2034
 APP_BASE_NAME=${0##*/}
-APP_HOME=$( cd "${APP_HOME:-./}" > /dev/null && pwd -P ) || exit
+# Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
+APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
 
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
@@ -92,7 +115,7 @@ case "$( uname )" in                #(
   CYGWIN* )         cygwin=true  ;; #(
   Darwin* )         darwin=true  ;; #(
   MSYS* | MINGW* )  msys=true    ;; #(
-  NonStop* )        nonstop=true ;;
+  NONSTOP* )        nonstop=true ;;
 esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
@@ -100,9 +123,13 @@ CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
-    if [ -x "$JAVA_HOME/bin/java" ] ; then
-        JAVACMD=$JAVA_HOME/bin/java
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD=$JAVA_HOME/jre/sh/java
     else
+        JAVACMD=$JAVA_HOME/bin/java
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
         die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
 
 Please set the JAVA_HOME variable in your environment to match the
@@ -123,115 +150,106 @@ fi
 if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     case $MAX_FD in #(
       max*)
+        # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
         MAX_FD=$( ulimit -H -n ) ||
             warn "Could not query maximum file descriptor limit"
-      ;;
     esac
     case $MAX_FD in  #(
       '' | soft) :;; #(
-      *)              
+      *)
+        # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
         ulimit -n "$MAX_FD" ||
             warn "Could not set maximum file descriptor limit to $MAX_FD"
-      ;;
     esac
 fi
 
-# Collect all arguments for the java command, following the shell quoting and substitution rules
-# We will eval them later to handle the quoting properly
-eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$@"
+# Collect all arguments for the java command, stacking in reverse order:
+#   * args from the command line
+#   * the main class name
+#   * -classpath
+#   * -D...appname settings
+#   * --module-path (only if needed)
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
 
-# by default we should be in the correct project dir, but when run from Finder on Mac, the cwd is wrong
-if [ "$( uname )" = "Darwin" ] && [ "$HOME" = "$PWD" ] ; then
-  cd "$( echo "$0" | sed -e 's:/[^/]*$::' )"
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if "$cygwin" || "$msys" ; then
+    APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+    CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
+
+    JAVACMD=$( cygpath --unix "$JAVACMD" )
+
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    for arg do
+        if
+            case $arg in                                #(
+              -*)   false ;;                            # don't mess with options #(
+              /?*)  t=${arg#/} t=/${t%%/*}              # looks like a POSIX filepath
+                    [ -e "$t" ] ;;                      #(
+              *)    false ;;
+            esac
+        then
+            arg=$( cygpath --path --ignore --mixed "$arg" )
+        fi
+        # Roll the args list around exactly as many times as the number of
+        # args, so each arg winds up back in the position where it started, but
+        # possibly modified.
+        #
+        # NB: a `for` loop captures its iteration list before it begins, so
+        # changing the positional parameters here affects neither the number of
+        # iterations, nor the values presented in `arg`.
+        shift                   # remove old arg
+        set -- "$@" "$arg"      # push replacement arg
+    done
 fi
 
-# Sourced from: https://github.com/ansible/ansible/blob/devel/lib/ansible/utils/shlex.py
-# The original file is licensed under GNU GPLv3:
-#   https://www.gnu.org/licenses/gpl-3.0.html
-__gradlew_shlex_split() {
-    # named arguments
-    declare -g __gradlew_result=()
-    declare -g __gradlew_index=0
-    declare -g __gradlew_start=0
-    declare -g __gradlew_current=0
-    declare -g __gradlew_nesting=0
-    declare -g __gradlew_escaped=0
 
-    # positional arguments
-    local __gradlew_str="$1"
-    local __gradlew_len=${#__gradlew_str}
-    local __gradlew_char
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS='-Dfile.encoding=UTF-8 "-Xmx64m" "-Xms64m"'
 
-    while [ $__gradlew_current -lt $__gradlew_len ]; do
-        __gradlew_char="${__gradlew_str:$__gradlew_current:1}"
+# Collect all arguments for the java command:
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and optsEnvironmentVar are not allowed to contain shell fragments,
+#     and any embedded shellness will be escaped.
+#   * For example: A user cannot expect ${Hostname} to be expanded, as it is an environment variable and will be
+#     treated as '${Hostname}' itself on the command line.
 
-        if [ $__gradlew_escaped -eq 1 ]; then
-            __gradlew_result[$__gradlew_index]+="$__gradlew_char"
-            __gradlew_escaped=0
-        elif [ "$__gradlew_char" = '\\' ]; then
-            __gradlew_escaped=1
-        elif [ "$__gradlew_char" = '"' ] && [ $((__gradlew_nesting % 2)) -eq 0 ]; then
-            __gradlew_nesting=$((__gradlew_nesting + 1))
-        elif [ "$__gradlew_char" = ' ' ] && [ $__gradlew_nesting -eq 0 ]; then
-            __gradlew_index=$((__gradlew_index + 1))
-            __gradlew_start=$((__gradlew_current + 1))
-        else
-            __gradlew_result[$__gradlew_index]+="$__gradlew_char"
-        fi
+set -- \
+        "-Dorg.gradle.appname=$APP_BASE_NAME" \
+        -classpath "$CLASSPATH" \
+        org.gradle.wrapper.GradleWrapperMain \
+        "$@"
 
-        __gradlew_current=$((__gradlew_current + 1))
-    done
-}
-
-__gradlew_concat_array() {
-    local __gradlew_array_name="$1"
-    local __gradlew_result=""
-    local __gradlew_i=0
-    local __gradlew_size=${#__gradlew_array_name[@]}
-
-    for ((__gradlew_i=0; __gradlew_i<__gradlew_size; __gradlew_i++)); do
-        __gradlew_result+="${!__gradlew_array_name[$__gradlew_i]} "
-    done
-
-    echo "$__gradlew_result"
-}
-
-__gradlew_split_args() {
-    local __gradlew_args="$1"
-    __gradlew_shlex_split "$__gradlew_args"
-    __gradlew_concat_array "__gradlew_result"
-}
-
-# Check that the JVM can handle the maximum number of files which might be open.
-# This is the actual test for the JVM, not for the shell which was tested above.
-# This step is skipped if we are using the default setting (maximum) and the
-# ulimit for maximum file descriptors is in the thousands.
-# We assume that the JVM can handle up to the ulimit for file descriptors.
-if [ "$MAX_FD" != "maximum" ] && [ "$MAX_FD" != "soft" ] ; then
-    # Test the JVM maximum file descriptors
-    case $MAX_FD in
-      '')
-        ;;
-      *)
-        # We need to check whether the JVM can handle this many file descriptors.
-        # Note: this is not a perfect test as we are only trying to open the number
-        #       of file descriptors specified by MAX_FD, but the JVM may use more
-        #       internally. This test is a heuristic to catch obvious cases.
-        eval "exec 3>&-" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            # Try to open as many file descriptors as MAX_FD
-            eval "exec {0..$((MAX_FD-1))}>&-" > /dev/null 2>&1
-            if [ $? -ne 0 ]; then
-                echo "Gradle could not configure the JVM to use more than $MAX_FD file descriptors."
-                echo "Please set MAX_FD to a lower value in your gradlew script or set it to 'maximum' to use the system limit."
-                exit 1
-            fi
-            # Close the file descriptors
-            eval "exec {0..$((MAX_FD-1))}>&-" > /dev/null 2>&1
-        fi
-        ;;
-    esac
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
 fi
 
-# Run the command
+# Use "xargs" to parse quoted args.
+#
+# With -n1 it outputs one arg per line, with the quotes and backslashes removed.
+#
+# In Bash we could simply go:
+#
+#   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
+#   set -- "${ARGS[@]}" "$@"
+#
+# but POSIX shell has neither arrays nor command substitution, so instead we
+# post-process each arg (as a line of input to sed) to backslash-escape any
+# character that might be a shell metacharacter, then use eval to reverse
+# that process (while maintaining the separation between arguments), and wrap
+# the whole thing up as a single "set" statement.
+#
+# This will of course break if any of these variables contains a newline or
+# an unmatched quote.
+#
+
+eval "set -- $(
+        printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+        xargs -n1 |
+        sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+        tr '\n' ' '
+    )" '"$@"'
+
 exec "$JAVACMD" "$@"

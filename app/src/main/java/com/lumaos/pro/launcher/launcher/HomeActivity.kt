@@ -1190,9 +1190,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.94f),
                     ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.14f else 0.66f),
                     ColorMath.withAlpha(c.outlineStrong, 0.5f),
-                    t.corner(comps.shapes.dockDp) * d, d
+                    t.corner(comps.shapes.dockDp) * d,
+                    dp(1)
                 )
-                dockSurface.elevation = if (effects.iconDepth) dp(comps.surfaces.elevationDp * 0.5f).toFloat() else 0f
+                dockSurface.elevation = if (effects.iconDepth) comps.surfaces.elevationDp * 0.5f * d else 0f
             }
             DockStyle.FLOAT -> {
                 lp.marginStart = dp(34); lp.marginEnd = dp(34)
@@ -1200,9 +1201,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency)),
                     ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.16f else 0.76f),
                     ColorMath.withAlpha(c.outlineStrong, 0.46f),
-                    dp(36).toFloat(), d
+                    dp(36).toFloat(),
+                    dp(1)
                 )
-                dockSurface.elevation = if (effects.iconDepth) dp(comps.surfaces.elevationDp).toFloat() else 0f
+                dockSurface.elevation = if (effects.iconDepth) comps.surfaces.elevationDp * d else 0f
             }
             DockStyle.MINIMAL -> {
                 lp.marginStart = dp(16); lp.marginEnd = dp(16)

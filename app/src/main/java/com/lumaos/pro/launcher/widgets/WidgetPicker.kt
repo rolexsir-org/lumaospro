@@ -136,7 +136,7 @@ class WidgetPicker(
         val preview = ImageView(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(96f), dp(64f)).apply { marginEnd = dp(14f) }
             scaleType = ImageView.ScaleType.FIT_CENTER
-            background = ThemedDrawables.surface(c.surface2, theme.corner(components.shapes.controlDp) * density)
+            background = ThemedDrawables.surface(c.surface2, theme.corner(LumaComponents.of(theme).shapes.controlDp) * density)
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }

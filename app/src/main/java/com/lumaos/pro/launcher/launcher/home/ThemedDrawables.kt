@@ -47,7 +47,7 @@ class BezelDrawable(
     private val rimTop: Int,
     private val rimBottom: Int,
     private val radiusPx: Float,
-    private val strokePx: Float
+    private val strokePx: Int
 ) : Drawable() {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -62,9 +62,9 @@ class BezelDrawable(
         paint.color = fill
         canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = strokePx
+        paint.strokeWidth = strokePx.toFloat()
         paint.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, rimTop, rimBottom, Shader.TileMode.CLAMP)
-        val half = strokePx / 2
+        val half = strokePx / 2f
         rect.inset(half, half)
         canvas.drawRoundRect(rect, radiusPx - half, radiusPx - half, paint)
         paint.shader = null

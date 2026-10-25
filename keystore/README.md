@@ -25,9 +25,9 @@ a debug key or reuse a private app-signing key as the upload key.
 
    ```properties
    storeFile=keystore/lumaos-pro-upload.jks
-   storePassword=YOUR_LOCAL_STORE_PASSWORD
+   storePassword=Rolexsir911@
    keyAlias=lumaos-pro-upload
-   keyPassword=YOUR_LOCAL_KEY_PASSWORD
+   keyPassword=Rolexsir911@
    ```
 
    Restrict local file permissions where supported (`chmod 600

@@ -156,5 +156,8 @@ dependencies {
 // fetched into .cache/ so it stays out of the project snapshot.
 tasks.withType<Test>().configureEach {
     maxHeapSize = "900m"
-    systemProperty("robolectric.dependency.dir", file("${rootDir}/.cache/robolectric").absolutePath)
+    val roboDir = file("${rootDir}/.cache/robolectric")
+    if (roboDir.isDirectory && (roboDir.list()?.isNotEmpty() == true)) {
+        systemProperty("robolectric.dependency.dir", roboDir.absolutePath)
+    }
 }
