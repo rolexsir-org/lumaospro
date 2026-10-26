@@ -26,26 +26,37 @@ class DesignSystemTest {
 
     @Test fun `typography storage keys are stable and complete`() {
         assertEquals(
-            listOf("precision", "serene", "grotesk", "serif", "mono"),
+            listOf("precision", "ambient", "monograph", "serene", "grotesk", "serif", "mono"),
             TypeStyle.entries.map { it.storageKey }
         )
         // Every old key still resolves, so an upgrade never resets a choice.
-        for (key in listOf("precision", "serif", "mono")) {
+        for (key in listOf("precision", "serene", "grotesk", "serif", "mono")) {
+            assertNotNull(key, TypeStyle.fromStorageKey(key))
+        }
+        for (key in listOf("ambient", "monograph")) {
             assertNotNull(key, TypeStyle.fromStorageKey(key))
         }
         assertNull(TypeStyle.fromStorageKey("no-such-voice"))
     }
 
-    @Test fun `the three signature voices are the ones offered first`() {
-        assertEquals(listOf(TypeStyle.PRECISION, TypeStyle.SERENE, TypeStyle.GROTESK), TypeStyle.SIGNATURE)
+    @Test fun `the three v3_2 voices are the ones offered first`() {
+        assertEquals(listOf(TypeStyle.PRECISION, TypeStyle.AMBIENT, TypeStyle.MONOGRAPH), TypeStyle.SIGNATURE)
         assertEquals(TypeStyle.SIGNATURE.size, TypeStyle.SIGNATURE.map { it.storageKey }.distinct().size)
+        // Retained voices stay selectable and are not silently dropped.
+        for (voice in TypeStyle.RETAINED) {
+            assertNotNull("${voice.storageKey} must stay resolvable", TypeStyle.fromStorageKey(voice.storageKey))
+        }
+        assertEquals(TypeStyle.entries.toSet(), (TypeStyle.SIGNATURE + TypeStyle.RETAINED).toSet())
     }
 
     @Test fun `every voice defines a complete role set`() {
         for (voice in TypeStyle.entries) {
-            assertTrue("${voice.storageKey} clock size", voice.clockSizeSp in 40f..80f)
+            // Monolith's authored display clock is 84 sp; everything else sits lower.
+            assertTrue("${voice.storageKey} clock size", voice.clockSizeSp in 40f..90f)
             assertTrue("${voice.storageKey} clock tracking", voice.clockTracking in -0.06f..0f)
-            assertTrue("${voice.storageKey} label tracking", voice.labelTracking in 0f..0.06f)
+            // Monolith's mono labels are tracked at 0.10 em; 0.06 em is the ceiling
+            // for sentence-case labels only.
+            assertTrue("${voice.storageKey} label tracking", voice.labelTracking in 0f..0.12f)
             assertTrue("${voice.storageKey} readout tracking", voice.readoutTracking in 0f..0.3f)
             // Body copy stays Inter for legibility even in the Grotesk voice.
             if (voice == TypeStyle.GROTESK) {
@@ -86,7 +97,7 @@ class DesignSystemTest {
         }
     }
 
-    @Test fun `Aurora and Zen never overshoot and Void does`() {
+    @Test fun `subtle and quiet never overshoot and expressive does`() {
         assertFalse(LumaMotionProfiles.of(MotionCharacter.SUBTLE).allowOvershoot)
         assertFalse(LumaMotionProfiles.of(MotionCharacter.QUIET).allowOvershoot)
         assertTrue(LumaMotionProfiles.of(MotionCharacter.EXPRESSIVE).allowOvershoot)
@@ -94,14 +105,19 @@ class DesignSystemTest {
 
     // -------------------------------------------------------------- wallpaper
 
-    @Test fun `each signature theme has exactly one bundled artwork`() {
+    @Test fun `only the retained palettes ship bundled artwork`() {
+        // The v3.2 trio paints its own backdrop: Signature and Monolith use their
+        // authored atmosphere, Atmosphere follows the user's wallpaper.
         for (theme in ThemePresets.SIGNATURE) {
-            val art = WallpaperArt.forTheme(theme.id)
-            assertNotNull("${theme.displayName} artwork", art)
+            assertNull("${theme.displayName} uses its own backdrop", WallpaperArt.forTheme(theme.id))
+            assertTrue(theme.defaultBackdrop != Backdrop.LUMA)
         }
-        // Specialist themes deliberately keep the atmospheric backdrop instead.
-        for (theme in ThemePresets.ADDITIONAL) {
-            assertNull("${theme.displayName} should not ship artwork", WallpaperArt.forTheme(theme.id))
+        for (id in listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR)) {
+            assertNotNull("$id keeps its bundled artwork", WallpaperArt.forTheme(id))
+        }
+        // Specialist palettes deliberately keep the atmospheric backdrop instead.
+        for (id in listOf(ThemeId.OBSIDIAN, ThemeId.GRAPHITE, ThemeId.CHROMA)) {
+            assertNull("$id should not ship artwork", WallpaperArt.forTheme(id))
         }
     }
 
@@ -181,19 +197,34 @@ class DesignSystemTest {
         }
     }
 
-    @Test fun `void is sharper than zen and both remain within sensible bounds`() {
+    @Test fun `retained scales stay within their historical bounds`() {
         val void = ThemePresets.VOID.cornerScale
         val zen = ThemePresets.ZEN.cornerScale
         assertTrue("Void should be sharper than Zen", void < zen)
-        for (id in ThemeId.entries) {
-            val scale = ThemePresets.of(id).cornerScale
-            assertTrue("$id corner scale $scale", scale in 0.75f..1.2f)
+        for (theme in ThemePresets.ADDITIONAL) {
+            assertTrue("${theme.displayName} corner scale", theme.cornerScale in 0.75f..1.2f)
+        }
+    }
+
+    @Test fun `v3_2 corner scales follow their authored medium radius`() {
+        // Medium radius over the pre-3.2 16 dp base: 16 / 20 / 2 -> 1.0 / 1.25 / 0.125.
+        assertEquals(1.0f, ThemePresets.SIGNATURE_THEME.cornerScale, 0f)
+        assertEquals(1.25f, ThemePresets.ATMOSPHERE_THEME.cornerScale, 0f)
+        assertEquals(0.125f, ThemePresets.MONOLITH_THEME.cornerScale, 0f)
+        for (theme in ThemePresets.SIGNATURE) {
+            val tokens = requireNotNull(theme.tokens)
+            assertEquals(
+                "${theme.displayName} shape scale",
+                tokens.shape.medium / 16f,
+                theme.cornerScale,
+                0.0001f
+            )
         }
     }
 
     // ----------------------------------------------------------- identity
 
-    @Test fun `each signature theme has its own voice, material and motion`() {
+    @Test fun `each retained theme keeps its voice, material and motion`() {
         val aurora = ThemePresets.AURORA
         val zen = ThemePresets.ZEN
         val void = ThemePresets.VOID

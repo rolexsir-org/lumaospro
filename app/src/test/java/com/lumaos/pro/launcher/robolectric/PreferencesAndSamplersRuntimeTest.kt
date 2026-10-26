@@ -86,7 +86,9 @@ class PreferencesAndSamplersRuntimeTest {
         assertEquals(ThemeMode.SYSTEM, prefs.themeMode.first())
         val theme = prefs.themeSettings.first()
         assertEquals(ThemeSwitching.SYSTEM, theme.switching)
-        assertEquals(ThemeId.AURORA, theme.darkThemeId)
+        // Design System v3.2 defaults: Signature in dark, the retained paper Zen in light.
+        assertEquals(ThemeId.SIGNATURE, theme.darkThemeId)
+        assertEquals(ThemeId.SIGNATURE, theme.themeId)
         assertEquals(ThemeId.PORCELAIN, theme.lightThemeId)
         assertEquals(true, prefs.showLabels.first())
         assertEquals(1.0f, prefs.textScale.first(), 0f)

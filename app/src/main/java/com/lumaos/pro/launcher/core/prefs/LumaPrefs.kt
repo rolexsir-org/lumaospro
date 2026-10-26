@@ -119,7 +119,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 ThemeMode.SYSTEM -> p[Keys.THEME_SWITCHING] = ThemeSwitching.SYSTEM.storageKey
                 ThemeMode.LIGHT, ThemeMode.DARK -> {
                     val pairKey = if (mode == ThemeMode.LIGHT) Keys.THEME_LIGHT_ID else Keys.THEME_DARK_ID
-                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.AURORA
+                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.SIGNATURE
                     val id = ThemeId.fromStorageKey(p[pairKey]) ?: fallback
                     p[Keys.THEME_ID] = id.storageKey
                     p[Keys.THEME_SWITCHING] = ThemeSwitching.FIXED.storageKey
@@ -157,7 +157,9 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
      *
      * Users of 0.1 had only a light/dark/system switch. Explicit legacy light
      * and dark choices keep their familiar presets; new installs follow the
-     * system and use the Aurora/Zen pair. Preset storage keys stay stable.
+     * system and use the Signature (dark) / Zen (light) pair, which is Design
+     * System v3.2's dark-first trio plus the retained paper palette. Preset
+     * storage keys stay stable, so nothing is rewritten on upgrade.
      */
     val themeSettings: Flow<ThemeSettings> = dataStore.data
         .catch { e ->
@@ -178,8 +180,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         }
         val themeId = explicitId ?: when (legacy) {
             ThemeMode.LIGHT -> ThemeId.PORCELAIN
-            ThemeMode.DARK -> ThemeId.GRAPHITE
-            else -> ThemeId.AURORA
+            ThemeMode.DARK -> ThemeId.SIGNATURE
+            else -> ThemeId.SIGNATURE
         }
         val profileThemes = ContextProfile.entries.mapNotNull { profile ->
             ThemeId.fromStorageKey(p[profileThemeKey(profile)])?.let { profile to it }
@@ -188,7 +190,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
             themeId = themeId,
             switching = switching,
             lightThemeId = ThemeId.fromStorageKey(p[Keys.THEME_LIGHT_ID]) ?: ThemeId.PORCELAIN,
-            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.AURORA,
+            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.SIGNATURE,
             darkWindow = DarkWindow.decode(p[Keys.THEME_DARK_WINDOW]),
             accentOverride = p[Keys.ACCENT_OVERRIDE],
             backgroundOverride = p[Keys.BACKGROUND_OVERRIDE],

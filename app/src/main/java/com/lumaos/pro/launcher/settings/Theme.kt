@@ -115,7 +115,7 @@ fun LumaOSTheme(
 ) {
     val dark = themeMode.resolveDark(isSystemInDarkTheme())
     val theme = ThemeEngine.resolve(
-        ThemeSettings().pinned(if (dark) ThemeId.AURORA else ThemeId.PORCELAIN),
+        ThemeSettings().pinned(if (dark) ThemeId.SIGNATURE else ThemeId.PORCELAIN),
         ThemeEnvironment(systemDark = dark, minuteOfDay = 0)
     )
     LumaOSTheme(theme = theme, textScale = textScale, content = content)

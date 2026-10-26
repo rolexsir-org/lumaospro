@@ -1,4 +1,4 @@
-# LumaOS Pro 0.1.0 — release preparation status
+# LumaOS Pro 1.0.0 — release preparation status
 
 **Status: NOT RELEASE-READY.** This is a preparation checklist, not evidence of a
 verified release or Play approval. The current repository does not contain a
@@ -9,14 +9,34 @@ verified APK or AAB.
 | Setting | Value |
 |---|---|
 | Application ID | `com.lumaos.pro.launcher` (provisional; verify availability before first upload) |
-| versionCode / versionName | `1` / `0.1.0` |
+| versionCode / versionName | `100` / `1.0.0` |
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Play package | Android App Bundle (`bundleRelease`) |
 
 Confirm the application ID is available and is the permanent package name before
-creating the Play listing. `versionCode` 1 is appropriate only for the first
-upload; increment it for every later release.
+creating the Play listing. `versionCode` follows
+`major * 100 + minor * 10 + patch` (1.0.0 → 100, 1.0.1 → 101, 1.1.0 → 110):
+increment it for every later upload. The pre-release 0.1.0 build (`versionCode`
+1) was never published, so its number is retired rather than reused.
+
+## What 1.0.0 contains
+
+- **Design System v3.2** — Signature, Atmosphere and Monolith, with authored
+  colour, geometry, material, typography, motion and spacing tokens transcribed
+  from the design bundle in `docs/design/v3.2/`. Fresh installs follow the
+  system appearance: Signature in dark, Zen in light.
+- **Retained palettes** — Aurora, Zen, Void, Obsidian, Graphite and Chroma keep
+  their storage keys, seeds, geometry and bundled artwork; no saved choice or
+  exported backup is rewritten by the upgrade.
+- The launcher itself: Home-role handling, app drawer and search, folders, dock,
+  widgets, context profiles and scheduled switching, backup/restore, diagnostics
+  and the Studio.
+
+The design-system tokens are enforced by `DesignTokensParityTest`; the theme
+behaviour is covered by `DesignSystemV32Test`, `ThemeEngineTest` and
+`DesignSystemTest`. None of these tests has been executed in this workspace —
+see the verification boundary in [BUILD_REPORT.md](BUILD_REPORT.md).
 
 ## Artifact and signing status
 
@@ -39,9 +59,10 @@ APK, or AAB.
 
 ## Remaining release gates
 
-1. Run a fresh current-source test suite, lint, debug/release build, and AAB
-   verification. These checks were deliberately not run as part of the current
-   changes; they are left to the project owner for testing and release.
+1. Run a fresh current-source test suite (including the design-system tests),
+   lint, debug/release build, and AAB verification. These checks have not been
+   run for this source; they are left to the project owner for testing and
+   release.
 2. Install from a Play internal/closed test track on physical devices. Validate
    first launch and onboarding, both app-drawer and Home-role entry points,
    widgets, backups, accessibility, notifications, profile schedules, and

@@ -95,8 +95,15 @@ object SemanticPalette {
 
         fun on(base: Int): Int = ColorMath.ensureContrast(ThemeEngine.bestTextOn(base), base, 4.5)
 
-        val success = status(GREEN, 0.13, 0.13)
-        val warning = status(AMBER, 0.14, 0.13)
+        // A v3.2 theme authors its own ok/warn roles; those are used verbatim and
+        // only nudged if they miss the AA floor on this surface. Retained palettes
+        // (and custom accents) keep the hue-derived status colours.
+        val success = c.successSeed
+            ?.let { ColorMath.ensureContrast(it, c.surface1, 4.5) }
+            ?: status(GREEN, 0.13, 0.13)
+        val warning = c.warningSeed
+            ?.let { ColorMath.ensureContrast(it, c.surface1, 4.5) }
+            ?: status(AMBER, 0.14, 0.13)
         val danger = ColorMath.ensureContrast(c.danger, c.surface1, 4.5)
         val info = ColorMath.ensureContrast(c.accent, c.surface1, 4.5)
 

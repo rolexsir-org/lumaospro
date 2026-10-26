@@ -62,10 +62,16 @@ data class DarkWindow(val startMinute: Int, val endMinute: Int) {
 
 /** Everything the user has chosen about appearance. Persisted by LumaPrefs. */
 data class ThemeSettings(
-    val themeId: ThemeId = ThemeId.AURORA,
+    val themeId: ThemeId = ThemeId.SIGNATURE,
     val switching: ThemeSwitching = ThemeSwitching.SYSTEM,
+    /**
+     * Light mode keeps the retained Zen palette: the three v3.2 identities are
+     * authored dark, and the specification defines a paper *surface* variant for
+     * widgets and sheets rather than a light theme. Choosing a dark pair here
+     * instead would put a midnight launcher on a light-mode phone.
+     */
     val lightThemeId: ThemeId = ThemeId.PORCELAIN,
-    val darkThemeId: ThemeId = ThemeId.AURORA,
+    val darkThemeId: ThemeId = ThemeId.SIGNATURE,
     val darkWindow: DarkWindow = DarkWindow.DEFAULT,
     val accentOverride: Int? = null,
     val backgroundOverride: Int? = null,
@@ -151,10 +157,20 @@ object ThemeEngine {
                 min(Oklch.fromArgb(background).c, 0.03)
             } else base.neutralChroma
         )
+        // Authored v3.2 roles are used whenever the user has not replaced the
+        // theme's own accent or background; a custom colour falls back to the
+        // seed-derived path, which can guarantee contrast for any input.
+        val tokens = base.tokens
+        val curated = settings.accentOverride == null && settings.backgroundOverride == null
+        val colors = if (tokens != null && curated) {
+            authoredColors(spec, tokens, backdrop, env.wallpaper)
+        } else {
+            deriveColors(spec, backdrop, env.wallpaper)
+        }
         return ResolvedTheme(
             id = id,
             displayName = base.displayName,
-            colors = deriveColors(spec, backdrop, env.wallpaper),
+            colors = colors,
             typography = settings.typography ?: base.typography,
             motionCharacter = base.motionCharacter,
             iconShape = settings.iconShape ?: base.iconShape,
@@ -162,7 +178,8 @@ object ThemeEngine {
             atmosphere = base.atmosphere,
             surfaceStyle = base.surfaceStyle,
             backdrop = backdrop,
-            cornerScale = base.cornerScale
+            cornerScale = base.cornerScale,
+            tokens = tokens
         )
     }
 
@@ -193,11 +210,63 @@ object ThemeEngine {
         )
     }
 
-    private fun deriveColors(spec: ThemeSpec, backdrop: Backdrop, wallpaper: WallpaperSeeds?): ThemeColors {
-        val tint = Oklch.fromArgb(spec.neutralTint)
-        fun neutral(l: Double, chromaScale: Double = 1.0): Int =
-            Oklch(l.coerceIn(0.0, 1.0), spec.neutralChroma * chromaScale, tint.h).toArgb()
+    /** Raw text roles before the contrast guarantees are applied. */
+    private data class RawText(val onSurface: Int, val muted: Int, val faint: Int)
 
+    /** Hue source + chroma shared by both colour paths, so neutrals behave alike. */
+    private fun neutralFn(spec: ThemeSpec): (Double, Double) -> Int {
+        val tint = Oklch.fromArgb(spec.neutralTint)
+        return { l, chromaScale ->
+            Oklch(l.coerceIn(0.0, 1.0), spec.neutralChroma * chromaScale, tint.h).toArgb()
+        }
+    }
+
+    /**
+     * Authored v3.2 colours.
+     *
+     * The token bundle states the exact roles, so these are *not* regenerated from
+     * a seed: `surface-1` is the authored translucent white over the authored
+     * `bg-1`, `text-2` is the authored grey, and so on. The contrast guarantees
+     * below still run, because the specification promises them (text-1 >= 15:1,
+     * text-2 >= 7:1, text-3 >= 4.6:1) and a hand-edited token file must not be
+     * able to ship illegible text.
+     */
+    private fun authoredColors(
+        spec: ThemeSpec,
+        tokens: ThemeTokens,
+        backdrop: Backdrop,
+        wallpaper: WallpaperSeeds?
+    ): ThemeColors {
+        val t = tokens.colors
+        val surface0 = ColorMath.opaque(t.background1)
+        // Translucent authored roles are composited over the panel they sit on:
+        // surface-1/2/3 are rows, controls and active states, all on surface0.
+        val surface1 = ColorMath.composite(t.surface1, surface0)
+        val surface2 = ColorMath.composite(t.surface2, surface0)
+        val surface3 = ColorMath.composite(t.surface3, surface0)
+        return assemble(
+            spec = spec,
+            backdrop = backdrop,
+            wallpaper = wallpaper,
+            neutral = neutralFn(spec),
+            surfaces = intArrayOf(surface0, surface1, surface2, surface3),
+            text = RawText(ColorMath.opaque(t.text1), ColorMath.opaque(t.text2), ColorMath.opaque(t.text3)),
+            accentSeed = ColorMath.opaque(t.accent),
+            secondarySeed = ColorMath.opaque(t.accent2),
+            dangerSeed = ColorMath.opaque(t.danger),
+            outline = ColorMath.composite(t.stroke1, surface0),
+            outlineStrong = ColorMath.composite(t.stroke2, surface0),
+            scrim = ColorMath.withAlpha(ColorMath.BLACK, 0.42f),
+            pressed = ColorMath.withAlpha(ColorMath.WHITE, 0.10f),
+            // Authored selection: the accent-soft role, made opaque for a fill.
+            selectedFill = ColorMath.composite(t.accentSoft, surface0),
+            successSeed = ColorMath.opaque(t.ok),
+            warningSeed = ColorMath.opaque(t.warn)
+        )
+    }
+
+    private fun deriveColors(spec: ThemeSpec, backdrop: Backdrop, wallpaper: WallpaperSeeds?): ThemeColors {
+        val neutral = neutralFn(spec)
         val bg = spec.background
         val bgL = Oklch.fromArgb(bg).l
         // Surfaces are derived from a base kept clear of the light/dark
@@ -206,15 +275,14 @@ object ThemeEngine {
         // no single text colour can reach 4.5:1 on all of them. Presets sit
         // far from the crossover and are unaffected.
         val baseL = if (spec.dark) min(bgL, DARK_SURFACE_BASE_MAX) else max(bgL, LIGHT_SURFACE_BASE_MIN)
-        val accentLch = Oklch.fromArgb(spec.accent)
 
         val surface0: Int
         val surface1: Int
         val surface2: Int
         val surface3: Int
-        var onSurface: Int
-        var muted: Int
-        var faint: Int
+        val onSurface: Int
+        val muted: Int
+        val faint: Int
         val outline: Int
         val outlineStrong: Int
         val scrim: Int
@@ -222,42 +290,89 @@ object ThemeEngine {
         if (spec.dark) {
             if (spec.amoled) {
                 surface0 = ColorMath.BLACK
-                surface1 = neutral(0.13)
-                surface2 = neutral(0.18)
-                surface3 = neutral(0.23)
+                surface1 = neutral(0.13, 1.0)
+                surface2 = neutral(0.18, 1.0)
+                surface3 = neutral(0.23, 1.0)
             } else {
-                surface0 = neutral(baseL + 0.035)
-                surface1 = neutral(baseL + 0.075)
-                surface2 = neutral(baseL + 0.12)
-                surface3 = neutral(baseL + 0.17)
+                surface0 = neutral(baseL + 0.035, 1.0)
+                surface1 = neutral(baseL + 0.075, 1.0)
+                surface2 = neutral(baseL + 0.12, 1.0)
+                surface3 = neutral(baseL + 0.17, 1.0)
             }
             onSurface = neutral(0.955, 0.5)
             muted = neutral(0.77, 0.8)
-            faint = neutral(0.60)
-            outline = neutral(min(baseL + 0.20, 0.42))
-            outlineStrong = neutral(min(baseL + 0.32, 0.55))
+            faint = neutral(0.60, 1.0)
+            outline = neutral(min(baseL + 0.20, 0.42), 1.0)
+            outlineStrong = neutral(min(baseL + 0.32, 0.55), 1.0)
             scrim = ColorMath.withAlpha(ColorMath.BLACK, 0.56f)
             pressed = ColorMath.withAlpha(ColorMath.WHITE, 0.10f)
         } else {
             surface0 = neutral(min(baseL + 0.025, 0.995), 0.4)
             surface1 = neutral(min(baseL + 0.03, 1.0), 0.3)
-            surface2 = neutral(baseL - 0.035)
-            surface3 = neutral(baseL - 0.075)
+            surface2 = neutral(baseL - 0.035, 1.0)
+            surface3 = neutral(baseL - 0.075, 1.0)
             onSurface = neutral(0.22, 1.2)
-            muted = neutral(0.44)
-            faint = neutral(0.60)
-            outline = neutral(baseL - 0.11)
-            outlineStrong = neutral(baseL - 0.22)
-            scrim = ColorMath.withAlpha(neutral(0.18), 0.38f)
+            muted = neutral(0.44, 1.0)
+            faint = neutral(0.60, 1.0)
+            outline = neutral(baseL - 0.11, 1.0)
+            outlineStrong = neutral(baseL - 0.22, 1.0)
+            scrim = ColorMath.withAlpha(neutral(0.18, 1.0), 0.38f)
             pressed = ColorMath.withAlpha(ColorMath.BLACK, 0.08f)
         }
+        return assemble(
+            spec = spec,
+            backdrop = backdrop,
+            wallpaper = wallpaper,
+            neutral = neutral,
+            surfaces = intArrayOf(surface0, surface1, surface2, surface3),
+            text = RawText(onSurface, muted, faint),
+            accentSeed = spec.accent,
+            secondarySeed = spec.secondary,
+            dangerSeed = if (spec.dark) 0xFFFF8A80.toInt() else 0xFFB3261E.toInt(),
+            outline = outline,
+            outlineStrong = outlineStrong,
+            scrim = scrim,
+            pressed = pressed,
+            selectedFill = ColorMath.withAlpha(spec.accent, if (spec.dark) 0.18f else 0.14f)
+        )
+    }
 
-        onSurface = ensureOnAll(onSurface, 7.0, surface0, surface1)
-        muted = ensureOnAll(muted, 4.5, surface1, surface2)
-        faint = ensureOnAll(faint, 3.0, surface1)
+    /**
+     * Shared tail of both colour paths: applies the published contrast
+     * guarantees, derives the accent/on-accent pair from the seed, decides how
+     * text sits over artwork, and assembles [ThemeColors].
+     */
+    private fun assemble(
+        spec: ThemeSpec,
+        backdrop: Backdrop,
+        wallpaper: WallpaperSeeds?,
+        neutral: (Double, Double) -> Int,
+        surfaces: IntArray,
+        text: RawText,
+        accentSeed: Int,
+        secondarySeed: Int,
+        dangerSeed: Int,
+        outline: Int,
+        outlineStrong: Int,
+        scrim: Int,
+        pressed: Int,
+        selectedFill: Int,
+        successSeed: Int? = null,
+        warningSeed: Int? = null
+    ): ThemeColors {
+        val surface0 = surfaces[0]
+        val surface1 = surfaces[1]
+        val surface2 = surfaces[2]
+        val surface3 = surfaces[3]
+        val bg = spec.background
+
+        val onSurface = ensureOnAll(text.onSurface, 7.0, surface0, surface1)
+        val muted = ensureOnAll(text.muted, 4.5, surface1, surface2)
+        val faint = ensureOnAll(text.faint, 3.0, surface1)
         val onBackground = ColorMath.ensureContrast(onSurface, bg, 7.0)
 
-        val accent = ensureOnAll(spec.accent, 3.0, surface1)
+        val accentLch = Oklch.fromArgb(accentSeed)
+        val accent = ensureOnAll(accentSeed, 3.0, surface1)
         val onAccentCandidate = if (ColorMath.isDark(accent)) neutral(0.97, 0.3)
         else Oklch(0.18, accentLch.c * 0.4, accentLch.h).toArgb()
         val onAccent = ColorMath.ensureContrast(onAccentCandidate, accent, 4.5)
@@ -268,10 +383,8 @@ object ThemeEngine {
             else Oklch(0.24, accentLch.c * 0.7, accentLch.h).toArgb(),
             accentContainer, 4.5
         )
-        val secondary = ensureOnAll(spec.secondary, 3.0, surface1)
-        val danger = ColorMath.ensureContrast(
-            if (spec.dark) 0xFFFF8A80.toInt() else 0xFFB3261E.toInt(), surface1, 4.5
-        )
+        val secondary = ensureOnAll(secondarySeed, 3.0, surface1)
+        val danger = ColorMath.ensureContrast(dangerSeed, surface1, 4.5)
 
         val homeForeground: Int
         val homeMuted: Int
@@ -294,10 +407,6 @@ object ThemeEngine {
             homeShadow = if (lightWallpaper) ColorMath.withAlpha(ColorMath.WHITE, 0.62f)
             else ColorMath.withAlpha(ColorMath.BLACK, 0.62f)
         }
-        // The semantic status palette is derived from these roles, so a
-        // customised accent automatically produces a matching info colour.
-        // `onSurface`-based roles remain correct because surfaces stay inside
-        // the dark/light crossover guarantees above.
 
         return ThemeColors(
             isDark = spec.dark,
@@ -323,10 +432,12 @@ object ThemeEngine {
             homeMuted = homeMuted,
             homeShadow = homeShadow,
             pressedOverlay = pressed,
-            selectedFill = ColorMath.withAlpha(accent, if (spec.dark) 0.18f else 0.14f),
+            selectedFill = selectedFill,
             focusRing = accent,
             ripple = ColorMath.withAlpha(accent, 0.24f),
-            danger = danger
+            danger = danger,
+            successSeed = successSeed,
+            warningSeed = warningSeed
         )
     }
 

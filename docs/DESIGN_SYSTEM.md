@@ -1,5 +1,7 @@
 # LumaOS Pro — Design System
 
+**Release:** 1.0.0 (`versionCode` 100).
+
 > **Verification status (read first).** This document describes the design system as
 > implemented in this checkout. The implementation was written in an environment
 > with **no JDK, Gradle, Android SDK or device access**, so it has **not** been
@@ -11,11 +13,112 @@
 
 ---
 
-## 0. What this system replaces
+## 0. Design System v3.2 (current)
 
-LumaOS Pro 0.2 keeps the product's promise — a fast launcher for low-resource
-phones — and gives it a deliberate visual identity. The old build drew with
-Material defaults plus a thin palette. That produced three problems:
+The authored bundle from the project owner's Drive — specification, per-theme token
+JSON and the studio build — is checked in at [`design/v3.2/`](design/v3.2/) and is
+now the source the app draws from. Provenance, the zip's SHA-256, the naming
+mapping for the "Luma Display / Text / Mono" faces and two measured token
+discrepancies are documented in [`design/v3.2/README.md`](design/v3.2/README.md).
+
+### 0.1 The three identities
+
+| | **Signature** | **Atmosphere** | **Monolith** |
+| --- | --- | --- | --- |
+| Personality | Refined, timeless, expensive | Immersive, cinematic, adaptive | Architectural, bold, exact |
+| Background | `#06070B → #0F1219` midnight ramp | `#04131A → #0A2430`, wallpaper-led | `#0B0B0A → #171715` stone neutrals |
+| Accent | `#7C86FF` indigo-violet, `#A78BFA` | `#46E0B0` aurora mint, `#7FB6FF` | `#FF5A2B` vermilion |
+| Radii (xl/lg/md/sm/xs) | 34 / 26 / 16 / 10 / 6 | 38 / 30 / 20 / 12 / 8 | 8 / 4 / 2 / 2 / 2 |
+| Icon tile | 58 dp at 24 dp, squircle | 58 dp at 26 dp, circular | 58 dp at 10 dp, rounded-square |
+| Material | blur 26 dp · sat 135 % · translucent | blur 34 dp · sat 165 % · glass | **no blur** · sat 100 % · solid |
+| Clock | 64 sp, light, −0.035 em, caps date | 58 sp, light, −0.040 em, sentence date | 84 sp, semibold, −0.060 em, mono date |
+| App label | 10.5 sp | 11 sp | 9 sp |
+| Voice | `precision` (Inter) | `ambient` (Inter) | `monograph` (Grotesk + mono) |
+| Motion | `subtle` | `cinematic` (one overshoot) | `exact` (no stagger, no overshoot) |
+| Backdrop | own atmosphere (`THEME`) | the user's wallpaper (`WALLPAPER`) | own atmosphere (`THEME`) |
+
+### 0.2 Tokens
+
+| Group | Values | Kotlin |
+| --- | --- | --- |
+| Spacing | 2 · 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 56 · 72; gutter 20 (compact 16, large 22), row 12, section 24, dock gap 40 | `LumaDesignTokens.SPACING_DP` / `spacing(step)`; `LumaSpacing` converts the same numbers to Compose `Dp` |
+| Radius | per theme (above) + dock 34 / 36 / 4, tile 24 / 26 / 10 | `TokenShape`, `ResolvedTheme.radius(RadiusRole…)` |
+| Material | blur 26 / 34 / 0, saturation 135 / 165 / 100 % | `TokenMaterial`, `ResolvedTheme.blurDp / blurFactor / saturation` |
+| Type | one ladder: clock 66, screen title 21, section 14, widget head 12.5, primary 13, label 11, supporting 10.5, numeric 10, button 13.5, kicker 9.5 | `LumaDesignTokens.TYPE_SCALE`, `ResolvedTheme.typeScale` |
+| Motion | 120 / 200 / 320 / 480 ms, press 90, long-press 500; standard `(.22,.61,.36,1)`, emphasis `(.16,.84,.28,1)`, exit `(.4,0,1,1)`; drag spring 480/34 | `LumaDesignTokens.Motion` |
+| Colour | `bg-0/1/2`, `surface-1/2/3` + `surface-solid`, `stroke-1/2`, `text-1/2/3`, `accent`, `accent-2`, `accent-soft`, `ok/warn/danger` | `TokenColors` per theme |
+
+The JSON in `design/v3.2/tokens/` is the source of truth and is enforced:
+`DesignTokensParityTest` fails with the token name if the Kotlin constants and the
+bundle disagree. It reads the checked-in JSON, not a copy.
+
+Two boundaries are deliberate. `ThemeTokens` carries a theme's clock *size* and app
+label size, but not clock weight or tracking: those belong to the type voice
+(`precision` / `ambient` / `monograph`), which already owned them, and duplicating
+them would let the two disagree. And the authored `ok` / `warn` roles are passed
+through to `SemanticColors` as seeds, so a v3.2 theme's status colours are the
+designed ones rather than hue-derived — while the retained palettes keep the derived
+status ramp.
+
+### 0.3 Authored colour vs derived colour
+
+The engine has two colour paths and picks per request:
+
+* **Authored** (`ThemeEngine.authoredColors`) — used for a v3.2 theme when the user
+  has not replaced its accent or background. Every role comes from the bundle
+  (including `ok` / `warn`, carried as `ThemeColors.successSeed` / `warningSeed`):
+  translucent roles (`surface-1 = rgba(255,255,255,.045)`) are composited over the
+  authored `bg-1`, `outline` is the authored hairline, and `accent-soft` becomes the
+  selection fill. Nothing is regenerated from a seed, so the shipped palette is the
+  designed palette.
+* **Derived** (`ThemeEngine.deriveColors`) — used for the retained pre-3.2 palettes,
+  for Chroma (wallpaper-seeded), and whenever the user sets a custom accent or
+  background. Unchanged from the previous pass.
+
+Both paths run the same guarantee tail (`assemble`), so the §2.3 contrast contract
+holds either way — including for a hand-edited token file.
+
+### 0.4 Compatibility, defaults and the light-mode decision
+
+* **Nothing is removed and no key is rewritten.** The pre-3.2 palettes (Aurora, Zen,
+  Void, Obsidian, Graphite, Chroma) keep their IDs, storage keys, seeds, geometry
+  and voices. They are shown under "Retained palettes" in Studio, below the three
+  v3.2 identities.
+* **Defaults.** A fresh install follows the system: **Signature** in dark mode and
+  **Zen** in light mode. The three v3.2 identities are authored dark, and the
+  specification defines a paper *surface* variant for widgets and sheets (§3.1) —
+  not a light theme. Putting a midnight launcher on a light-mode phone would be the
+  wrong default, so the retained paper palette stays the light partner until that
+  variant is implemented. This is a deliberate limitation, not an oversight.
+* **Blur is material, not preference.** Monolith's token is 0 dp, so
+  `HomeActivity.applyDepth()` draws no blur for it even when the device and the
+  effects policy would allow one.
+* **Custom colours still win.** An accent or background override falls back to the
+  derived path by design, because only the derived path can reach the guarantees
+  for an arbitrary colour.
+
+### 0.5 Verification of this pass
+
+Mechanically checked here, with no JDK or Android SDK (see `QA_CHECKLIST.md` §A):
+
+* token parity between the bundle JSON and `LumaDesignTokens.kt` — scripted, exact
+  on colour, radii, tile, blur, saturation, type ladder, spacing and motion;
+* the measured contrast of every authored pair, over the composited surfaces the
+  roles actually sit on;
+* balanced source in all 19 changed Kotlin files, every `R.string` reference
+  resolving, and each of the nine `ThemeId`s having exactly one preset.
+
+Not run: Kotlin compilation, resource linking, lint, unit tests (including
+`DesignTokensParityTest` and `DesignSystemV32Test`), and any on-device rendering.
+Do not present the new themes as compiled or device-verified.
+
+---
+
+### 0.6 History: what the token layer replaced
+
+The pre-1.0 builds (0.1 / 0.2) kept the product's promise — a fast launcher for
+low-resource phones — and gave it a deliberate visual identity. They drew with
+Material defaults plus a thin palette, which produced three problems:
 
 1. **One look for three products.** Aurora, Zen and Void differed only in accent
    hue, so switching themes felt like a colour swap, not a change of character.
@@ -25,8 +128,9 @@ Material defaults plus a thin palette. That produced three problems:
 3. **Contrast by luck.** Text colours were chosen per widget; some pairs only
    passed AA on dark surfaces and failed on light ones.
 
-The design system fixes all three with one rule: **components ask for a role,
-never for a number.**
+1.0.0 keeps that rule and ships the three-identity system above. The sections
+that follow (§1–§14) are the reference for the roles; they were written for the
+retained palettes before v3.2 and remain accurate for them.
 
 ---
 
@@ -36,7 +140,7 @@ never for a number.**
 | --- | --- |
 | Quiet luxury, not decoration | No gradients on text, no heavy shadows, no outlines that only decorate. Every stroke exists to separate two materials. |
 | One hierarchy, three voices | The type scale is identical everywhere. Themes change family, weight, tracking and motion — never the ladder. |
-| Material honesty | Aurora is midnight glass, Zen is paper, Void is a machined instrument. Each theme's radii, borders, elevation and blur follow that material. |
+| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument). Each theme's radii, borders, elevation and blur follow its material — Monolith's zero blur is a token, not an exception. |
 | Legibility is a guarantee | Text roles are contrast-checked by the theme engine, not chosen by eye. |
 | Motion is feedback, not theatre | Every animation is interruptible, honours the system animation scale, and vanishes under reduced motion. |
 | Identity is preserved | App icons are never recoloured. Bundled glyphs are used only for the interface; app artwork is passed through untouched. |
@@ -47,17 +151,23 @@ never for a number.**
 
 ### 2.1 Themes
 
+v3.2 identities first, then the retained palettes.
+
 | Theme | Storage key | Character | Material | Type voice | Motion |
 | --- | --- | --- | --- | --- | --- |
-| **Aurora** | `aurora` | Midnight ribbon light | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
-| **Zen** | `porcelain` | Quiet paper and mist | Solid paper, almost no elevation, soft radii | Inter, modern serenity | Quiet |
-| **Void** | `vector` | Indigo depth, cyan signal | Layered panels, sharper corners, accent halo | Space Grotesk + Inter | Expressive |
-| Obsidian | `obsidian` | True black for OLED | Flat black, no glow | Inter | Subtle |
-| Graphite | `graphite` | Machined grey, amber instrument | Matte panels, 3 dp | Inter | Subtle |
-| Chroma | `chroma` | Built from the wallpaper | Same as current backdrop | Inter | Subtle |
+| **Signature** | `signature` | Midnight ramp, indigo-violet | Translucent, blur 26, sat 135 % | Inter, refined | Subtle |
+| **Atmosphere** | `atmosphere` | Wallpaper-led, aurora mint | Glass, blur 34, sat 165 % | Inter, airy | Cinematic |
+| **Monolith** | `monolith` | Stone neutrals, vermilion rules | Solid, **no blur** | Space Grotesk + mono | Exact |
+| Aurora (retained) | `aurora` | Midnight ribbon light | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
+| Zen (retained) | `porcelain` | Quiet paper and mist — the light-mode partner | Solid paper, almost no elevation, soft radii | Inter, modern serenity | Quiet |
+| Void (retained) | `vector` | Indigo depth, cyan signal | Layered panels, sharper corners, accent halo | Space Grotesk + Inter | Expressive |
+| Obsidian (retained) | `obsidian` | True black for OLED | Flat black, no glow | Inter | Subtle |
+| Graphite (retained) | `graphite` | Machined grey, amber instrument | Matte panels, 3 dp | Inter | Subtle |
+| Chroma (retained) | `chroma` | Built from the wallpaper | Same as current backdrop | Inter | Subtle |
 
-Legacy 0.1 storage keys (`aurora`, `porcelain`, `vector`) and the old light/dark
-switch are preserved. No saved preference is rewritten or discarded.
+Every legacy storage key — including 0.1's `aurora`, `porcelain`, `vector` — and the
+old light/dark switch are preserved. No saved preference or exported backup is
+rewritten or discarded on upgrade; a stored `aurora` still resolves to Aurora.
 
 ### 2.2 Semantic roles
 
@@ -153,15 +263,18 @@ system (`LumaTypeScale`), so Settings (Compose) and Home (Views) cannot drift.
 
 | Voice | Storage key | Clock | Titles | Body | Labels | Readouts |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Precision** | `precision` | Inter Light, −0.035 | Inter Semibold, −0.02 | Inter Regular | Inter Medium | Inter Medium, caps, 0.14 |
-| **Serene** | `serene` | Inter Light, −0.015 | Inter Medium, −0.008 | Inter Regular | Inter Medium | Inter Medium, mixed case |
+| **Precision** (Signature) | `precision` | Inter Light 64 sp, −0.035 | Inter Semibold, −0.02 | Inter Regular | Inter Medium | Inter Medium, caps, 0.14 |
+| **Ambient** (Atmosphere) | `ambient` | Inter Light 58 sp, −0.040 | Inter Semibold, −0.015 | Inter Regular | Inter Medium | Inter Medium, sentence case |
+| **Monograph** (Monolith) | `monograph` | Space Grotesk Semibold 84 sp, −0.060 | Space Grotesk Semibold, −0.015 | Inter Regular | **Mono Medium**, 0.10 | **Mono** Medium, caps, 0.12 |
+| **Serene** (Zen, retained) | `serene` | Inter Light, −0.015 | Inter Medium, −0.008 | Inter Regular | Inter Medium | Inter Medium, mixed case |
 | **Grotesk** | `grotesk` | Space Grotesk Regular | Space Grotesk Semibold | Inter Regular | Space Grotesk Medium | Space Grotesk Medium, caps |
 | Serif (fallback) | `serif` | Platform serif | Platform serif | Inter | Platform serif | Platform serif |
 | Mono (fallback) | `mono` | Platform mono | Platform mono | Inter | Inter | Platform mono |
 
-The three signature voices are what the Studio offers first. `serif` and `mono`
-remain loadable for old backups and explicit user choices; their storage keys are
-unchanged.
+`TypeStyle.SIGNATURE` — the voices the three v3.2 themes speak — is
+`precision`, `ambient`, `monograph`. `serene`, `grotesk`, `serif` and `mono` remain
+loadable for old backups and explicit user choices (`TypeStyle.RETAINED`), and
+every storage key is unchanged.
 
 ### 3.4 Runtime application
 
@@ -259,8 +372,17 @@ wallpaper *colours*, not the image).
 
 ## 6. Shapes and surfaces
 
-`ShapeTokens` (`ui/theme/Components.kt`) defines component roles; every value is
-multiplied by the theme's `cornerScale` (Void 0.82, Aurora/Zen 1.0/1.08).
+Two shape systems coexist, intentionally:
+
+* **Authored radii (v3.2).** A component asks for a role —
+  `theme.radius(RadiusRole.EXTRA_LARGE)` — and Signature answers 34 dp, Atmosphere
+  38 dp, Monolith 8 dp. The full ladders are 34/26/16/10/6, 38/30/20/12/8 and
+  8/4/2/2/2, with dock 34/36/4 and icon tile 24/26/10 at 58 dp.
+* **Scaled base radii (retained palettes).** `ShapeTokens`
+  (`ui/theme/Components.kt`) multiplies a base radius by the theme's `cornerScale`
+  (Void 0.82, Aurora 1.0, Zen 1.08, and so on). v3.2 themes also drive this path
+  from their authored medium radius (`cornerScale` = `r-md` / 16: 1.0, 1.25,
+  0.125), so a legacy call site lands on the same geometry family.
 
 | Role | Base radius | Used by |
 | --- | --- | --- |
@@ -281,9 +403,16 @@ Rules:
 * **One radius per control.** A parent's radius is ≥ its children's; nothing is
   square inside a round container.
 * **Borders are hairlines, not decoration.** `borderAlpha` per theme: Aurora 0.18,
-  Zen 0.12, Void 0.26, Graphite 0.14, Chroma 0.16, Obsidian 0.16.
+  Zen 0.12, Void 0.26, Graphite 0.14, Chroma 0.16, Obsidian 0.16. v3.2 themes read
+  it from the authored `stroke-2` token (Signature 0.17, Atmosphere 0.26,
+  Monolith 0.24).
 * **Elevation ceilings:** Zen/Obsidian 0 dp, Graphite 3 dp, Chroma 4 dp, Aurora
-  6 dp, Void 10 dp. Shadows exist only where a surface genuinely floats.
+  6 dp, Void 10 dp; v3.2 derives the ceiling from the authored blur
+  (Signature 6 dp, Atmosphere 8 dp, Monolith 0 dp). Shadows exist only where a
+  surface genuinely floats.
+* **Blur is a material token, not a global switch.** 26 dp (Signature), 34 dp
+  (Atmosphere), 0 dp (Monolith, which therefore never blurs even on capable
+  hardware).
 * **Translucency** is `SurfaceStyle`-driven and is disabled entirely when the
   effects policy says so, then `surfaceAlpha()` returns 1.
 
@@ -303,8 +432,10 @@ Desktop, top to bottom:
 
 * **Header** (20 dp start inset, 12 dp top inset)
   * 64 dp chronometer dial (`home_dial`) when the preset uses `DIAL`
-  * clock at the theme's `clockSizeSp` (DIAL 66 sp, HERO ×1.42, COMPACT ×0.70),
-    Inter Light/Space Grotesk, tracking from the voice
+  * clock at `ResolvedTheme.clockSp` — the theme's authored size (Signature 64,
+    Atmosphere 58, Monolith 84 sp; a retained palette answers with its voice's
+    `clockSizeSp`) — scaled per preset (DIAL × 1.0, HERO × 1.42, COMPACT × 0.70),
+    in the voice's clock family and tracking
   * date as an overline: caps, tracked, `homeMuted` over artwork
   * context chip — the active profile and time-of-day readout, 48 dp tall,
     chevron included, one radius shared with the design system
@@ -341,17 +472,20 @@ the composition:
 
 ## 9. Motion
 
-`MotionIdentity.kt` defines three profiles. All share one spring vocabulary
-(`MotionTokens`), one rule set, and the system animator-duration scale.
+`MotionIdentity.kt` defines five profiles. All share one spring vocabulary
+(`MotionTokens`), one rule set, and the system animator-duration scale. Durations
+come from the v3.2 family — 120 / 200 / 320 / 480 ms, press 90, long-press 500 —
+with the authored cubic-beziers for standard, emphasis and exit.
 
-| Property | Aurora (subtle) | Zen (quiet) | Void (expressive) |
-| --- | --- | --- | --- |
-| `pressMs` | 90 | 110 | 70 |
-| `themeChangeMs` | 420 | 480 | 320 |
-| `pressScale` | 0.985 | 0.99 | 0.96 |
-| `enterScaleFrom` | 0.98 | 0.99 | 0.92 |
-| `popupScaleFrom` | 0.96 | 0.98 | 0.94 |
-| Overshoot | Never | Never | Once, on open |
+| Property | Signature (subtle) | Atmosphere (cinematic) | Monolith (exact) | Zen (quiet) | Void (expressive) |
+| --- | --- | --- | --- | --- | --- |
+| `pressMs` | 90 | 90 | 70 | 110 | 70 |
+| `openMs` / `closeMs` | 320 / 240 | 320 / 220 | 200 / 150 | 380 / 280 | 260 / 190 |
+| `themeChangeMs` | 420 | 420 | **280** | 480 | 320 |
+| `staggerMs` | 18 | 24 | **0** | 24 | 14 |
+| `pressScale` | 0.985 | 0.97 | 0.97 | 0.99 | 0.96 |
+| `enterScaleFrom` | 0.98 | 0.96 | 0.97 | 0.99 | 0.92 |
+| Overshoot | Never | Once, on open | Never | Never | Once, on open |
 
 Invariants, asserted by `MotionProfile.init`:
 
@@ -433,7 +567,8 @@ ThemeEngine.resolve() ──► ResolvedTheme ──► ThemeRepository.theme (S
 
 | File | Contains |
 | --- | --- |
-| `ui/DesignTokens.kt` | Spacing, corner base radii, sizes, elevation, `LumaMotion` |
+| `ui/theme/LumaDesignTokens.kt` | **Design System v3.2**: authored colour/shape/material/type tokens per theme, spacing scale, motion tokens (parity-tested against `docs/design/v3.2/tokens`) |
+| `ui/DesignTokens.kt` | Corner base radii, sizes, elevation, `LumaMotion`; `LumaSpacing` converts the v3.2 scale to Compose `Dp` |
 | `ui/theme/TypeSystem.kt` | Families, weights, faces, `TypeStyle`, `LumaTypeScale`, tracking |
 | `ui/theme/SemanticColors.kt` | Status, interaction, overlay, widget, field roles |
 | `ui/theme/Components.kt` | `ShapeTokens`, `SurfaceTokens`, `SizeTokens`, per-theme material |
@@ -453,3 +588,13 @@ ThemeEngine.resolve() ──► ResolvedTheme ──► ThemeRepository.theme (S
 * Blur (`RenderEffect`) is API 31+ only and is skipped below it.
 * Manual visual, orientation and TalkBack rows in `QA_CHECKLIST.md` still require a
   real device.
+* **v3.2 screens that do not exist yet are not claimed.** The bundle specifies 26
+  screens, eight widget anatomies, Quick Shelf states, Focus Spaces, a 7-section
+  Studio, a Plus plan and Glance surfaces. This adoption ships the token system,
+  the three identities, their typography, geometry, material and motion. Screens
+  beyond that are design intent, not implementation.
+* **No paper/light variant of the v3.2 identities.** The specification's light
+  surface variant (§3.1: `rgba(255,255,255,.92)` sheets, ink `#0B0F16`) is not
+  implemented; light mode uses the retained Zen palette (see §0.4).
+* **No bundled Luma Display/Text/Mono faces.** Inter and the platform mono face
+  stand in (see `docs/design/v3.2/README.md`).
