@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Strings added with the 0.2 redesign (home, drawer, edit mode, widgets, Studio, backup). -->
+<!-- Strings added with the pre-1.0 redesign (home, drawer, edit mode, widgets, Studio, backup). -->
 <resources>
     <!-- Home -->
     <string name="search_pill_hint">Search apps and shortcuts</string>

@@ -1,5 +1,7 @@
 # LumaOS Pro — Design System
 
+**Release:** 1.0.0 (`versionCode` 100).
+
 > **Verification status (read first).** This document describes the design system as
 > implemented in this checkout. The implementation was written in an environment
 > with **no JDK, Gradle, Android SDK or device access**, so it has **not** been
@@ -80,7 +82,8 @@ holds either way — including for a hand-edited token file.
 
 * **Nothing is removed and no key is rewritten.** The pre-3.2 palettes (Aurora, Zen,
   Void, Obsidian, Graphite, Chroma) keep their IDs, storage keys, seeds, geometry
-  and voices. They are shown under "More palettes" in Studio.
+  and voices. They are shown under "Retained palettes" in Studio, below the three
+  v3.2 identities.
 * **Defaults.** A fresh install follows the system: **Signature** in dark mode and
   **Zen** in light mode. The three v3.2 identities are authored dark, and the
   specification defines a paper *surface* variant for widgets and sheets (§3.1) —
@@ -97,18 +100,25 @@ holds either way — including for a hand-edited token file.
 ### 0.5 Verification of this pass
 
 Mechanically checked here, with no JDK or Android SDK (see `QA_CHECKLIST.md` §A):
-token parity between the JSON and Kotlin (scripted, exact), and the measured
-contrast of every authored pair. Not run: Kotlin compilation, resource linking,
-lint, unit tests, and any on-device rendering. Do not present the new themes as
-device-verified.
+
+* token parity between the bundle JSON and `LumaDesignTokens.kt` — scripted, exact
+  on colour, radii, tile, blur, saturation, type ladder, spacing and motion;
+* the measured contrast of every authored pair, over the composited surfaces the
+  roles actually sit on;
+* balanced source in all 19 changed Kotlin files, every `R.string` reference
+  resolving, and each of the nine `ThemeId`s having exactly one preset.
+
+Not run: Kotlin compilation, resource linking, lint, unit tests (including
+`DesignTokensParityTest` and `DesignSystemV32Test`), and any on-device rendering.
+Do not present the new themes as compiled or device-verified.
 
 ---
 
 ### 0.6 History: what the token layer replaced
 
-LumaOS Pro 0.2 kept the product's promise — a fast launcher for low-resource
-phones — and gave it a deliberate visual identity. That build drew with Material
-defaults plus a thin palette, which produced three problems:
+The pre-1.0 builds (0.1 / 0.2) kept the product's promise — a fast launcher for
+low-resource phones — and gave it a deliberate visual identity. They drew with
+Material defaults plus a thin palette, which produced three problems:
 
 1. **One look for three products.** Aurora, Zen and Void differed only in accent
    hue, so switching themes felt like a colour swap, not a change of character.
@@ -118,8 +128,8 @@ defaults plus a thin palette, which produced three problems:
 3. **Contrast by luck.** Text colours were chosen per widget; some pairs only
    passed AA on dark surfaces and failed on light ones.
 
-v3.2 keeps that rule and adds the three-identity system above; the sections that
-follow (§1–§14) are the reference for the roles, and they were written for the
+1.0.0 keeps that rule and ships the three-identity system above. The sections
+that follow (§1–§14) are the reference for the roles; they were written for the
 retained palettes before v3.2 and remain accurate for them.
 
 ---
@@ -130,7 +140,7 @@ retained palettes before v3.2 and remain accurate for them.
 | --- | --- |
 | Quiet luxury, not decoration | No gradients on text, no heavy shadows, no outlines that only decorate. Every stroke exists to separate two materials. |
 | One hierarchy, three voices | The type scale is identical everywhere. Themes change family, weight, tracking and motion — never the ladder. |
-| Material honesty | Aurora is midnight glass, Zen is paper, Void is a machined instrument. Each theme's radii, borders, elevation and blur follow that material. |
+| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument). Each theme's radii, borders, elevation and blur follow its material — Monolith's zero blur is a token, not an exception. |
 | Legibility is a guarantee | Text roles are contrast-checked by the theme engine, not chosen by eye. |
 | Motion is feedback, not theatre | Every animation is interruptible, honours the system animation scale, and vanishes under reduced motion. |
 | Identity is preserved | App icons are never recoloured. Bundled glyphs are used only for the interface; app artwork is passed through untouched. |
@@ -253,7 +263,7 @@ system (`LumaTypeScale`), so Settings (Compose) and Home (Views) cannot drift.
 
 | Voice | Storage key | Clock | Titles | Body | Labels | Readouts |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Precision** (Signature) | `precision` | Inter Light 64–66 sp, −0.035 | Inter Semibold, −0.02 | Inter Regular | Inter Medium | Inter Medium, caps, 0.14 |
+| **Precision** (Signature) | `precision` | Inter Light 64 sp, −0.035 | Inter Semibold, −0.02 | Inter Regular | Inter Medium | Inter Medium, caps, 0.14 |
 | **Ambient** (Atmosphere) | `ambient` | Inter Light 58 sp, −0.040 | Inter Semibold, −0.015 | Inter Regular | Inter Medium | Inter Medium, sentence case |
 | **Monograph** (Monolith) | `monograph` | Space Grotesk Semibold 84 sp, −0.060 | Space Grotesk Semibold, −0.015 | Inter Regular | **Mono Medium**, 0.10 | **Mono** Medium, caps, 0.12 |
 | **Serene** (Zen, retained) | `serene` | Inter Light, −0.015 | Inter Medium, −0.008 | Inter Regular | Inter Medium | Inter Medium, mixed case |
@@ -422,8 +432,10 @@ Desktop, top to bottom:
 
 * **Header** (20 dp start inset, 12 dp top inset)
   * 64 dp chronometer dial (`home_dial`) when the preset uses `DIAL`
-  * clock at the theme's `clockSizeSp` (DIAL 66 sp, HERO ×1.42, COMPACT ×0.70),
-    Inter Light/Space Grotesk, tracking from the voice
+  * clock at `ResolvedTheme.clockSp` — the theme's authored size (Signature 64,
+    Atmosphere 58, Monolith 84 sp; a retained palette answers with its voice's
+    `clockSizeSp`) — scaled per preset (DIAL × 1.0, HERO × 1.42, COMPACT × 0.70),
+    in the voice's clock family and tracking
   * date as an overline: caps, tracked, `homeMuted` over artwork
   * context chip — the active profile and time-of-day readout, 48 dp tall,
     chevron included, one radius shared with the design system
@@ -556,7 +568,7 @@ ThemeEngine.resolve() ──► ResolvedTheme ──► ThemeRepository.theme (S
 | File | Contains |
 | --- | --- |
 | `ui/theme/LumaDesignTokens.kt` | **Design System v3.2**: authored colour/shape/material/type tokens per theme, spacing scale, motion tokens (parity-tested against `docs/design/v3.2/tokens`) |
-| `ui/DesignTokens.kt` | Pre-3.2 spacing, corner base radii, sizes, elevation, `LumaMotion` |
+| `ui/DesignTokens.kt` | Corner base radii, sizes, elevation, `LumaMotion`; `LumaSpacing` converts the v3.2 scale to Compose `Dp` |
 | `ui/theme/TypeSystem.kt` | Families, weights, faces, `TypeStyle`, `LumaTypeScale`, tracking |
 | `ui/theme/SemanticColors.kt` | Status, interaction, overlay, widget, field roles |
 | `ui/theme/Components.kt` | `ShapeTokens`, `SurfaceTokens`, `SizeTokens`, per-theme material |

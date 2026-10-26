@@ -37,12 +37,13 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A17 | **v3.2** token parity: Kotlin constants vs `docs/design/v3.2/tokens/*.json` (18 colour roles × 3 themes, radii, tile, blur, saturation, type scale, spacing, motion) | Scripted comparison using the same rounding and parsing as `DesignTokensParityTest` | PASS — exact match, 0 differences |
 | A18 | **v3.2** authored contrast measured against the engine's contract (text-1 ≥ 7:1 on surfaces 0/1, text-2 ≥ 4.5:1 on 1/2, text-3 ≥ 3:1, accent ≥ 3:1, danger ≥ 4.5:1, max ink on accent ≥ 4.5:1) | Scripted WCAG maths on composited roles, all three themes | PASS for every enforced floor. Two authored roles sit below the *specification's own* targets and are shipped as authored: Monolith text-2 = 6.8:1 (spec 7:1) and text-3 = 4.1 / 4.4 / 3.4:1 by theme (spec 4.6:1) — see `docs/design/v3.2/README.md` |
 | A19 | **v3.2** every `ThemeId` has exactly one preset and `ThemePresets.ALL` covers the enum | Scripted set comparison | PASS (9 identities, 3 v3.2 + 6 retained) |
-| A20 | **v3.2** bracket balance in the 15 Kotlin files touched by this pass | String/comment-stripping counter | PASS (aggregate counts match) |
+| A20 | **v3.2** bracket balance in the 19 Kotlin files touched by this pass | String/comment-stripping counter (backticked test names handled) | PASS |
 | A21 | **v3.2** new string resources declared and referenced (`type_ambient`, `type_monograph`) | Resource cross-check | PASS (only `android.R.string.cancel` is a framework resource) |
 | A22 | **v3.2** no unbundled typeface is referenced by the token layer | Manual review | PASS — `FontFamilyId` still covers exactly Inter, Space Grotesk, system sans/serif/mono |
 | A23 | **v3.2** the Compose spacing object draws every value from the token scale (no off-scale 6/10/14 dp) | `LumaSpacing` definitions reviewed against `SPACING_DP` | PASS — `grid/xxs 4`, `compactGap/elementGap/sm 8`, `md 12`, `lg/contentPadding 16`, `screenHorizontal/Vertical 20`, `sectionGap/xl/screenEnd 24`, `xxl 32`, `dockGap 40`, `xxxl 56`, `display 72` |
 | A24 | **v3.2** authored `ok`/`warn` reach the semantic layer instead of being re-derived | `ThemeColors.successSeed` / `warningSeed` → `SemanticPalette.of`, retained palettes null | PASS (by inspection; unit test `DesignSystemV32Test` asserts the seeds) |
 | A25 | **v3.2** clock size is a per-theme token, not a constant | `ResolvedTheme.clockSp` → `HomeActivity.applyPreset` | PASS (by inspection; 64 / 58 / 84 sp) |
+| A26 | Version identity is `1.0.0` / `versionCode` 100 in the build file and every document | Cross-check of `app/build.gradle.kts`, `README.md`, `RELEASE-1.0.0.md`, `CHANGELOG.md`, `BUILD_REPORT.md` | PASS |
 
 Not performed: Kotlin compilation, resource linking, lint, unit tests, Robolectric
 tests, APK/AAB assembly, signing, installation.

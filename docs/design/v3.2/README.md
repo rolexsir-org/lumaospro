@@ -90,6 +90,12 @@ Both are one-line changes in `tokens/*.json` plus `LumaDesignTokens.kt` (the par
 test fails until both are updated together). Until then the app keeps the authored
 values and the engine keeps its enforced floors.
 
+## Release
+
+This is the design system **shipped in LumaOS Pro 1.0.0** (`versionCode` 100).
+Version format: `versionName` `major.minor.patch`; `versionCode` is
+`major * 100 + minor * 10 + patch`.
+
 ## What this adoption does **not** claim
 
 The bundle specifies a great deal more than a token layer: 26 screens, eight

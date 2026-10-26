@@ -63,6 +63,11 @@ from them:
   `cinematic` and `exact`. No existing storage key changed.
 - Fresh installs default to Signature (dark) / Zen (light); the v3.2 trio is
   authored dark and the specification's light *surface* variant is not implemented.
+- Authored `ok` / `warn` seeds flow into `SemanticPalette`; the per-theme clock
+  size and app-label size are tokens; `LumaSpacing` now draws every value from the
+  bundle's 2 · 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 56 · 72 dp scale.
+- Configured version for this release: **1.0.0** (`versionCode` 100,
+  `major * 100 + minor * 10 + patch`). The 0.1.0 pre-release was never published.
 
 ### What was checked here, without a toolchain
 
@@ -71,7 +76,9 @@ from them:
 | Token parity, Kotlin ↔ bundle JSON | Scripted comparison (same parsing/rounding as `DesignTokensParityTest`): 18 colour roles × 3 themes, radii, tile, blur, saturation, type scale, spacing, motion | Exact match, 0 differences |
 | Authored contrast | Scripted WCAG maths over composited roles | Every engine floor met; two authored roles are below the *specification's* own targets and are shipped as authored (Monolith text-2 6.8:1 vs 7:1; text-3 4.1/4.4/3.4:1 vs 4.6:1) |
 | Preset coverage | Scripted enum/preset set comparison | 9 identities, exactly one preset each |
-| Edited Kotlin files | Bracket balance with strings/comments stripped | Balanced |
+| Edited Kotlin files | Bracket balance with strings/comments stripped, backticked test names handled | Balanced (19 files) |
+| Status roles | `ThemeColors.successSeed` / `warningSeed` → `SemanticPalette.of`, retained palettes null | Wired; asserted by `DesignSystemV32Test` |
+| Spacing | `LumaSpacing` values checked against `SPACING_DP` | No off-scale value (4/8/12/16/20/24/32/40/56/72) |
 | Resources | `R.string` cross-check | All resolve (`android.R.string.cancel` is framework) |
 
 ### What was **not** run
@@ -83,6 +90,10 @@ accessibility check. The v3.2 pass must not be described as compiled or
 device-verified. `docs/QA_CHECKLIST.md` §D0 lists the device rows that remain.
 
 ## Release configuration and Play readiness
+
+- Application identity for this release: `com.lumaos.pro.launcher`, version
+  `1.0.0` (`versionCode` 100). Configured in `app/build.gradle.kts`; no build of
+  this identity has been produced in this workspace.
 
 - The app is configured for Android 16 / API 36. Google Play's new-app and
   update target requirement became API 36 on August 31, 2026; the previous API

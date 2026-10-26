@@ -77,9 +77,10 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 - The publisher selected **LumaOS Pro** as the replacement brand; app labels,
   package namespace, and listing artwork have been updated in source. Confirm
   `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
-  clearance before first upload. Increment `versionCode` on each later update
-  and follow any account-specific Play testing gates shown in Console. The new
-  name and package have not been independently cleared.
+  clearance before first upload. `versionCode` follows
+  `major * 100 + minor * 10 + patch` (1.0.0 → 100), so increment it on each
+  later upload and follow any account-specific Play testing gates shown in
+  Console. The new name and package have not been independently cleared.
 
 ---
 
@@ -91,7 +92,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 0.1.0 (versionCode 1) |
+| Version | 1.0.0 (versionCode 100) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
