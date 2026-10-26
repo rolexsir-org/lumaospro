@@ -18,7 +18,21 @@ package com.lumaos.pro.launcher.ui.theme
  * Everything here is plain data with no Android imports, so the derived
  * colours and their contrast guarantees are unit tested on the JVM.
  */
+/**
+ * Selectable identities.
+ *
+ * The first three are Design System v3.2. The rest are the pre-3.2 palettes,
+ * kept verbatim - same storage keys, same geometry, same voices - so that an
+ * upgrade never resets a saved choice or rewrites an exported backup. No theme is
+ * removed; ordering only decides what Studio shows first.
+ */
 enum class ThemeId(val storageKey: String) {
+    /** v3.2 - refined, timeless, expensive. */
+    SIGNATURE("signature"),
+    /** v3.2 - immersive, cinematic, adaptive. */
+    ATMOSPHERE("atmosphere"),
+    /** v3.2 - architectural, bold, exact. Blur is 0 by design. */
+    MONOLITH("monolith"),
     OBSIDIAN("obsidian"),
     GRAPHITE("graphite"),
     VECTOR("vector"),
@@ -116,7 +130,14 @@ data class ThemeSpec(
     val surfaceStyle: SurfaceStyle,
     val defaultBackdrop: Backdrop,
     /** Multiplier for every corner radius (sharper < 1 < softer). */
-    val cornerScale: Float
+    val cornerScale: Float,
+    /**
+     * Authored v3.2 tokens for this identity, or null for the retained pre-3.2
+     * palettes (whose colours are derived from the seeds above).
+     *
+     * Declared last and defaulted so every existing preset stays source-compatible.
+     */
+    val tokens: ThemeTokens? = null
 )
 
 /** Complete derived colour set. Every on-colour is contrast-checked against its surface. */
@@ -152,7 +173,13 @@ data class ThemeColors(
     val selectedFill: Int,
     val focusRing: Int,
     val ripple: Int,
-    val danger: Int
+    val danger: Int,
+    /**
+     * Authored `ok` / `warn` roles from a v3.2 bundle, when the theme has them.
+     * Null for the retained palettes, whose status colours stay hue-derived.
+     */
+    val successSeed: Int? = null,
+    val warningSeed: Int? = null
 ) {
     companion object {
         /** Animated theme changes interpolate every role at once. */
@@ -185,11 +212,21 @@ data class ThemeColors(
                 selectedFill = c(a.selectedFill, b.selectedFill),
                 focusRing = c(a.focusRing, b.focusRing),
                 ripple = c(a.ripple, b.ripple),
-                danger = c(a.danger, b.danger)
+                danger = c(a.danger, b.danger),
+                // A status seed is a role identity, not a gradient: it snaps at the
+                // midpoint instead of being interpolated into an undefined hue.
+                successSeed = if (t < 0.5f) a.successSeed else b.successSeed,
+                warningSeed = if (t < 0.5f) a.warningSeed else b.warningSeed
             )
         }
     }
 }
+
+/**
+ * Corner roles a component may ask for. A screen never passes a raw dp value:
+ * it asks for the role and the active theme answers with its authored radius.
+ */
+enum class RadiusRole { EXTRA_LARGE, LARGE, MEDIUM, SMALL, EXTRA_SMALL, DOCK, TILE }
 
 /** A theme after overrides and environment have been applied: what is actually drawn. */
 data class ResolvedTheme(
@@ -203,7 +240,9 @@ data class ResolvedTheme(
     val atmosphere: Atmosphere,
     val surfaceStyle: SurfaceStyle,
     val backdrop: Backdrop,
-    val cornerScale: Float
+    val cornerScale: Float,
+    /** Authored v3.2 tokens; null for a retained pre-3.2 palette. */
+    val tokens: ThemeTokens? = null
 ) {
     val isDark: Boolean get() = colors.isDark
 
@@ -215,6 +254,76 @@ data class ResolvedTheme(
 
     /** Corner radius in dp for a given base radius, scaled by the theme's geometry. */
     fun corner(baseDp: Float): Float = baseDp * cornerScale
+
+    /**
+     * Corner radius in dp for a design-system role.
+     *
+     * v3.2 themes answer with their authored token (34/26/16/10/6 for Signature,
+     * 38/30/20/12/8 for Atmosphere, 8/4/2/2/2 for Monolith). Retained palettes
+     * answer with the pre-3.2 base radius scaled by their geometry, so old themes
+     * keep exactly the shape they had before.
+     */
+    fun radius(role: RadiusRole): Float {
+        tokens?.shape?.let { shape ->
+            return when (role) {
+                RadiusRole.EXTRA_LARGE -> shape.extraLarge
+                RadiusRole.LARGE -> shape.large
+                RadiusRole.MEDIUM -> shape.medium
+                RadiusRole.SMALL -> shape.small
+                RadiusRole.EXTRA_SMALL -> shape.extraSmall
+                RadiusRole.DOCK -> shape.dockRadius
+                RadiusRole.TILE -> shape.tileRadius
+            }
+        }
+        val base = when (role) {
+            RadiusRole.EXTRA_LARGE -> 24f
+            RadiusRole.LARGE -> 22f
+            RadiusRole.MEDIUM -> 16f
+            RadiusRole.SMALL -> 10f
+            RadiusRole.EXTRA_SMALL -> 6f
+            RadiusRole.DOCK -> 24f
+            RadiusRole.TILE -> 16f
+        }
+        return base * cornerScale
+    }
+
+    /**
+     * Blur radius this theme's material calls for, in dp.
+     *
+     * Blur is a material value, not a global preference: Signature asks for 26,
+     * Atmosphere 34 and Monolith 0. Retained palettes keep the launcher's
+     * historical 26 dp ceiling.
+     */
+    val blurDp: Float get() = tokens?.material?.blurDp ?: LEGACY_BLUR_DP
+
+    /** Multiplier for real-time blur radii; 0 disables blur entirely for this theme. */
+    val blurFactor: Float get() = (blurDp / LEGACY_BLUR_DP).coerceIn(0f, 2f)
+
+    /** False when the theme's material excludes blur (Monolith). */
+    val usesBlur: Boolean get() = blurDp > 0f
+
+    /** Saturation multiplier applied to blurred backdrop content. 1 = untouched. */
+    val saturation: Float get() = tokens?.material?.saturation ?: 1f
+
+    /** App-label size for this theme, in sp. */
+    val appLabelSp: Float get() = tokens?.appLabelSp ?: typeScale.appLabel
+
+    /**
+     * Home clock size for this theme, in sp.
+     *
+     * v3.2 authors 64 / 58 / 84 for Signature / Atmosphere / Monolith, which is
+     * intentionally not the shared 66 sp scale entry: the clock is the one role a
+     * theme may resize. Retained palettes answer from their voice.
+     */
+    val clockSp: Float get() = tokens?.clockSp ?: typography.clockSizeSp
+
+    /** The ten-role type ladder in force (v3.2 set, or the shared fallback). */
+    val typeScale: TokenTypeScale get() = tokens?.type ?: LumaDesignTokens.TYPE_SCALE
+
+    companion object {
+        /** Historical blur ceiling; also the baseline the token ratio is measured against. */
+        const val LEGACY_BLUR_DP = 26f
+    }
 
     /** Alpha applied to elevated surfaces for the theme's material. */
     fun surfaceAlpha(effectsAllowTranslucency: Boolean): Float = when {
@@ -235,6 +344,11 @@ data class WallpaperSeeds(
 )
 
 object ThemePresets {
+
+    // The pre-3.2 presets are kept exactly as they shipped. They are the
+    // compatibility half of this file: storage keys, seeds, corner scales and
+    // voices here must not change, because a database row or an exported backup
+    // may still name them.
 
     val OBSIDIAN = ThemeSpec(
         id = ThemeId.OBSIDIAN,
@@ -377,11 +491,93 @@ object ThemePresets {
         cornerScale = 1.0f
     )
 
-    /** Three signature identities shown first in Studio. */
-    val SIGNATURE: List<ThemeSpec> = listOf(AURORA, ZEN, VOID)
+    // ------------------------------------------------------------ v3.2 themes
+    //
+    // Seeds below are the authored v3.2 token values (docs/design/v3.2). The
+    // engine draws the exact authored roles when no override is in force; the
+    // seeds here are what the derived path and Studio previews fall back to when
+    // the user picks a custom accent or background.
 
-    /** Existing specialist palettes remain available; no saved theme is discarded. */
-    val ADDITIONAL: List<ThemeSpec> = listOf(OBSIDIAN, GRAPHITE, CHROMA)
+    /** Signature: refined, timeless, expensive. Centred clock, floating dock. */
+    val SIGNATURE_THEME = ThemeSpec(
+        id = ThemeId.SIGNATURE,
+        displayName = "Signature",
+        tagline = "Refined and timeless: midnight ramp, indigo-violet light, floating dock.",
+        dark = true,
+        amoled = false,
+        background = 0xFF06070B.toInt(),
+        accent = 0xFF7C86FF.toInt(),
+        secondary = 0xFFA78BFA.toInt(),
+        neutralTint = 0xFF7C86FF.toInt(),
+        neutralChroma = 0.012,
+        typography = TypeStyle.PRECISION,
+        motionCharacter = MotionCharacter.SUBTLE,
+        iconShape = IconShape.SQUIRCLE,
+        iconStyle = IconStyle.PLATE,
+        atmosphere = Atmosphere.HALO,
+        surfaceStyle = SurfaceStyle.TRANSLUCENT,
+        defaultBackdrop = Backdrop.THEME,
+        cornerScale = 1.0f,
+        tokens = LumaDesignTokens.SIGNATURE
+    )
+
+    /** Atmosphere: immersive, cinematic, adaptive. Wallpaper-led, aurora mint. */
+    val ATMOSPHERE_THEME = ThemeSpec(
+        id = ThemeId.ATMOSPHERE,
+        displayName = "Atmosphere",
+        tagline = "Cinematic and adaptive: the wall leads, aurora mint and sky follow.",
+        dark = true,
+        amoled = false,
+        background = 0xFF04131A.toInt(),
+        accent = 0xFF46E0B0.toInt(),
+        secondary = 0xFF7FB6FF.toInt(),
+        neutralTint = 0xFF46E0B0.toInt(),
+        neutralChroma = 0.018,
+        typography = TypeStyle.AMBIENT,
+        motionCharacter = MotionCharacter.CINEMATIC,
+        iconShape = IconShape.CIRCLE,
+        iconStyle = IconStyle.PLATE,
+        atmosphere = Atmosphere.TINT,
+        surfaceStyle = SurfaceStyle.GLASS,
+        defaultBackdrop = Backdrop.WALLPAPER,
+        // Medium radius 20 dp over the pre-3.2 16 dp base, so legacy component
+        // tokens scale to the authored geometry instead of contradicting it.
+        cornerScale = 1.25f,
+        tokens = LumaDesignTokens.ATMOSPHERE
+    )
+
+    /** Monolith: architectural, bold, exact. Stone neutrals, vermilion, no blur. */
+    val MONOLITH_THEME = ThemeSpec(
+        id = ThemeId.MONOLITH,
+        displayName = "Monolith",
+        tagline = "Architectural and exact: stone neutrals, ruled surfaces, vermilion signal.",
+        dark = true,
+        amoled = false,
+        background = 0xFF0B0B0A.toInt(),
+        accent = 0xFFFF5A2B.toInt(),
+        secondary = 0xFFFF5A2B.toInt(),
+        neutralTint = 0xFFF5F3EE.toInt(),
+        neutralChroma = 0.004,
+        typography = TypeStyle.MONOGRAPH,
+        motionCharacter = MotionCharacter.EXACT,
+        iconShape = IconShape.ROUNDED,
+        iconStyle = IconStyle.PLATE,
+        atmosphere = Atmosphere.NONE,
+        surfaceStyle = SurfaceStyle.SOLID,
+        defaultBackdrop = Backdrop.THEME,
+        // Medium radius 2 dp / 16 dp base: the near-square Monolith geometry.
+        cornerScale = 0.125f,
+        tokens = LumaDesignTokens.MONOLITH
+    )
+
+    /** The v3.2 identities, in the order Studio shows them. */
+    val SIGNATURE: List<ThemeSpec> = listOf(SIGNATURE_THEME, ATMOSPHERE_THEME, MONOLITH_THEME)
+
+    /**
+     * Palettes retained from before v3.2. Same IDs, seeds and geometry as the day
+     * they shipped: an upgrade must not move a user's home screen.
+     */
+    val ADDITIONAL: List<ThemeSpec> = listOf(AURORA, ZEN, VOID, OBSIDIAN, GRAPHITE, CHROMA)
 
     /** All selectable presets, including the retained specialist palettes. */
     val ALL: List<ThemeSpec> = SIGNATURE + ADDITIONAL
@@ -390,6 +586,11 @@ object ThemePresets {
 
     /** Curated accent swatches offered in the Studio (plus the theme's own). */
     val ACCENT_SWATCHES: List<Int> = listOf(
+        0xFF7C86FF.toInt(), // Signature indigo-violet (v3.2)
+        0xFFA78BFA.toInt(), // Signature secondary violet (v3.2)
+        0xFF46E0B0.toInt(), // Atmosphere aurora mint (v3.2)
+        0xFF7FB6FF.toInt(), // Atmosphere sky (v3.2)
+        0xFFFF5A2B.toInt(), // Monolith vermilion (v3.2)
         0xFFB5C5A9.toInt(), // LumaOS Pro sage
         0xFFE2B66B.toInt(), // amber
         0xFF9AD3FF.toInt(), // Aurora ice
@@ -409,6 +610,9 @@ object ThemePresets {
 
     /** Curated background swatches for the THEME backdrop. */
     val BACKGROUND_SWATCHES: List<Int> = listOf(
+        0xFF06070B.toInt(), // Signature midnight (v3.2)
+        0xFF04131A.toInt(), // Atmosphere deep teal (v3.2)
+        0xFF0B0B0A.toInt(), // Monolith stone (v3.2)
         0xFF000000.toInt(),
         0xFF080D1A.toInt(), // Aurora midnight
         0xFF080815.toInt(), // Void indigo

@@ -3,11 +3,13 @@ package com.lumaos.pro.launcher.ui.theme
 /**
  * LumaOS Pro's bundled wallpaper collection.
  *
- * Each signature theme ships one art-directed wallpaper so its identity is
- * complete out of the box. The artwork is authored for both portrait and
- * landscape (the same resource name in `drawable-nodpi` and
- * `drawable-land-nodpi`), and is always drawn centre-cropped with the stated
- * focal point - never stretched.
+ * The retained pre-3.2 palettes ship one art-directed wallpaper each so their
+ * identity is complete out of the box. The Design System v3.2 identities (Signature,
+ * Atmosphere, Monolith) deliberately do **not**: Signature and Monolith paint their
+ * own authored atmosphere, and Atmosphere follows the user's system wallpaper.
+ * The artwork is authored for both portrait and landscape (the same resource name
+ * in `drawable-nodpi` and `drawable-land-nodpi`), and is always drawn
+ * centre-cropped with the stated focal point - never stretched.
  *
  * [supportsDarkText] is a property of the artwork itself, not a guess at
  * runtime: the Zen wallpaper is a light, misty landscape and therefore uses dark

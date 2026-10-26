@@ -1170,9 +1170,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         findViewById<TextView>(R.id.edit_done).typeface = Typefaces.label(style)
         drawer.setSearchTypeface(Typefaces.body(style))
         val label = Typefaces.label(style)
-        homeCellConfig = homeCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
-        dockCellConfig = dockCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
-        drawerCellConfig = drawerCellConfig.copy(typeface = label, labelTracking = style.labelTracking)
+        // Label size comes from the theme's token, so Monolith's 9 sp engraved
+        // labels and Atmosphere's 11 sp labels are data, not per-screen constants.
+        val labelSize = t.appLabelSp
+        homeCellConfig = homeCellConfig.copy(
+            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+        )
+        dockCellConfig = dockCellConfig.copy(
+            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+        )
+        drawerCellConfig = drawerCellConfig.copy(
+            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+        )
         folderCellConfig = drawerCellConfig
         applyPreset(appearance.preset)
     }
@@ -1311,7 +1320,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Spatial arrangement for the chosen composition preset. */
     private fun applyPreset(preset: HomePreset) {
-        val voiceClock = theme.typography.clockSizeSp
+        // The authored per-theme clock size (Signature 64, Atmosphere 58,
+        // Monolith 84), not a single constant shared by every identity.
+        val voiceClock = theme.clockSp
         val clockSp: Float
         when (preset.clock) {
             ClockStyle.DIAL -> {
@@ -1451,7 +1462,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         desktop.scaleY = scale
         desktop.alpha = (1f - 0.45f * drawerProgress) * (1f - 0.25f * folderProgress) * (0.6f + 0.4f * settleProgress)
         if (Build.VERSION.SDK_INT >= 31) {
-            val radius = if (effects.blur) maxOf(20f * drawerProgress, 14f * folderProgress) * resources.displayMetrics.density else 0f
+            // Blur is a theme material value, not only an effects-policy one:
+            // Signature asks for 26 dp, Atmosphere 34 and Monolith 0. A theme with
+            // no blur consequently draws none even on a device that supports it.
+            val themeBlur = theme.blurFactor
+            val radius = if (effects.blur && themeBlur > 0f) {
+                maxOf(20f * drawerProgress, 14f * folderProgress) * themeBlur * resources.displayMetrics.density
+            } else 0f
             val stepped = (radius * 2f).roundToInt() / 2f
             if (stepped != lastBlurRadius) {
                 lastBlurRadius = stepped

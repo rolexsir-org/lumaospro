@@ -70,28 +70,34 @@ class ThemeEngineTest {
         }
     }
 
-    @Test fun `signature themes use the requested identities without changing stored IDs`() {
-        assertEquals(listOf("Aurora", "Zen", "Void"), ThemePresets.SIGNATURE.map { it.displayName })
+    @Test fun `signature themes are the v3_2 trio without changing stored IDs`() {
+        assertEquals(listOf("Signature", "Atmosphere", "Monolith"), ThemePresets.SIGNATURE.map { it.displayName })
         assertEquals(
-            listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR),
+            listOf(ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH),
             ThemePresets.SIGNATURE.map { it.id }
         )
+        assertEquals("signature", ThemePresets.SIGNATURE_THEME.id.storageKey)
+        assertEquals("atmosphere", ThemePresets.ATMOSPHERE_THEME.id.storageKey)
+        assertEquals("monolith", ThemePresets.MONOLITH_THEME.id.storageKey)
         assertEquals(ThemeId.entries.toSet(), ThemePresets.ALL.map { it.id }.toSet())
+        // The pre-3.2 keys are unchanged, so an upgrade never resets a choice.
         assertEquals("porcelain", ThemePresets.ZEN.id.storageKey)
         assertEquals("vector", ThemePresets.VOID.id.storageKey)
         assertEquals(ThemeId.PORCELAIN, ThemeId.fromStorageKey("porcelain"))
         assertEquals(ThemeId.VECTOR, ThemeId.fromStorageKey("vector"))
+        assertEquals(ThemeId.AURORA, ThemeId.fromStorageKey("aurora"))
         assertFalse(ThemePresets.ZEN.dark)
         assertTrue(ThemePresets.AURORA.dark && ThemePresets.VOID.dark)
+        assertTrue(ThemePresets.SIGNATURE.all { it.dark })
         assertNotEquals(ThemePresets.AURORA.background, ThemePresets.VOID.background)
-        assertNotEquals(ThemePresets.AURORA.accent, ThemePresets.VOID.accent)
+        assertNotEquals(ThemePresets.SIGNATURE_THEME.accent, ThemePresets.ATMOSPHERE_THEME.accent)
     }
 
-    @Test fun `fresh theme defaults follow the system with Aurora and Zen`() {
+    @Test fun `fresh theme defaults follow the system with Signature and Zen`() {
         assertEquals(ThemeSwitching.SYSTEM, ThemeSettings().switching)
-        assertEquals(ThemeId.AURORA, ThemeSettings().darkThemeId)
+        assertEquals(ThemeId.SIGNATURE, ThemeSettings().darkThemeId)
         assertEquals(ThemeId.PORCELAIN, ThemeSettings().lightThemeId)
-        assertEquals(ThemeId.AURORA, ThemeEngine.resolve(ThemeSettings(), envDark).id)
+        assertEquals(ThemeId.SIGNATURE, ThemeEngine.resolve(ThemeSettings(), envDark).id)
         assertEquals(ThemeId.PORCELAIN, ThemeEngine.resolve(ThemeSettings(), envLight).id)
     }
 

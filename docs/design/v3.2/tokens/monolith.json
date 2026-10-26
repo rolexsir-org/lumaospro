@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "name": "LumaOS",
+    "theme": "monolith",
+    "version": "3.2",
+    "generated": "2026-10-26T14:20:38.398Z"
+  },
+  "color": {
+    "background": {
+      "bg0": "#0B0B0A",
+      "bg1": "#111110",
+      "bg2": "#171715"
+    },
+    "surface": {
+      "s1": "rgba(245,243,238,.045)",
+      "s2": "rgba(245,243,238,.075)",
+      "s3": "rgba(245,243,238,.11)",
+      "solid": "#1A1A17"
+    },
+    "stroke": {
+      "s1": "rgba(245,243,238,.13)",
+      "s2": "rgba(245,243,238,.24)"
+    },
+    "text": {
+      "t1": "#F4F2EC",
+      "t2": "#A5A29A",
+      "t3": "#726F68"
+    },
+    "accent": {
+      "primary": "#FF5A2B",
+      "secondary": "#FF5A2B",
+      "soft": "rgba(255,90,43,.14)"
+    },
+    "status": {
+      "ok": "#9BD16A",
+      "warn": "#F2C14E",
+      "danger": "#FF5A2B"
+    }
+  },
+  "shape": {
+    "r-xl": "8px",
+    "r-lg": "4px",
+    "r-md": "2px",
+    "r-sm": "2px",
+    "r-xs": "2px",
+    "dock": "4px",
+    "iconTile": {
+      "size": "58px",
+      "radius": "10px"
+    }
+  },
+  "material": {
+    "blur": "0px",
+    "saturation": "100%",
+    "shadow2": "0 2px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06)",
+    "shadow3": "0 24px 60px -28px rgba(0,0,0,.9)"
+  },
+  "type": {
+    "display": "Luma Display",
+    "text": "Luma Text",
+    "mono": "Luma Mono",
+    "scale": {
+      "clock": 66,
+      "screenTitle": 21,
+      "sectionHeading": 14,
+      "widgetHeading": 12.5,
+      "primary": 13,
+      "appLabel": 11,
+      "supporting": 10.5,
+      "numeric": 10,
+      "button": 13.5,
+      "kicker": 9.5
+    }
+  },
+  "spacing": {
+    "sp-1": 2,
+    "sp-2": 4,
+    "sp-3": 8,
+    "sp-4": 12,
+    "sp-5": 16,
+    "sp-6": 20,
+    "sp-7": 24,
+    "sp-8": 32,
+    "sp-9": 40,
+    "sp-10": 56,
+    "sp-11": 72
+  },
+  "motion": {
+    "dur1": 120,
+    "dur2": 200,
+    "dur3": 320,
+    "dur4": 480,
+    "press": 90,
+    "longPress": 500,
+    "easing": {
+      "standard": "cubic-bezier(.22,.61,.36,1)",
+      "emphasis": "cubic-bezier(.16,.84,.28,1)",
+      "exit": "cubic-bezier(.4,0,1,1)"
+    }
+  }
+}

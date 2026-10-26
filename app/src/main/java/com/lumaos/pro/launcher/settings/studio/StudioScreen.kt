@@ -689,6 +689,8 @@ private fun TimeButton(label: String, minute: Int, onSelected: (Int) -> Unit) {
 private fun typeLabel(value: TypeStyle): String = stringResource(
     when (value) {
         TypeStyle.PRECISION -> R.string.type_precision
+        TypeStyle.AMBIENT -> R.string.type_ambient
+        TypeStyle.MONOGRAPH -> R.string.type_monograph
         TypeStyle.SERENE -> R.string.type_serene
         TypeStyle.GROTESK -> R.string.type_grotesk
         TypeStyle.SERIF -> R.string.type_serif

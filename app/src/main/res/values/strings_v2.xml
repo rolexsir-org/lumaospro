@@ -100,8 +100,8 @@
     <string name="tab_studio">Studio</string>
     <string name="studio_preview_label">Live preview</string>
     <string name="studio_themes">Themes</string>
-    <string name="studio_theme_signature">Signature themes</string>
-    <string name="studio_theme_additional">More palettes</string>
+    <string name="studio_theme_signature">Signature (v3.2)</string>
+    <string name="studio_theme_additional">Retained palettes</string>
     <string name="studio_color_option_description">Color %1$s</string>
     <string name="studio_apply">Apply</string>
     <string name="studio_revert">Revert</string>
@@ -152,7 +152,9 @@
     <string name="style_natural">Natural</string>
     <string name="style_plate">Plate</string>
     <string name="style_tinted">Tinted</string>
-    <string name="type_precision">Aurora · Inter quiet luxury</string>
+    <string name="type_precision">Signature · Inter refined</string>
+    <string name="type_ambient">Atmosphere · Inter airy</string>
+    <string name="type_monograph">Monolith · Grotesk + Mono exact</string>
     <string name="type_serene">Zen · Inter modern serenity</string>
     <string name="type_grotesk">Void · Space Grotesk</string>
     <string name="type_serif">Editorial serif (fallback)</string>

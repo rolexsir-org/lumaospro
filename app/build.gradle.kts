@@ -157,4 +157,11 @@ dependencies {
 tasks.withType<Test>().configureEach {
     maxHeapSize = "900m"
     systemProperty("robolectric.dependency.dir", file("${rootDir}/.cache/robolectric").absolutePath)
+    // DesignTokensParityTest reads the authored Design System v3.2 bundle from the
+    // repository, not from a copy, so a drift between docs/design/v3.2 and the
+    // Kotlin tokens fails the suite instead of being discovered by eye.
+    systemProperty(
+        "lumaos.designTokensDir",
+        rootProject.file("docs/design/v3.2/tokens").absolutePath
+    )
 }

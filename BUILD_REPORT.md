@@ -42,6 +42,46 @@ Robolectric tests, APK/AAB assembly, signing, installation, or any on-device
 visual/performance/accessibility check. This pass must not be described as
 device-verified.
 
+## Design System v3.2 adoption (current branch)
+
+The owner supplied the LumaOS Design System v3.2 bundle (`design.zip`, Drive,
+2026-10-26 14:43 UTC, SHA-256 `bc338391396d9c6784395ec33537681156e6032a28f8963aba52f1fc277b53a8`).
+The specification and per-theme token JSON are now checked in at
+`docs/design/v3.2/` with provenance, and the app's appearance layer is generated
+from them:
+
+- `ui/theme/LumaDesignTokens.kt` — authored colour, shape, material, type,
+  spacing and motion tokens for the three identities.
+- `ThemePresets.SIGNATURE_THEME / ATMOSPHERE_THEME / MONOLITH_THEME` — the v3.2
+  identities; the six pre-3.2 palettes are retained unchanged.
+- `ThemeEngine.authoredColors()` — draws the authored roles exactly (translucent
+  roles composited over the authored background), falling back to the seed-derived
+  path for custom colours and retained palettes.
+- Blur (26/34/0 dp), saturation (135/165/100 %), corner geometry, app-label size
+  and the type ladder are now data the UI reads, not per-screen constants.
+- `TypeStyle` gained `ambient` and `monograph`; `MotionCharacter` gained
+  `cinematic` and `exact`. No existing storage key changed.
+- Fresh installs default to Signature (dark) / Zen (light); the v3.2 trio is
+  authored dark and the specification's light *surface* variant is not implemented.
+
+### What was checked here, without a toolchain
+
+| Check | Method | Result |
+| --- | --- | --- |
+| Token parity, Kotlin ↔ bundle JSON | Scripted comparison (same parsing/rounding as `DesignTokensParityTest`): 18 colour roles × 3 themes, radii, tile, blur, saturation, type scale, spacing, motion | Exact match, 0 differences |
+| Authored contrast | Scripted WCAG maths over composited roles | Every engine floor met; two authored roles are below the *specification's* own targets and are shipped as authored (Monolith text-2 6.8:1 vs 7:1; text-3 4.1/4.4/3.4:1 vs 4.6:1) |
+| Preset coverage | Scripted enum/preset set comparison | 9 identities, exactly one preset each |
+| Edited Kotlin files | Bracket balance with strings/comments stripped | Balanced |
+| Resources | `R.string` cross-check | All resolve (`android.R.string.cancel` is framework) |
+
+### What was **not** run
+
+Kotlin compilation, resource linking, lint, unit tests (including the new
+`DesignTokensParityTest` and `DesignSystemV32Test`), Robolectric tests, APK/AAB
+assembly, signing, installation, or any on-device visual, performance and
+accessibility check. The v3.2 pass must not be described as compiled or
+device-verified. `docs/QA_CHECKLIST.md` §D0 lists the device rows that remain.
+
 ## Release configuration and Play readiness
 
 - The app is configured for Android 16 / API 36. Google Play's new-app and
