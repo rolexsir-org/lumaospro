@@ -77,9 +77,10 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 - The publisher selected **LumaOS Pro** as the replacement brand; app labels,
   package namespace, and listing artwork have been updated in source. Confirm
   `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
-  clearance before first upload. Increment `versionCode` on each later update
-  and follow any account-specific Play testing gates shown in Console. The new
-  name and package have not been independently cleared.
+  clearance before first upload. `versionCode` follows
+  `major * 100 + minor * 10 + patch` (1.0.0 → 100), so increment it on each
+  later upload and follow any account-specific Play testing gates shown in
+  Console. The new name and package have not been independently cleared.
 
 ---
 
@@ -91,7 +92,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 0.1.0 (versionCode 1) |
+| Version | 1.0.0 (versionCode 100) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
@@ -116,35 +117,61 @@ migration path while retaining the new application ID; it is not automatic.
 
 ---
 
-## Design system
+## Design system (v3.2)
 
-The launcher has a complete, token-driven visual identity: three signature themes
-(Aurora, Zen, Void) with their own typography, motion, geometry, icon treatment and
-bundled wallpaper, plus three specialist palettes kept for existing users.
+The appearance layer is **LumaOS Design System v3.2**, adopted from the authored
+bundle in [`docs/design/v3.2/`](docs/design/v3.2/): a written specification, one
+token file per theme, and a parity test that fails if the Kotlin constants and the
+bundle ever disagree. The bundle's studio build is kept in
+[`design-src/v3.2/`](design-src/v3.2/).
+
+Three identities, one grammar. They differ in composition, typography, icon
+treatment, surface material and motion — not just in accent hue:
+
+| | **Signature** | **Atmosphere** | **Monolith** |
+| --- | --- | --- | --- |
+| Character | Refined, timeless | Cinematic, adaptive | Architectural, exact |
+| Accent | `#7C86FF` indigo-violet | `#46E0B0` aurora mint | `#FF5A2B` vermilion |
+| Radii (xl→xs) | 34 / 26 / 16 / 10 / 6 | 38 / 30 / 20 / 12 / 8 | 8 / 4 / 2 / 2 / 2 |
+| Material | blur 26 dp · sat 135 % | blur 34 dp · sat 165 % | **no blur** · solid |
+| Clock | 64 sp light, caps date | 58 sp light, sentence date | 84 sp semibold, mono date |
+| Label | 10.5 sp | 11 sp | 9 sp |
 
 | Area | Where it lives | Summary |
 | --- | --- | --- |
-| Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt` | Base + semantic roles, contrast-checked at resolution time |
-| Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 12-role scale, three voices |
-| Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 45 glyphs on one 24 dp grid, 1.75 dp stroke, filled only for selection |
-| Wallpaper | `ui/theme/WallpaperArt.kt`, `drawable-nodpi` | One artwork per signature theme, portrait and landscape, focal-point crop |
-| Shapes | `ui/theme/Components.kt` | Component radii/materials, scaled per theme |
-| Motion | `ui/theme/MotionIdentity.kt` | Subtle / quiet / expressive profiles with hard invariants |
-| Home | `res/layout/activity_home.xml`, `launcher/HomeActivity.kt` | One composition, three materials, widgets framed by the theme |
+| Tokens | `ui/theme/LumaDesignTokens.kt` | Authored v3.2 colour, shape, material, type, spacing and motion; parity-tested against `docs/design/v3.2/tokens` |
+| Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt`, `ThemeEngine.kt` | Authored roles for v3.2 themes, seed-derived for retained palettes and custom colours; contrast enforced on both paths |
+| Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 10-role ladder, five voices |
+| Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 45 glyphs on one 24 dp grid, filled only for selection; per-theme tile shape at 58 dp |
+| Wallpaper | `ui/theme/WallpaperArt.kt`, `drawable-nodpi` | Authored art for the retained palettes; v3.2 paints its own backdrop or follows the system wallpaper |
+| Shapes | `ResolvedTheme.radius(RadiusRole…)`, `ui/theme/Components.kt` | Authored per-theme radii, with the pre-3.2 scaled path kept for retained palettes |
+| Motion | `ui/theme/MotionIdentity.kt`, `LumaDesignTokens.Motion` | Subtle / cinematic / exact (+ retained quiet, expressive) with hard invariants |
+| Home | `res/layout/activity_home.xml`, `launcher/HomeActivity.kt` | One composition; blur, label size and radii come from the theme's tokens |
 | Switching | `ui/theme/ThemeEngine.kt` | One resolver feeding View and Compose surfaces |
 
 * [Design system reference](docs/DESIGN_SYSTEM.md)
 * [Design QA checklist](docs/QA_CHECKLIST.md) — separates static checks performed
   here from the device verification that is still required
+* [Design bundle provenance](docs/design/v3.2/README.md) — zip hash, what was and
+  was not copied, why Inter stands in for "Luma Display/Text", and two measured
+  token discrepancies in the authored colours
 
-The storage keys `aurora`, `porcelain`, `vector` and the typography keys
-`precision`, `serene`, `grotesk`, `serif`, `mono` are unchanged, so upgrading never
-resets a saved choice.
+**Compatibility.** Nothing is removed. The pre-3.2 palettes — Aurora, Zen, Void,
+Obsidian, Graphite and Chroma — keep their storage keys, seeds, geometry and
+voices; a stored `aurora`, `porcelain` or `vector` still resolves to the same
+palette, and the typography keys `precision`, `serene`, `grotesk`, `serif`, `mono`
+all still load (joined by `ambient` and `monograph`). A fresh install follows the
+system: **Signature** in dark mode, **Zen** (the retained paper palette) in light
+mode, because the v3.2 trio is authored dark and the specification's light
+*surface* variant is not implemented yet.
 
-**Status:** this design-system pass has not been compiled, linted or rendered in
-this workspace (no JDK/Android SDK/device). See the QA checklist for exactly what
-has and has not been verified; do not present these screens as device-verified
-until section D is complete.
+**Status:** the v3.2 adoption has not been compiled, linted or rendered in this
+workspace (no JDK/Android SDK/device). What was checked mechanically: exact
+token parity between the bundle JSON and Kotlin, and the measured contrast of every
+authored pair (two authored roles fall short of the specification's own targets —
+see the provenance page). Unit tests, lint and any on-device rendering remain
+outstanding; do not present these screens as device-verified until section D of the
+QA checklist is complete.
 
 ---
 
@@ -173,31 +200,34 @@ com.lumaos.pro.launcher
 ├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
 ├── onboarding/      OnboardingActivity (Compose)
 └── ui/              DesignTokens, ThemeMode compatibility, shared theme engine
-    └── theme/       ThemeRepository, ThemeEngine, contrast, atmosphere, presets
+    └── theme/       ThemeRepository, ThemeEngine, LumaDesignTokens (v3.2),
+                     contrast, atmosphere, presets
 ```
 
 ### Appearance and theme system
 
-Aurora, Zen, and Void are LumaOS Pro's signature themes, resolved by one
-shared engine for the View-based home, drawer, folders, menus, hosted-widget
-frames, and Compose settings/Studio:
+Signature, Atmosphere and Monolith are LumaOS Pro's signature themes (Design
+System v3.2), resolved by one shared engine for the View-based home, drawer,
+folders, menus, hosted-widget frames, and Compose settings/Studio:
 
-- **Aurora** — midnight navy and obsidian surfaces, icy blue accents, and a
-  slow, restrained polar glow.
-- **Zen** — quiet paper neutrals, sage and blue-grey accents, clear text
-  hierarchy, and a soft daylight lift.
-- **Void** — indigo depth with cyan and magenta signals, fine grid detail, and
-  reduced highlight intensity.
+- **Signature** — a midnight ramp (`#06070B → #0F1219`), indigo-violet accents on
+  translucent surfaces, blur 26 dp, and a light 64 sp clock.
+- **Atmosphere** — a wallpaper-led screen with aurora-mint and sky accents, the
+  deepest blur (34 dp, 165 % saturation), a 58 sp clock and a cinematic motion
+  profile.
+- **Monolith** — stone neutrals, a vermilion signal, near-square geometry
+  (8/4/2/2/2), **no blur at all**, an 84 sp Space Grotesk clock and mono labels.
 
-Obsidian, Graphite, and Chroma remain available as additional palettes. To
-preserve existing settings and backups, Zen and Void retain the historical
-`porcelain` and `vector` storage keys; the IDs are not rewritten or used to reset
-the home layout. Theme selection persists through DataStore and does not change
+Aurora, Zen, Void, Obsidian, Graphite and Chroma remain available as retained
+palettes, with their historical storage keys (`porcelain` and `vector` included) so
+no saved preference is rewritten or used to reset the home layout. Theme selection persists through DataStore and does not change
 app placement, folders, widget IDs/configuration, icon-pack choice, or unrelated
 preferences. The Studio keeps custom color/type/icon/backdrop overrides when a
 preset changes. New installs follow Android's system appearance, choosing
-Aurora for dark mode and Zen for light. Scheduled and context-profile switching
-remain available.
+Signature for dark mode and Zen for light. Scheduled and context-profile switching
+remain available. A custom accent or background deliberately switches the palette
+to the seed-derived path, which can guarantee contrast for an arbitrary colour —
+the authored v3.2 roles are used only while the theme's own colours are in force.
 
 The Studio previews the user's installed app icons and Android wallpaper color
 seeds. Android exposes wallpaper colors here, not the wallpaper image, so that

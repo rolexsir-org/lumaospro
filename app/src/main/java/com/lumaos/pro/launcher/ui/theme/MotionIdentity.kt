@@ -11,12 +11,19 @@ import com.lumaos.pro.launcher.motion.SpringSpec
  * animator-duration scale is honoured. The character only changes how the
  * springs are used - never whether feedback happens.
  *
- *  - Aurora: subtle fades and restrained scale on smooth, non-overshooting springs.
- *  - Zen: gentle, quiet movement with slightly longer settles and no urgency.
- *  - Void: expressive, responsive scale with a single controlled overshoot.
+ *  - Signature (SUBTLE): restrained fades and scale on non-overshooting springs.
+ *  - Atmosphere (CINEMATIC): longer travel and a single controlled overshoot -
+ *    the drawer rises, the wall parallaxes, the eye follows.
+ *  - Monolith (EXACT): short, mechanical transitions that land without a bounce
+ *    and never stagger. Structure, not choreography.
+ *
+ * Zen (QUIET) and Void (EXPRESSIVE) keep their characters for the retained
+ * palettes, so a saved theme never changes tempo on upgrade.
  */
 enum class MotionCharacter(val storageKey: String) {
     SUBTLE("subtle"),
+    CINEMATIC("cinematic"),
+    EXACT("exact"),
     QUIET("quiet"),
     EXPRESSIVE("expressive");
 
@@ -86,6 +93,52 @@ object LumaMotionProfiles {
         easing = floatArrayOf(0.2f, 0f, 0f, 1f)
     )
 
+    /**
+     * Atmosphere: the cinematic profile. 320 ms emphasis, a 24 ms stagger and one
+     * controlled overshoot - the only v3.2 character that is allowed to overshoot.
+     */
+    val ATMOSPHERE = MotionProfile(
+        character = MotionCharacter.CINEMATIC,
+        pressMs = 90,
+        openMs = 320,
+        closeMs = 220,
+        themeChangeMs = 420,
+        staggerMs = 24,
+        pressScale = 0.97f,
+        enterScaleFrom = 0.96f,
+        // The sheet's 1.02 -> 1 settle is produced by the overshooting popup
+        // spring, not by an entry scale above 1 (the profile invariant forbids it).
+        popupScaleFrom = 0.98f,
+        allowOvershoot = true,
+        openSpring = MotionTokens.LIVELY,
+        closeSpring = MotionTokens.SNAPPY,
+        popupSpring = MotionTokens.LIVELY,
+        settleSpring = MotionTokens.LIVELY,
+        easing = LumaDesignTokens.Motion.EMPHASIS
+    )
+
+    /**
+     * Monolith: the exact profile. Fast, no stagger, no overshoot, and the
+     * shortest theme cross-fade in the system (280 ms).
+     */
+    val MONOLITH = MotionProfile(
+        character = MotionCharacter.EXACT,
+        pressMs = 70,
+        openMs = 200,
+        closeMs = 150,
+        themeChangeMs = 280,
+        staggerMs = 0,
+        pressScale = 0.97f,
+        enterScaleFrom = 0.97f,
+        popupScaleFrom = 0.98f,
+        allowOvershoot = false,
+        openSpring = MotionTokens.SNAPPY,
+        closeSpring = MotionTokens.SNAPPY,
+        popupSpring = MotionTokens.SNAPPY.withoutOvershoot(),
+        settleSpring = MotionTokens.STANDARD,
+        easing = LumaDesignTokens.Motion.STANDARD
+    )
+
     val ZEN = MotionProfile(
         character = MotionCharacter.QUIET,
         pressMs = 110,
@@ -124,6 +177,8 @@ object LumaMotionProfiles {
 
     fun of(character: MotionCharacter): MotionProfile = when (character) {
         MotionCharacter.SUBTLE -> AURORA
+        MotionCharacter.CINEMATIC -> ATMOSPHERE
+        MotionCharacter.EXACT -> MONOLITH
         MotionCharacter.QUIET -> ZEN
         MotionCharacter.EXPRESSIVE -> VOID
     }

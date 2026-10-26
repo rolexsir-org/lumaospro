@@ -33,6 +33,12 @@ data class CellConfig(
     val cellHeightPx: Int? = null,
     val typeface: Typeface? = null,
     val labelTracking: Float = 0f,
+    /**
+     * Label size from the active theme's token (Signature 10.5 sp, Atmosphere 11,
+     * Monolith 9). Null keeps the historical base size, so anything that builds a
+     * CellConfig without a resolved theme behaves exactly as before.
+     */
+    val labelSizeSp: Float? = null,
     /** Theme ripple colour; 0 keeps the platform default background. */
     val rippleColor: Int = 0,
     val cornerPx: Float = 16f,
@@ -133,7 +139,7 @@ class AppEntryAdapter(
 
             holder.label.text = label
             holder.label.setTextColor(config.labelColor)
-            holder.label.textSize = BASE_LABEL_SP * config.textScale
+            holder.label.textSize = (config.labelSizeSp ?: BASE_LABEL_SP) * config.textScale
             config.typeface?.let { holder.label.typeface = it }
             holder.label.letterSpacing = config.labelTracking
             holder.label.visibility = if (config.showLabels) View.VISIBLE else View.GONE

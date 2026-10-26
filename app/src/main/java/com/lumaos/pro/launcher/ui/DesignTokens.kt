@@ -2,29 +2,45 @@ package com.lumaos.pro.launcher.ui
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 
 /**
- * One 4 dp spacing rhythm for every surface.
+ * The Design System v3.2 spacing scale for every surface: **2 · 4 · 8 · 12 · 16 ·
+ * 20 · 24 · 32 · 40 · 56 · 72**.
  *
- * Screens use the named steps rather than arbitrary values so the visual
- * rhythm survives new features. Dense controls (drawer rows, chips) may use the
- * smaller steps; page breathing room always uses the larger ones.
+ * Screens use the named steps rather than arbitrary values so the visual rhythm
+ * survives new features, and the specification's rule is explicit: a gap that is
+ * not on this scale (6, 10, 14 …) is a defect. The two gaps that are semantic
+ * rather than decorative — row gap 12 and section gap 24 — are their own tokens, as
+ * are the screen gutter (20, compact 16, large 22) and the dock-to-grid gap (40).
+ *
+ * Values come from [LumaDesignTokens.SPACING_DP]; this object only gives them
+ * Compose types and readable names.
  */
 object LumaSpacing {
+    /** `sp-2`: the smallest visible separation. */
     val grid: Dp = 4.dp
-    val xxs: Dp = 4.dp
-    val compactGap: Dp = 6.dp
-    val elementGap: Dp = 8.dp
-    val sm: Dp = 8.dp
-    val md: Dp = 12.dp
-    val sectionGap: Dp = 16.dp
-    val contentPadding: Dp = 16.dp
-    val lg: Dp = 16.dp
-    val screenHorizontal: Dp = 20.dp
-    val screenVertical: Dp = 20.dp
-    val xl: Dp = 24.dp
-    val screenEnd: Dp = 24.dp
-    val xxl: Dp = 32.dp
+    val xxs: Dp = LumaDesignTokens.spacing(2).dp
+    /** Dense control internals, e.g. a chip's padding or a control-to-note gap. */
+    val compactGap: Dp = LumaDesignTokens.spacing(3).dp
+    val elementGap: Dp = LumaDesignTokens.spacing(3).dp
+    val sm: Dp = LumaDesignTokens.spacing(3).dp
+    /** `sp-4`: row gap between grid rows and list items. */
+    val md: Dp = LumaDesignTokens.spacing(4).dp
+    /** `sp-7`: gap between sections. */
+    val sectionGap: Dp = LumaDesignTokens.SECTION_GAP_DP.dp
+    val contentPadding: Dp = LumaDesignTokens.spacing(5).dp
+    val lg: Dp = LumaDesignTokens.spacing(5).dp
+    val screenHorizontal: Dp = LumaDesignTokens.GUTTER_DP.dp
+    val screenVertical: Dp = LumaDesignTokens.GUTTER_DP.dp
+    val xl: Dp = LumaDesignTokens.spacing(7).dp
+    val screenEnd: Dp = LumaDesignTokens.spacing(7).dp
+    val xxl: Dp = LumaDesignTokens.spacing(8).dp
+    /** `sp-9`: the gap the specification keeps between the dock and the grid. */
+    val dockGap: Dp = LumaDesignTokens.DOCK_GAP_DP.dp
+    /** `sp-10` and `sp-11`: deliberate empty bands (Signature keeps one above the agenda). */
+    val xxxl: Dp = LumaDesignTokens.spacing(10).dp
+    val display: Dp = LumaDesignTokens.spacing(11).dp
 }
 
 /**

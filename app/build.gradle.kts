@@ -42,8 +42,16 @@ android {
         applicationId = "com.lumaos.pro.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // 1.0.0 is the first public release and the first build that carries
+        // Design System v3.2. The pre-release 0.1.0 build never left this
+        // workspace and was never uploaded, so its versionCode is retired rather
+        // than reused.
+        //
+        // versionCode = major * 100 + minor * 10 + patch:
+        //   1.0.0 -> 100, 1.0.1 -> 101, 1.1.0 -> 110. Monotonic, and room for
+        //   99 patches and 9 minors inside each major without renumbering.
+        versionCode = 100
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("en")
@@ -157,4 +165,11 @@ dependencies {
 tasks.withType<Test>().configureEach {
     maxHeapSize = "900m"
     systemProperty("robolectric.dependency.dir", file("${rootDir}/.cache/robolectric").absolutePath)
+    // DesignTokensParityTest reads the authored Design System v3.2 bundle from the
+    // repository, not from a copy, so a drift between docs/design/v3.2 and the
+    // Kotlin tokens fails the suite instead of being discovered by eye.
+    systemProperty(
+        "lumaos.designTokensDir",
+        rootProject.file("docs/design/v3.2/tokens").absolutePath
+    )
 }

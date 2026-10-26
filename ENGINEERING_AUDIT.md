@@ -47,7 +47,7 @@ review cannot establish that the app is crash-free or Play-approved.
 | P0 | Privacy and Console | Supply publisher/legal name, support/privacy email, and public policy URL; review and publish the draft; accurately complete Data safety and app-content declarations, including local history, Android backup, and optional speech recognition. Add the final policy link in-app. |
 | P0 | Brand and package | Confirm trademark clearance for **LumaOS Pro** and verify `com.lumaos.pro.launcher` is available before creating the Play listing. Neither check can be established from this checkout. |
 | P1 | Store listing | Capture real screenshots from verified devices; review the supplied icon and feature graphic; complete listing metadata and account-specific testing requirements. |
-| P1 | Versioning | `versionCode` 1 is for an initial listing only; increment it for every later upload. |
+| P1 | Versioning | 1.0.0 is configured as `versionCode` 100 (`major * 100 + minor * 10 + patch`). Increment it for every later upload; 0.1.0/1 was never published. |
 
 ## Artifact state
 
@@ -58,6 +58,6 @@ record has been replaced with an accurate pending-release checklist, and the
 stale checksum file has been removed. Build new artifacts from the current
 Gradle source and verify the actual files before upload.
 
-See [BUILD_REPORT.md](BUILD_REPORT.md), [RELEASE-0.1.0.md](RELEASE-0.1.0.md),
+See [BUILD_REPORT.md](BUILD_REPORT.md), [RELEASE-1.0.0.md](RELEASE-1.0.0.md),
 [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md), and [README.md](README.md)
 for the current release boundary and setup steps.

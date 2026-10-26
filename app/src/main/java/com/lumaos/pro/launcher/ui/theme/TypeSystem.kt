@@ -8,8 +8,11 @@ package com.lumaos.pro.launcher.ui.theme
  * never the hierarchy. That is what makes Aurora, Zen and Void feel distinct
  * while staying recognisably the same product.
  *
- * The bundled families are Inter (Aurora, Zen and all body copy) and Space
- * Grotesk (Void display and headings), both SIL Open Font License 1.1. Their
+ * The bundled families are Inter (Signature, Atmosphere and all body copy) and
+ * Space Grotesk (Monolith display and headings), both SIL Open Font License 1.1.
+ * v3.2 names its faces "Luma Display / Luma Text / Luma Mono"; those are the
+ * brand names for exactly these two licensed families plus the platform mono
+ * face, and no unbundled face is referenced. Their
  * licence files ship in `assets/licenses` and are readable in Settings → About.
  * Every face has a platform fallback, so text remains legible if an asset is
  * ever removed from a build.
@@ -69,16 +72,17 @@ data class FontFace(val family: FontFamilyId, val weight: FontWeightToken) {
 /**
  * Theme-specific typographic voice.
  *
- * Aurora (PRECISION): refined Inter, light display numerals, semibold headings,
- * open-tracked instrument labels.
- * Zen (SERENE): calm Inter, medium headings, tighter metadata and a quieter
- * clock with generous breathing room.
- * Void (GROTESK): geometric Space Grotesk for display and headings, Inter for
- * body copy so long text stays readable, crisp uppercase readouts.
+ * Signature (PRECISION): refined Inter, light 64-66 sp clock at -0.035 em,
+ * semibold titles, open-tracked uppercase readouts.
+ * Atmosphere (AMBIENT): airier Inter, lighter 58 sp clock at -0.040 em, sentence
+ * case metadata - the voice of a wallpaper-led screen.
+ * Monolith (MONOGRAPH): oversized 84 sp Space Grotesk clock at -0.060 em with
+ * mono readouts and mono labels, reflecting the theme's engraved, architectural
+ * character.
  *
- * SERIF and MONO are retained as explicit fallback voices for existing user
- * choices and old backups; no signature theme uses them. Their storage keys are
- * stable, so no saved preference is reset.
+ * Zen (SERENE) and Void (GROTESK) remain selectable voices and keep their
+ * storage keys, so no saved preference or old backup is reset. SERIF and MONO
+ * are retained as explicit fallback voices for the same reason.
  */
 enum class TypeStyle(
     val storageKey: String,
@@ -141,6 +145,34 @@ enum class TypeStyle(
         readoutCaps = true,
         readoutTracking = 0.16f
     ),
+    AMBIENT(
+        storageKey = "ambient",
+        clock = FontFace(FontFamilyId.INTER, FontWeightToken.LIGHT),
+        clockSizeSp = 58f,
+        clockTracking = -0.04f,
+        title = FontFace(FontFamilyId.INTER, FontWeightToken.SEMIBOLD),
+        titleTracking = -0.015f,
+        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
+        label = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        labelTracking = 0.005f,
+        readout = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        readoutCaps = false,
+        readoutTracking = 0.03f
+    ),
+    MONOGRAPH(
+        storageKey = "monograph",
+        clock = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
+        clockSizeSp = 84f,
+        clockTracking = -0.06f,
+        title = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
+        titleTracking = -0.015f,
+        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
+        label = FontFace(FontFamilyId.SYSTEM_MONO, FontWeightToken.MEDIUM),
+        labelTracking = 0.10f,
+        readout = FontFace(FontFamilyId.SYSTEM_MONO, FontWeightToken.MEDIUM),
+        readoutCaps = true,
+        readoutTracking = 0.12f
+    ),
     SERIF(
         storageKey = "serif",
         clock = FontFace(FontFamilyId.SYSTEM_SERIF, FontWeightToken.LIGHT),
@@ -173,7 +205,9 @@ enum class TypeStyle(
     /** The obvious description used in the Studio and design reference. */
     val character: String
         get() = when (this) {
-            PRECISION -> "Quiet luxury"
+            PRECISION -> "Refined and timeless"
+            AMBIENT -> "Cinematic and adaptive"
+            MONOGRAPH -> "Architectural and exact"
             SERENE -> "Modern serenity"
             GROTESK -> "Futuristic expression"
             SERIF -> "Editorial fallback"
@@ -183,8 +217,15 @@ enum class TypeStyle(
     companion object {
         fun fromStorageKey(raw: String?): TypeStyle? = entries.firstOrNull { it.storageKey == raw }
 
-        /** Voices offered as first-class choices; fallbacks stay persisted but are not promoted. */
-        val SIGNATURE: List<TypeStyle> = listOf(PRECISION, SERENE, GROTESK)
+        /**
+         * Voices the v3.2 themes speak. All five remaining voices stay selectable
+         * in Studio and in restored backups; these three are what a fresh install
+         * sees first, in the order Signature -> Atmosphere -> Monolith.
+         */
+        val SIGNATURE: List<TypeStyle> = listOf(PRECISION, AMBIENT, MONOGRAPH)
+
+        /** Voices retained from the pre-3.2 system; still valid, no longer promoted. */
+        val RETAINED: List<TypeStyle> = listOf(SERENE, GROTESK, SERIF, MONO)
     }
 }
 
