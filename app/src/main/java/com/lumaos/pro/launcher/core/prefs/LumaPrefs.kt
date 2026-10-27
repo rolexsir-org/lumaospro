@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.launcher.model.GestureAction
 import com.lumaos.pro.launcher.ui.ThemeMode
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.DarkWindow
+import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeId
@@ -76,6 +77,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val WIDGETS_ENABLED = booleanPreferencesKey("widgets_enabled")
         val LAYOUT_SEEDED = booleanPreferencesKey("layout_seeded")
         val LAST_ACTION_AT = stringPreferencesKey("last_action_at")
+        val EXPERIENCE_PROFILE = stringPreferencesKey("experience_profile")
 
         // Theme engine (0.2)
         val THEME_ID = stringPreferencesKey("theme_id")
@@ -445,6 +447,12 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     /** Controls adding widgets; existing placed widgets are never removed by this setting. */
     val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { true }
     suspend fun setWidgetsEnabled(value: Boolean) = write(Keys.WIDGETS_ENABLED, value)
+
+    /** Selected first-class experience (PURE, LIQUID, MIDNIGHT). New installs default to LIQUID. */
+    val experienceProfile: Flow<ExperienceProfile> = readNullable(Keys.EXPERIENCE_PROFILE)
+        .map { ExperienceProfile.fromStorageKey(it) ?: ExperienceProfile.DEFAULT }
+    suspend fun setExperienceProfile(profile: ExperienceProfile) =
+        write(Keys.EXPERIENCE_PROFILE, profile.storageKey)
 
     val onboardingDone: Flow<Boolean> = read(Keys.ONBOARDING_DONE) { false }
     suspend fun setOnboardingDone(value: Boolean) = write(Keys.ONBOARDING_DONE, value)

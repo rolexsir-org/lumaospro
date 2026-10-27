@@ -427,6 +427,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun removeWidget(appWidgetId: Int) = mutate { HomeLayoutOps.removeWidget(it, appWidgetId) }
 
+    /**
+     * Removes widgets whose Android binding is gone (provider uninstalled or
+     * host id invalid) from every profile's saved layout. All other items and
+     * ordering are preserved. Returns the released widget ids so the activity
+     * can delete them from the AppWidgetHost exactly once.
+     */
+    suspend fun reconcileWidgets(validIds: Set<Int>): Set<Int> {
+        val removed = HashSet<Int>()
+        for (profile in ContextProfile.entries) {
+            val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
+            val invalid = HomeLayoutOps.invalidWidgetIds(current, validIds)
+            if (invalid.isEmpty()) continue
+            removed += invalid
+            val reconciled = HomeLayoutOps.reconcileWidgets(current, validIds)
+            prefs.setHomeLayoutRaw(profile, HomeLayoutCodec.encode(reconciled))
+            if (profile == activeContextProfile.value) {
+                withContext(Dispatchers.Main) { _layout.value = reconciled }
+            }
+        }
+        return removed
+    }
+
     fun addSmartFolder(kind: SmartKind, name: String) = mutate {
         HomeLayoutOps.addSmartFolder(it, 0, HomeItem.SmartFolder("smart_${kind.storageKey}", kind, name))
     }

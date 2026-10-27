@@ -14,19 +14,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -34,18 +40,24 @@ import androidx.lifecycle.lifecycleScope
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.RoleHelper
+import com.lumaos.pro.launcher.settings.ExperienceProfileController
 import com.lumaos.pro.launcher.settings.LumaOSTheme
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
+import com.lumaos.pro.launcher.ui.theme.GlassRole
+import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
  * First-run onboarding.
  *
- * Its only job is the Home role: a launcher that is not the default launcher is
- * just an app, so this screen makes the one decision the user actually needs to
- * make, and then gets out of the way.
+ * Two decisions, and nothing else: the coordinated experience profile (Pure,
+ * Liquid or Midnight) and the Home role. A launcher that is not the default
+ * launcher is just an app, so the role request is the only blocking question.
  *
- * Skipping is a first-class outcome. LumaOS Pro stays fully usable as an app, and
- * the default-launcher controls remain available in Settings.
+ * Skipping is a first-class outcome. LumaOS Pro stays fully usable as an app,
+ * and the default-launcher controls remain available in Settings. Choosing a
+ * profile only writes appearance preferences - layouts and widgets are untouched.
  */
 class OnboardingActivity : ComponentActivity() {
 
@@ -53,7 +65,7 @@ class OnboardingActivity : ComponentActivity() {
 
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    ) {
         // Record the outcome whatever it was: the user has been asked, and
         // nagging them again on every launch would be worse than not asking.
         lifecycleScope.launch {
@@ -73,7 +85,15 @@ class OnboardingActivity : ComponentActivity() {
         setContent {
             val theme by themes.theme.collectAsState()
             val textScale by prefs.textScale.collectAsState(1.0f)
+            val selectedProfile by prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
             LumaOSTheme(theme = theme, textScale = textScale) {
+                // First run with no explicit choice: wear the coordinated Liquid
+                // defaults so the first home screen already looks finished. The
+                // write is appearance-only and never touches layout or widgets.
+                LaunchedEffect(Unit) {
+                    val profile = prefs.experienceProfile.first()
+                    ExperienceProfileController.apply(prefs, profile)
+                }
                 DisposableEffect(theme.isDark) {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
                         isAppearanceLightStatusBars = !theme.isDark
@@ -89,6 +109,7 @@ class OnboardingActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp, vertical = 28.dp),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -98,7 +119,7 @@ class OnboardingActivity : ComponentActivity() {
                             modifier = Modifier.widthIn(max = 440.dp),
                             style = MaterialTheme.typography.headlineLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.CENTER
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -107,14 +128,35 @@ class OnboardingActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(24.dp))
                         Text(
-                            text = stringResource(R.string.onboarding_contexts),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = stringResource(R.string.onboarding_profiles_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(28.dp))
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.onboarding_profiles_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        ExperienceProfile.entries.forEach { profile ->
+                            ProfileCard(
+                                theme = theme,
+                                profile = profile,
+                                selected = profile == selectedProfile,
+                                onSelected = {
+                                    lifecycleScope.launch {
+                                        ExperienceProfileController.apply(prefs, profile)
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.height(10.dp))
+                        }
+                        Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = ::requestHomeRole,
                             modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
@@ -142,6 +184,52 @@ class OnboardingActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun ProfileCard(
+        theme: com.lumaos.pro.launcher.ui.theme.ResolvedTheme,
+        profile: ExperienceProfile,
+        selected: Boolean,
+        onSelected: () -> Unit
+    ) {
+        val title = when (profile) {
+            ExperienceProfile.PURE -> stringResource(R.string.experience_pure)
+            ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid)
+            ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight)
+        }
+        val description = when (profile) {
+            ExperienceProfile.PURE -> stringResource(R.string.experience_pure_desc)
+            ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid_desc)
+            ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight_desc)
+        }
+        LumaGlassSurface(
+            theme = theme,
+            role = GlassRole.SETTINGS_CONTROL,
+            selected = selected,
+            onClick = onSelected,
+            modifier = Modifier
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+                .semantics {
+                    role = Role.RadioButton
+                    this.selected = selected
+                }
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
