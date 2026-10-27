@@ -65,10 +65,10 @@ data class ThemeSettings(
     val themeId: ThemeId = ThemeId.SIGNATURE,
     val switching: ThemeSwitching = ThemeSwitching.SYSTEM,
     /**
-     * Light mode keeps the retained Zen palette: the three v3.2 identities are
-     * authored dark, and the specification defines a paper *surface* variant for
-     * widgets and sheets rather than a light theme. Choosing a dark pair here
-     * instead would put a midnight launcher on a light-mode phone.
+     * Light mode keeps the retained Zen palette as the light adaptation of the
+     * single Luma Glass system. The palette IDs are compatibility anchors, not
+     * separate design systems; the glass material layer supplies one geometry,
+     * one surface grammar and one motion vocabulary in both modes.
      */
     val lightThemeId: ThemeId = ThemeId.PORCELAIN,
     val darkThemeId: ThemeId = ThemeId.SIGNATURE,
@@ -78,7 +78,8 @@ data class ThemeSettings(
     val typography: TypeStyle? = null,
     val iconShape: IconShape? = null,
     val iconStyle: IconStyle? = null,
-    val backdrop: Backdrop? = null,
+    /** Luma Glass defaults to the real system wallpaper, with a legibility scrim. */
+    val backdrop: Backdrop? = Backdrop.WALLPAPER,
     /** Context profiles that force a theme while active (e.g. Sleep -> Obsidian). */
     val profileThemes: Map<ContextProfile, ThemeId> = emptyMap()
 ) {

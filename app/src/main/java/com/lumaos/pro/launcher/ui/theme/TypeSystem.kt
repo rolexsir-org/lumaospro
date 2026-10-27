@@ -117,34 +117,6 @@ enum class TypeStyle(
         readoutCaps = true,
         readoutTracking = 0.14f
     ),
-    SERENE(
-        storageKey = "serene",
-        clock = FontFace(FontFamilyId.INTER, FontWeightToken.LIGHT),
-        clockSizeSp = 58f,
-        clockTracking = -0.015f,
-        title = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
-        titleTracking = -0.008f,
-        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
-        label = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
-        labelTracking = 0.01f,
-        readout = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
-        readoutCaps = false,
-        readoutTracking = 0.035f
-    ),
-    GROTESK(
-        storageKey = "grotesk",
-        clock = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
-        clockSizeSp = 68f,
-        clockTracking = -0.025f,
-        title = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
-        titleTracking = -0.02f,
-        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
-        label = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
-        labelTracking = 0.008f,
-        readout = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.MEDIUM),
-        readoutCaps = true,
-        readoutTracking = 0.16f
-    ),
     AMBIENT(
         storageKey = "ambient",
         clock = FontFace(FontFamilyId.INTER, FontWeightToken.LIGHT),
@@ -172,6 +144,34 @@ enum class TypeStyle(
         readout = FontFace(FontFamilyId.SYSTEM_MONO, FontWeightToken.MEDIUM),
         readoutCaps = true,
         readoutTracking = 0.12f
+    ),
+    SERENE(
+        storageKey = "serene",
+        clock = FontFace(FontFamilyId.INTER, FontWeightToken.LIGHT),
+        clockSizeSp = 58f,
+        clockTracking = -0.015f,
+        title = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        titleTracking = -0.008f,
+        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
+        label = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        labelTracking = 0.01f,
+        readout = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        readoutCaps = false,
+        readoutTracking = 0.035f
+    ),
+    GROTESK(
+        storageKey = "grotesk",
+        clock = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
+        clockSizeSp = 68f,
+        clockTracking = -0.025f,
+        title = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.SEMIBOLD),
+        titleTracking = -0.02f,
+        body = FontFace(FontFamilyId.INTER, FontWeightToken.REGULAR),
+        label = FontFace(FontFamilyId.INTER, FontWeightToken.MEDIUM),
+        labelTracking = 0.008f,
+        readout = FontFace(FontFamilyId.SPACE_GROTESK, FontWeightToken.MEDIUM),
+        readoutCaps = true,
+        readoutTracking = 0.16f
     ),
     SERIF(
         storageKey = "serif",
@@ -250,7 +250,7 @@ object LumaTypeScale {
     // Titles - dialogs, sheets, folders, row titles.
     const val titleLargeSp = 21f
     const val titleMediumSp = 18f
-    const val titleSmallSp = 15.5f
+    const val titleSmallSp = 17f
 
     // Body - settings copy, descriptions, menus.
     const val bodyLargeSp = 16f

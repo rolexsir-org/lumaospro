@@ -14,6 +14,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.graphics.drawable.GradientDrawable
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -26,8 +27,11 @@ import com.lumaos.pro.launcher.launcher.model.DrawerRow
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
-import com.lumaos.pro.launcher.ui.theme.LumaComponents
-import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassPalette
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import kotlin.math.abs
@@ -70,6 +74,10 @@ class DrawerController(
         fun retryApps()
         fun showSortMenu(anchor: View, current: DrawerSort)
     }
+
+    /** Current shared glass recipes, refreshed on every theme/effects change. */
+    private var glassPalette: GlassPalette =
+        GlassMaterials.palette(host.theme(), GlassCapabilities.SOLID)
 
     private val density = context.resources.displayMetrics.density
     private fun dp(v: Float) = (v * density).toInt()
@@ -280,16 +288,10 @@ class DrawerController(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
                 typeface = Typefaces.label(theme.typography)
                 letterSpacing = theme.typography.labelTracking
-                setTextColor(if (chosen) c.onAccentContainer else c.onSurfaceMuted)
-                background = ThemedDrawables.ripple(
-                    c.ripple,
-                    ThemedDrawables.surface(
-                        if (chosen) c.accentContainer else c.surface2,
-                        theme.corner(LumaComponents.of(theme).shapes.chipDp) * density,
-                        if (chosen) 0 else c.outline, if (chosen) 0 else dp(1f)
-                    ),
-                    theme.corner(LumaComponents.of(theme).shapes.chipDp) * density
-                )
+                val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
+                val chipColors = if (chosen) chipSpec.states.selected else chipSpec.rest
+                setTextColor(chipColors.content)
+                background = GlassViews.drawable(chipSpec, density, ripple = true)
                 isSelected = chosen
                 contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, label) else label
                 setOnClickListener { host.onFilterSelected(filter) }
@@ -310,47 +312,45 @@ class DrawerController(
             emptyView.background = null
             return
         }
-        val theme = host.theme()
-        val c = theme.colors
-        val radius = theme.corner(LumaComponents.of(theme).shapes.chipDp) * density
-        emptyView.background = ThemedDrawables.ripple(
-            c.ripple,
-            ThemedDrawables.surface(c.surface2, radius, c.outline, 1),
-            radius
-        )
+        val spec = glassPalette[GlassRole.OVERLAY]
+        emptyView.background = GlassViews.drawable(spec, density, ripple = true)
+        emptyView.setTextColor(spec.rest.content)
     }
 
-    fun applyTheme(theme: ResolvedTheme, translucency: Boolean) {
+    fun applyTheme(theme: ResolvedTheme, palette: GlassPalette) {
+        glassPalette = palette
         val c = theme.colors
-        val shapes = LumaComponents.of(theme).shapes
-        val radius = theme.corner(shapes.sheetDp) * density
-        sheet.background = ThemedDrawables.topRounded(
-            ColorMath.withAlpha(c.surface0, theme.surfaceAlpha(translucency)), radius
-        )
+        val sheetSpec = palette[GlassRole.SHEET]
+        val searchSpec = palette[GlassRole.SEARCH]
+        val sheetColors = sheetSpec.rest
+        val searchColors = searchSpec.rest
+
+        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false)
+        GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = false)
         scrim.setBackgroundColor(c.scrim)
-        handle.background = ThemedDrawables.surface(c.outlineStrong, dp(2f).toFloat())
-        searchField.background = ThemedDrawables.surface(
-            c.surface1, theme.corner(shapes.searchDp) * density, c.outline, dp(1f)
-        )
-        searchField.setTextColor(c.onSurface)
-        searchField.setHintTextColor(c.onSurfaceMuted)
-        clearButton.imageTintList = android.content.res.ColorStateList.valueOf(c.onSurfaceMuted)
+        handle.background = GradientDrawable().apply {
+            setColor(sheetColors.edgeTop)
+            cornerRadius = dp(2f).toFloat()
+        }
+        searchField.setTextColor(searchColors.content)
+        searchField.setHintTextColor(searchColors.muted)
+        clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchColors.muted)
         searchField.typeface = Typefaces.label(theme.typography)
         ContextCompat.getDrawable(context, R.drawable.ic_rx_search)?.mutate()?.let { d ->
-            d.setTint(c.onSurfaceMuted)
+            d.setTint(searchColors.muted)
             d.setBounds(0, 0, dp(20f), dp(20f))
             searchField.setCompoundDrawablesRelative(d, null, null, null)
         }
-        title.setTextColor(c.onSurface)
+        title.setTextColor(sheetColors.content)
         title.typeface = Typefaces.title(theme.typography)
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
         subtitle.typeface = Typefaces.body(theme.typography)
-        subtitle.setTextColor(c.onSurfaceMuted)
-        emptyView.setTextColor(c.onSurfaceMuted)
+        subtitle.setTextColor(sheetColors.muted)
+        emptyView.setTextColor(sheetColors.muted)
         emptyView.typeface = Typefaces.body(theme.typography)
         emptyView.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
         updateRetryAvailability(retryAvailable, forceStyle = true)
-        alphaIndex.setAccentColor(c.accent)
+        alphaIndex.setAccentColor(sheetColors.focusRing)
     }
 
     /** Body voice for the search field, kept in step with the theme's typography. */

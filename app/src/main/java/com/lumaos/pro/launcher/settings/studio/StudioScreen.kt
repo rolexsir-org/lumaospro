@@ -1,7 +1,6 @@
 package com.lumaos.pro.launcher.settings.studio
 
 import android.app.TimePickerDialog
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,16 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,15 +58,21 @@ import com.lumaos.pro.launcher.effects.EffectsPreference
 import com.lumaos.pro.launcher.launcher.model.DockStyle
 import com.lumaos.pro.launcher.launcher.model.HomePreset
 import com.lumaos.pro.launcher.motion.MotionPreference
+import com.lumaos.pro.launcher.settings.LocalLumaTheme
 import com.lumaos.pro.launcher.settings.SettingsViewModel
 import com.lumaos.pro.launcher.settings.StudioConfiguration
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
-import com.lumaos.pro.launcher.ui.LumaCorners
 import com.lumaos.pro.launcher.ui.LumaSizes
 import com.lumaos.pro.launcher.ui.LumaSpacing
+import com.lumaos.pro.launcher.ui.glass.LumaGlassChoice
+import com.lumaos.pro.launcher.ui.glass.LumaGlassPreviewFrame
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSectionTitle
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
+import com.lumaos.pro.launcher.ui.theme.GlassGeometry
+import com.lumaos.pro.launcher.ui.theme.GlassRole
+import com.lumaos.pro.launcher.ui.theme.LumaGlassIdentity
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
-import com.lumaos.pro.launcher.ui.theme.DarkWindow
 import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
@@ -158,10 +157,9 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         Column(Modifier.widthIn(max = LumaSizes.studioPreviewMaxWidth).fillMaxWidth()) {
             Text(stringResource(R.string.studio_preview_label), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(LumaSpacing.elementGap))
-            Card(
-                shape = RoundedCornerShape(LumaCorners.large * resolved.cornerScale),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            LumaGlassPreviewFrame(
+                theme = resolved,
+                modifier = Modifier.fillMaxWidth().height(340.dp)
             ) {
                 HomePreview(
                     theme = resolved,
@@ -174,7 +172,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     timeText = timeText,
                     dateText = dateText,
                     readout = activeProfile.title,
-                    modifier = Modifier.fillMaxWidth().height(340.dp)
+                    modifier = Modifier.fillMaxSize()
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -258,6 +256,27 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            StudioSection(LumaGlassIdentity.NAME) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LumaGlassIdentity.ACCENTS.forEach { accent ->
+                        LumaGlassChoice(
+                            theme = resolved,
+                            label = accent.name,
+                            selected = draft.theme.accentOverride == accent.color &&
+                                draft.theme.themeId == accent.darkAnchor,
+                            onClick = { draft = draft.copy(theme = accent.applyTo(draft.theme)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    LumaGlassIdentity.TAGLINE,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             StudioSection(stringResource(R.string.studio_switching)) {
@@ -470,12 +489,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
 @Composable
 private fun StudioSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    val theme = LocalLumaTheme.current
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(LumaSpacing.elementGap))
-        content()
+        LumaGlassSectionTitle(theme, title)
+        Spacer(Modifier.height(4.dp))
+        LumaGlassSurface(theme, GlassRole.SECONDARY, Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(GlassGeometry.GUTTER_DP.dp)) {
+                content()
+            }
+        }
         Spacer(Modifier.height(16.dp))
-        HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outline)
     }
 }
 
@@ -510,25 +533,20 @@ private fun ThemePresetRow(
 
 @Composable
 private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(LumaCorners.card)
+    val theme = LocalLumaTheme.current
     val textColor = Color(ThemeEngine.bestTextOn(spec.background))
-    Card(
+    LumaGlassSurface(
+        theme = theme,
+        role = GlassRole.PRIMARY,
         modifier = Modifier
             .size(width = LumaSizes.studioThemeCardWidth, height = LumaSizes.studioThemeCardHeight)
-            .clip(shape)
-            .clickable(role = Role.RadioButton, onClick = onClick)
             .semantics(mergeDescendants = true) {
                 role = Role.RadioButton
                 this.selected = selected
                 contentDescription = "${spec.displayName}. ${spec.tagline}"
             },
-        shape = shape,
-        border = BorderStroke(
-            if (selected) 2.dp else 1.dp,
-            if (selected) Color(spec.accent) else MaterialTheme.colorScheme.outline
-        ),
-        colors = CardDefaults.cardColors(containerColor = Color(spec.background)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        selected = selected,
+        onClick = onClick
     ) {
         Column(
             Modifier
@@ -572,8 +590,6 @@ private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> U
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                // Identity in one line: typeface voice and motion character, so a
-                // card says more than "dark" or "light".
                 Text(
                     "${spec.typography.character} · ${spec.motionCharacter.name.lowercase()}",
                     color = textColor.copy(alpha = 0.62f),
@@ -594,7 +610,9 @@ private fun <T> StudioChoice(
     optionLabel: @Composable (T) -> String = { TextValue(it) },
     onSelected: (T) -> Unit
 ) {
+    val theme = LocalLumaTheme.current
     var expanded by remember { mutableStateOf(false) }
+    val selectedText = selected
     Row(
         Modifier.fillMaxWidth().padding(vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -602,21 +620,34 @@ private fun <T> StudioChoice(
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(8.dp))
         Box {
-            OutlinedButton(
+            LumaGlassChoice(
+                theme = theme,
+                label = selected,
+                selected = false,
                 onClick = { expanded = true },
                 modifier = Modifier.widthIn(max = 220.dp).heightIn(min = LumaSizes.minimumTouchTarget)
+            )
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color.Transparent)
             ) {
-                Text(selected, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(optionLabel(option), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        onClick = {
-                            onSelected(option)
-                            expanded = false
+                LumaGlassSurface(theme, GlassRole.MENU, Modifier.widthIn(min = 180.dp)) {
+                    Column(Modifier.padding(8.dp)) {
+                        options.forEach { option ->
+                            val text = optionLabel(option)
+                            LumaGlassChoice(
+                                theme = theme,
+                                label = text,
+                                selected = text == selectedText,
+                                onClick = {
+                                    onSelected(option)
+                                    expanded = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -643,7 +674,13 @@ private fun SwatchRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedButton(onClick = { onSelected(null) }) { Text(defaultLabel) }
+        val theme = LocalLumaTheme.current
+        LumaGlassChoice(
+            theme = theme,
+            label = defaultLabel,
+            selected = selected == null,
+            onClick = { onSelected(null) }
+        )
         colors.forEach { color ->
             val chosen = selected == color
             Box(
@@ -672,17 +709,21 @@ private fun SwatchRow(
 @Composable
 private fun TimeButton(label: String, minute: Int, onSelected: (Int) -> Unit) {
     val context = LocalContext.current
-    OutlinedButton(onClick = {
-        TimePickerDialog(
-            context,
-            { _, hour, min -> onSelected(hour * 60 + min) },
-            minute / 60,
-            minute % 60,
-            android.text.format.DateFormat.is24HourFormat(context)
-        ).show()
-    }) {
-        Text("$label %02d:%02d".format(minute / 60, minute % 60))
-    }
+    val theme = LocalLumaTheme.current
+    LumaGlassChoice(
+        theme = theme,
+        label = "$label %02d:%02d".format(minute / 60, minute % 60),
+        selected = false,
+        onClick = {
+            TimePickerDialog(
+                context,
+                { _, hour, min -> onSelected(hour * 60 + min) },
+                minute / 60,
+                minute % 60,
+                android.text.format.DateFormat.is24HourFormat(context)
+            ).show()
+        }
+    )
 }
 
 @Composable

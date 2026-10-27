@@ -4,11 +4,11 @@ import android.app.Activity
 import android.app.KeyguardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
@@ -31,17 +30,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +45,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import android.os.Build
@@ -74,8 +67,16 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppMatcher
-import com.lumaos.pro.launcher.ui.LumaCorners
 import com.lumaos.pro.launcher.ui.LumaIcon
+import com.lumaos.pro.launcher.ui.glass.LumaGlassChoice
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSlider
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSwitchRow
+import com.lumaos.pro.launcher.ui.glass.LumaGlassTextField
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassGeometry
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.LumaSpacing
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.intelligence.ProfileId
@@ -141,25 +142,30 @@ private fun SettingsSection(
     icon: LumaIcon,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(Modifier.fillMaxWidth()) {
+    val theme = LocalLumaTheme.current
+    val spec = GlassMaterials.palette(theme, GlassCapabilities.SOLID)[GlassRole.SECONDARY]
+    val contentColor = Color(spec.rest.content)
+    Column(Modifier.fillMaxWidth().padding(bottom = LumaSpacing.sectionGap)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(icon.res),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = contentColor,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(10.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = contentColor
             )
         }
         Spacer(Modifier.height(LumaSpacing.md))
-        content()
-        Spacer(Modifier.height(LumaSpacing.lg))
-        HorizontalDivider(thickness = 0.75.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        LumaGlassSurface(theme, GlassRole.SECONDARY, Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(GlassGeometry.GUTTER_DP.dp)) {
+                content()
+            }
+        }
     }
 }
 
@@ -508,10 +514,7 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
 
     if (managerOpen) {
         Dialog(onDismissRequest = { managerOpen = false }) {
-            Card(
-                shape = RoundedCornerShape(LumaCorners.large),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
+            GlassDialogSurface {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(
                         stringResource(R.string.hidden_manage_title, activeProfile.title),
@@ -519,12 +522,13 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
+                    LumaGlassTextField(
                         value = managerQuery,
                         onValueChange = { managerQuery = it },
+                        theme = LocalLumaTheme.current,
+                        placeholder = stringResource(R.string.search_hint),
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.search_hint)) }
+                        singleLine = true
                     )
                     Spacer(Modifier.height(8.dp))
                     val filteredApps = remember(apps, managerQuery) { AppMatcher.filter(apps, managerQuery) }
@@ -787,11 +791,7 @@ private fun AboutSection() {
             }
         }
         Dialog(onDismissRequest = { showLicenses = false }) {
-            Card(
-                shape = RoundedCornerShape(LumaCorners.dialog),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+            GlassDialogSurface {
                 Column(Modifier.padding(LumaSpacing.contentPadding)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -820,6 +820,16 @@ private fun AboutSection() {
 
 // ------------------------------------------------------------- primitives
 
+/** One glass surface for every settings dialog. */
+@Composable
+private fun GlassDialogSurface(content: @Composable BoxScope.() -> Unit) {
+    val theme = LocalLumaTheme.current
+    LumaGlassSurface(theme, GlassRole.MENU, Modifier.fillMaxWidth()) {
+        content()
+    }
+}
+
+
 @Composable
 private fun SliderRow(
     label: String,
@@ -829,28 +839,16 @@ private fun SliderRow(
     isFloat: Boolean = false,
     onValueChange: (Float) -> Unit
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = if (isFloat) "%.2f×".format(value.toFloat()) else "${value.toInt()}$suffix",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { next ->
-                onValueChange(next.coerceIn(range.start, range.endInclusive))
-            },
-            valueRange = range
-        )
-    }
+    val theme = LocalLumaTheme.current
+    val valueLabel = if (isFloat) "%.2f×".format(value.toFloat()) else "${value.toInt()}$suffix"
+    LumaGlassSlider(
+        label = label,
+        value = value.toFloat(),
+        onValueChange = { next -> onValueChange(next.coerceIn(range.start, range.endInclusive)) },
+        theme = theme,
+        valueRange = range,
+        valueLabel = valueLabel
+    )
 }
 
 @Composable
@@ -861,23 +859,15 @@ private fun SwitchRow(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
+    val theme = LocalLumaTheme.current
+    LumaGlassSwitchRow(
+        label = label,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        theme = theme,
+        subtitle = subtitle,
+        enabled = enabled
+    )
 }
 
 @Composable
@@ -887,7 +877,9 @@ private fun <T> ChoiceRow(
     options: List<Pair<T, String>>,
     onSelected: (T) -> Unit
 ) {
+    val theme = LocalLumaTheme.current
     var expanded by remember { mutableStateOf(false) }
+    val selectedText = selected
 
     Row(
         Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -896,37 +888,36 @@ private fun <T> ChoiceRow(
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color(GlassMaterials.palette(theme, GlassCapabilities.SOLID)[GlassRole.SETTINGS_CONTROL].rest.content),
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.width(8.dp))
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 164.dp)) {
-            Text(selected, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        LumaGlassChoice(
+            theme = theme,
+            label = selected,
+            selected = false,
+            onClick = { expanded = true },
+            modifier = Modifier.widthIn(max = 164.dp)
+        )
     }
 
     if (expanded) {
         Dialog(onDismissRequest = { expanded = false }) {
-            Card(
-                shape = RoundedCornerShape(LumaCorners.large),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+            LumaGlassSurface(theme, GlassRole.MENU, Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(vertical = 8.dp)) {
                     options.forEach { (value, text) ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = text == selected, onClick = {
+                        LumaGlassChoice(
+                            theme = theme,
+                            label = text,
+                            selected = text == selectedText,
+                            onClick = {
                                 onSelected(value)
                                 expanded = false
-                            })
-                            Spacer(Modifier.width(8.dp))
-                            Text(text, style = MaterialTheme.typography.bodyMedium)
-                        }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }

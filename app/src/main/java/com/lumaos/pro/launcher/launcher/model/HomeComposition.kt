@@ -3,15 +3,15 @@ package com.lumaos.pro.launcher.launcher.model
 /**
  * Home-screen composition presets.
  *
- * A preset decides the spatial arrangement - how the chronometer is drawn,
- * whether the icon grid is shown, how many rows it starts with and how the
- * dock sits - independently of the theme. Any preset works with any theme,
- * and each one is complete without a single widget.
+ * A preset decides spatial scale, grid density and dock behaviour independently
+ * of the theme. Luma Glass has one clock/date focal point in every preset; the
+ * old chronometer dial is no longer drawn. Any preset works with any theme and
+ * each one is complete without a widget.
  */
 enum class ClockStyle {
-    /** Chronometer dial (day-progress ring, battery arc, alarm marker) beside the time. */
+    /** Legacy storage value: mapped to the refined centred clock. */
     DIAL,
-    /** Large centred time with date and readouts beneath. */
+    /** Centred time with date beneath. */
     HERO,
     /** One compact line, maximising room for the grid. */
     COMPACT
@@ -41,28 +41,28 @@ enum class HomePreset(
     val dockLabels: Boolean
 ) {
     INSTRUMENT(
-        "instrument", "Instrument",
-        "Chronometer dial with live readouts above a calm grid.",
-        ClockStyle.DIAL, showGrid = true, defaultRows = 4, dock = DockStyle.BEZEL, dockLabels = false
+        "instrument", "Balanced",
+        "Centred clock, four app rows and a floating glass dock.",
+        ClockStyle.HERO, showGrid = true, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false
     ),
     HORIZON(
         "horizon", "Horizon",
-        "A large centred time over open space; fewer, bigger rows.",
+        "A spacious centred clock, three rows and open wallpaper.",
         ClockStyle.HERO, showGrid = true, defaultRows = 3, dock = DockStyle.FLOAT, dockLabels = false
     ),
     GRID(
         "grid", "Grid",
-        "Compact time line and a dense grid for many apps.",
-        ClockStyle.COMPACT, showGrid = true, defaultRows = 6, dock = DockStyle.BEZEL, dockLabels = false
+        "Compact clock and a dense, aligned grid for many apps.",
+        ClockStyle.COMPACT, showGrid = true, defaultRows = 6, dock = DockStyle.FLOAT, dockLabels = false
     ),
     ZEN(
         "zen", "Zen",
-        "Time, readouts and dock only. Everything else lives in the drawer.",
-        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.MINIMAL, dockLabels = true
+        "Clock, date and dock only. Everything else lives in the drawer.",
+        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = true
     );
 
     companion object {
-        val DEFAULT = INSTRUMENT
+        val DEFAULT = HORIZON
         fun fromStorageKey(raw: String?): HomePreset = entries.firstOrNull { it.storageKey == raw } ?: DEFAULT
     }
 }

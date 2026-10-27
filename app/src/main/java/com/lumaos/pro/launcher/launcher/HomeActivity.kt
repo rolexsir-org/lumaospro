@@ -69,7 +69,6 @@ import com.lumaos.pro.launcher.icons.IconRenderSpec
 import com.lumaos.pro.launcher.intelligence.Profile
 import com.lumaos.pro.launcher.intelligence.Profiles
 import com.lumaos.pro.launcher.launcher.home.AmbientBackdropView
-import com.lumaos.pro.launcher.launcher.home.BezelDrawable
 import com.lumaos.pro.launcher.launcher.home.ChronoDialView
 import com.lumaos.pro.launcher.launcher.home.DesktopLayout
 import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
@@ -104,10 +103,13 @@ import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.settings.SettingsActivity
+import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.GlassPalette
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.IconShapes
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeColors
@@ -226,6 +228,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         EffectsPreference.AUTO,
         EffectsSignals(com.lumaos.pro.launcher.intelligence.DeviceTier.MEDIUM, com.lumaos.pro.launcher.intelligence.ProfileId.BALANCED, Build.VERSION.SDK_INT)
     )
+    private var glassPalette: GlassPalette = GlassViews.palette(theme, effects)
     private var motion: MotionPolicy = MotionPolicy.DEFAULT
     private var profile: Profile = Profiles.BALANCED
     private var appearance = Appearance()
@@ -558,7 +561,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         findViewById<View>(R.id.search_pill_voice).setOnClickListener { launchVoiceCommand() }
         findViewById<View>(R.id.search_pill_settings).setOnClickListener { openSettings() }
         homeEmpty.setOnClickListener { drawer.open(focusSearch = false) }
-        homeContext.setOnClickListener { showContextMenu(it) }
+        homeContext.setOnClickListener { showContextMenu(homeClock) }
+        // The clock is the single focal point. Long-press actions keep context
+        // selection and settings reachable without header controls or chips.
+        homeClock.setOnLongClickListener { showContextMenu(homeClock); true }
+        homeDate.setOnLongClickListener { openSettings(); true }
+        searchPill.setOnLongClickListener { openSettings(); true }
+        homeClock.contentDescription = getString(R.string.home_clock_description) + ". " +
+            getString(R.string.home_clock_long_press_hint)
+        homeDate.contentDescription = getString(R.string.home_date_long_press_hint)
     }
 
     /**
@@ -986,9 +997,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val shapes = comps.shapes
         val artwork = t.backdrop.usesArtwork
         val darkText = !ColorMath.isDark(ColorMath.opaque(c.homeForeground))
-        val scrimSide = if (darkText) ColorMath.WHITE else ColorMath.BLACK
+        glassPalette = GlassViews.palette(t, effects)
+        val glass = glassPalette
 
         renderWallpaper(t)
+
+        // One wallpaper veil; the theme engine chooses its tint from the
+        // measured wallpaper/text relationship, not from a decorative gradient.
+        findViewById<View>(R.id.glass_scrim).background = GlassViews.scrim(t)
 
         // System bars follow what is immediately behind them.
         val behindBars = when {
@@ -1002,89 +1018,52 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             isAppearanceLightNavigationBars = lightBars
         }
 
-        // Clock block
-        // Shadows only exist to separate text from a photographic backdrop; on the
-        // theme's own solid atmosphere they would just blur the edges.
+        // One refined clock/date focal point. Shadows are deliberately small:
+        // the legibility comes from the wallpaper veil, not letter halos.
         homeClock.setTextColor(c.homeForeground)
-        homeClock.setShadowLayer(if (artwork) 10f else 0f, 0f, 1f, c.homeShadow)
-        homeDate.setTextColor(if (artwork) ColorMath.withAlpha(c.homeForeground, 0.90f) else c.homeMuted)
-        homeDate.setShadowLayer(if (artwork) 6f else 0f, 0f, 1f, c.homeShadow)
-        homeEmpty.setTextColor(c.homeForeground)
-        homeEmpty.setShadowLayer(if (artwork) 4f else 0f, 0f, 1f, c.homeShadow)
-        homeEmpty.background = ThemedDrawables.ripple(
-            c.ripple,
-            ThemedDrawables.surface(
-                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.16f else 0.96f),
-                t.corner(shapes.cellDp) * d,
-                ColorMath.withAlpha(scrimSide, 0.18f),
-                dp(1)
-            ),
-            t.corner(shapes.cellDp) * d
-        )
+        homeClock.setShadowLayer(if (artwork) 4f else 0f, 0f, 1f, c.homeShadow)
+        homeDate.setTextColor(if (artwork) ColorMath.withAlpha(c.homeForeground, 0.92f) else c.homeMuted)
+        homeDate.setShadowLayer(if (artwork) 3f else 0f, 0f, 1f, c.homeShadow)
 
-        // Header actions: one circular scrim, one tint, one touch target.
-        val actionBackground = ThemedDrawables.ripple(
-            c.ripple,
-            ThemedDrawables.surface(
-                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.14f else 0.90f),
-                dp(24).toFloat(),
-                ColorMath.withAlpha(if (artwork) scrimSide else c.outline, if (artwork) 0.20f else 0.7f),
-                dp(1)
-            ),
-            dp(24).toFloat()
-        )
+        val emptySpec = glass[GlassRole.OVERLAY]
+        GlassViews.apply(homeEmpty, emptySpec, d, ripple = true)
+        homeEmpty.setTextColor(emptySpec.rest.content)
+        homeEmpty.compoundDrawableTintList = ColorStateList.valueOf(emptySpec.rest.content)
+
+        // Compatibility controls remain bound to their actions but are no longer
+        // part of the visual hierarchy. Search and settings have clear primary
+        // entry points below and on the clock/date long-press.
         val actionTint = ColorStateList.valueOf(c.homeForeground)
         listOf(R.id.home_search, R.id.home_settings).forEach { id ->
-            findViewById<ImageButton>(id).apply {
-                background = actionBackground.constantState?.newDrawable(resources)?.mutate()
-                imageTintList = actionTint
-            }
+            findViewById<ImageButton>(id).imageTintList = actionTint
         }
-
-        // Context chip: a quiet label, not a button that looks like a pill menu.
-        val chipRadius = t.corner(shapes.chipDp) * d
-        homeContext.background = ThemedDrawables.ripple(
-            c.ripple,
-            ThemedDrawables.surface(
-                ColorMath.withAlpha(if (artwork) scrimSide else c.surface1, if (artwork) 0.14f else 0.92f),
-                chipRadius,
-                ColorMath.withAlpha(if (artwork) scrimSide else c.outline, if (artwork) 0.18f else 0.7f),
-                dp(1)
-            ),
-            chipRadius
-        )
+        homeContext.background = null
         homeContext.setTextColor(c.homeMuted)
-        homeContext.setShadowLayer(if (artwork) 5f else 0f, 0f, 1f, c.homeShadow)
-        homeContext.compoundDrawableTintList = ColorStateList.valueOf(c.homeMuted)
+        homeContext.compoundDrawableTintList = null
 
-        // Chronometer
+        // Compatibility chronometer: hidden, but its colours stay coherent for
+        // any external code that still queries the view.
         dial.ringColor = ColorMath.withAlpha(c.homeForeground, 0.38f)
         dial.progressColor = if (artwork) c.homeForeground else c.accent
         dial.batteryColor = if (artwork) c.homeMuted else c.secondary
         dial.markerColor = c.homeForeground
 
-        // Search bar: the same radius in every theme, so only the material changes.
-        val searchRadius = t.corner(shapes.searchDp) * d
-        searchPill.background = ThemedDrawables.ripple(
-            c.ripple,
-            ThemedDrawables.surface(
-                ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.96f),
-                searchRadius,
-                ColorMath.withAlpha(c.outline, comps.surfaces.borderAlpha * 2f),
-                dp(1)
-            ),
-            searchRadius
-        )
-        findViewById<ImageView>(R.id.search_pill_icon).imageTintList = ColorStateList.valueOf(s.searchIcon)
-        findViewById<TextView>(R.id.search_pill_text).setTextColor(s.searchHint)
-        findViewById<ImageButton>(R.id.search_pill_voice).imageTintList = ColorStateList.valueOf(s.searchIcon)
-        findViewById<ImageButton>(R.id.search_pill_settings).imageTintList = ColorStateList.valueOf(s.searchIcon)
+        // The single primary search entry: one translucent surface, one fine
+        // edge, one focus ring, one bounded ripple.
+        val searchSpec = glass[GlassRole.SEARCH]
+        GlassViews.apply(searchPill, searchSpec, d, ripple = true)
+        val searchColors = searchSpec.rest
+        findViewById<ImageView>(R.id.search_pill_icon).imageTintList = ColorStateList.valueOf(searchColors.muted)
+        findViewById<TextView>(R.id.search_pill_text).setTextColor(searchColors.muted)
+        findViewById<ImageButton>(R.id.search_pill_voice).imageTintList = ColorStateList.valueOf(searchColors.content)
+        findViewById<ImageButton>(R.id.search_pill_settings).imageTintList = ColorStateList.valueOf(searchColors.content)
 
         applyDockStyle(t)
-        drawer.applyTheme(t, effects.translucency)
-        findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(c.onSurface)
-        findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(c.onSurface)
-        findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(c.onSurface)
+        drawer.applyTheme(t, glass)
+        val sheetColors = glass[GlassRole.SHEET].rest
+        findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(sheetColors.content)
+        findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(sheetColors.content)
+        findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(sheetColors.content)
 
         val cellCorner = t.corner(shapes.cellDp) * d
         // Press feedback follows the theme's motion character, and disappears
@@ -1099,16 +1078,16 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
         dockCellConfig = dockCellConfig.copy(
-            labelColor = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else c.onSurface,
+            labelColor = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else glass[GlassRole.DOCK].rest.content,
             labelShadow = appearance.effectiveDock == DockStyle.MINIMAL, labelShadowColor = c.homeShadow,
             rippleColor = c.ripple, cornerPx = cellCorner,
             placeholderFill = if (appearance.effectiveDock == DockStyle.MINIMAL) ColorMath.withAlpha(c.homeForeground, 0.10f) else s.disabledSurface,
-            placeholderText = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else c.onSurface,
+            placeholderText = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else glass[GlassRole.DOCK].rest.content,
             pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
         drawerCellConfig = drawerCellConfig.copy(
-            labelColor = c.onSurface, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
-            placeholderFill = s.disabledSurface, placeholderText = c.onSurfaceMuted,
+            labelColor = sheetColors.content, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
+            placeholderFill = s.disabledSurface, placeholderText = sheetColors.muted,
             pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
         folderCellConfig = drawerCellConfig
@@ -1190,49 +1169,31 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val c = t.colors
         val s = t.semantics
         val d = resources.displayMetrics.density
-        val comps = LumaComponents.of(t)
+        val spec = glassPalette[GlassRole.DOCK]
         val lp = dockSurface.layoutParams as ViewGroup.MarginLayoutParams
         when (appearance.effectiveDock) {
-            DockStyle.BEZEL -> {
-                lp.marginStart = dp(16); lp.marginEnd = dp(16)
-                dockSurface.background = BezelDrawable(
-                    ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency) * 0.94f),
-                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.14f else 0.66f),
-                    ColorMath.withAlpha(c.outlineStrong, 0.5f),
-                    t.corner(comps.shapes.dockDp) * d,
-                    dp(1)
-                )
-                dockSurface.elevation = if (effects.iconDepth) comps.surfaces.elevationDp * 0.5f * d else 0f
-            }
-            DockStyle.FLOAT -> {
-                lp.marginStart = dp(34); lp.marginEnd = dp(34)
-                dockSurface.background = BezelDrawable(
-                    ColorMath.withAlpha(c.surface1, t.surfaceAlpha(effects.translucency)),
-                    ColorMath.withAlpha(ColorMath.WHITE, if (t.isDark) 0.16f else 0.76f),
-                    ColorMath.withAlpha(c.outlineStrong, 0.46f),
-                    dp(36).toFloat(),
-                    dp(1)
-                )
-                dockSurface.elevation = if (effects.iconDepth) comps.surfaces.elevationDp * d else 0f
-            }
             DockStyle.MINIMAL -> {
-                lp.marginStart = dp(16); lp.marginEnd = dp(16)
+                lp.marginStart = dp(20); lp.marginEnd = dp(20)
                 dockSurface.background = null
                 dockSurface.elevation = 0f
+                dockSurface.clipToOutline = false
+            }
+            else -> {
+                lp.marginStart = dp(20); lp.marginEnd = dp(20)
+                GlassViews.apply(dockSurface, spec, d, ripple = false)
             }
         }
         dockSurface.layoutParams = lp
-        dockSurface.clipToOutline = appearance.effectiveDock != DockStyle.MINIMAL
         dockSurface.contentDescription = null
         // Keep the dock rows' own text legible against whatever plate is used.
         if (appearance.effectiveDock == DockStyle.MINIMAL) {
             dockCellConfig = dockCellConfig.copy(labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow)
         } else {
             dockCellConfig = dockCellConfig.copy(
-                labelColor = c.onSurface,
+                labelColor = spec.rest.content,
                 labelShadow = false,
                 placeholderFill = s.disabledSurface,
-                placeholderText = c.onSurface
+                placeholderText = spec.rest.content
             )
         }
     }
@@ -1244,41 +1205,40 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     /**
-     * The shared widget container: one surface, one border, one radius, so
+     * The shared widget container: one glass role, one border radius, so
      * third-party widgets read as part of the home composition. Provider content
      * is clipped to the frame but never recoloured.
      */
-    private fun widgetFrameDrawable() = ThemedDrawables.surface(
-        ColorMath.withAlpha(theme.semantics.widgetSurface, theme.surfaceAlpha(effects.translucency) * 0.92f),
-        theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density,
-        ColorMath.withAlpha(theme.semantics.widgetBorder, 0.72f),
-        dp(1)
+    private fun widgetFrameDrawable() = GlassViews.drawable(
+        glassPalette[GlassRole.WIDGET],
+        resources.displayMetrics.density,
+        ripple = false
     )
 
     private fun folderStyle(): FolderStyle {
-        val c = theme.colors
+        val folder = glassPalette[GlassRole.FOLDER].rest
         return FolderStyle(
-            plate = ColorMath.withAlpha(if (theme.isDark) c.surface2 else c.surface1, 0.86f),
-            rim = ColorMath.withAlpha(c.outlineStrong, 0.7f),
+            plate = folder.fillTop,
+            rim = folder.edgeTop,
             outline = IconShapes.outline(theme.iconShape),
-            smartMarker = c.accent
+            smartMarker = folder.focusRing
         )
     }
 
     private fun drawerRowStyle(): DrawerRowStyle {
-        val c = theme.colors
+        val colors = glassPalette[GlassRole.SHEET].rest
         return DrawerRowStyle(
-            headerColor = c.onSurfaceMuted,
+            headerColor = colors.muted,
             headerTypeface = Typefaces.readout(theme.typography),
             headerCaps = true,
             headerTracking = 0.12f,
-            titleColor = c.onSurface,
+            titleColor = colors.content,
             titleTypeface = Typefaces.body(theme.typography),
-            subtitleColor = c.onSurfaceMuted,
+            subtitleColor = colors.muted,
             subtitleTypeface = Typefaces.body(theme.typography),
-            iconTint = c.onSurface,
-            rippleColor = c.ripple,
-            cornerPx = theme.corner(LumaComponents.of(theme).shapes.cellDp) * resources.displayMetrics.density
+            iconTint = colors.content,
+            rippleColor = colors.ripple,
+            cornerPx = glassPalette[GlassRole.SETTINGS_CONTROL].radiusDp * resources.displayMetrics.density
         )
     }
 
@@ -1322,43 +1282,28 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Spatial arrangement for the chosen composition preset. */
     private fun applyPreset(preset: HomePreset) {
-        // The authored per-theme clock size (Signature 64, Atmosphere 58,
-        // Monolith 84), not a single constant shared by every identity.
         val voiceClock = theme.clockSp
-        val clockSp: Float
-        when (preset.clock) {
-            ClockStyle.DIAL -> {
-                dial.visibility = View.VISIBLE
-                clockSp = voiceClock
-                clockColumn.gravity = Gravity.START
-                homeClock.gravity = Gravity.START
-                homeHeader.gravity = Gravity.START
-                (homeContext.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.START
-            }
-            ClockStyle.HERO -> {
-                dial.visibility = View.GONE
-                clockSp = voiceClock * 1.42f
-                clockColumn.gravity = Gravity.CENTER_HORIZONTAL
-                homeClock.gravity = Gravity.CENTER_HORIZONTAL
-                (homeContext.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL
-            }
-            ClockStyle.COMPACT -> {
-                dial.visibility = View.GONE
-                clockSp = voiceClock * 0.70f
-                clockColumn.gravity = Gravity.START
-                homeClock.gravity = Gravity.START
-                (homeContext.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.START
-            }
-        }
+        val clockSp = if (preset.clock == ClockStyle.COMPACT) voiceClock * 0.70f else voiceClock * 1.12f
+
+        // Luma Glass has one clock/date focal point. The decorative chronometer,
+        // header action cluster and context chip are compatibility-only views.
+        dial.visibility = View.GONE
+        headerActions.visibility = View.GONE
+        homeContext.visibility = View.GONE
+        homeHeader.gravity = Gravity.CENTER_HORIZONTAL
+        clusterRow.gravity = Gravity.CENTER
+        clockColumn.gravity = Gravity.CENTER_HORIZONTAL
+        homeClock.gravity = Gravity.CENTER
+        homeDate.gravity = Gravity.CENTER
+        homeContext.gravity = Gravity.CENTER
         homeClock.setAutoSizeTextTypeUniformWithConfiguration(
             (clockSp * 0.55f).roundToInt(), clockSp.roundToInt(), 1, TypedValue.COMPLEX_UNIT_SP
         )
-        // Hero centres the clock; header actions move into the search pill.
-        headerActions.visibility = if (preset.clock == ClockStyle.HERO) View.GONE else View.VISIBLE
-        findViewById<ImageButton>(R.id.search_pill_settings).visibility =
-            if (preset.clock == ClockStyle.HERO) View.VISIBLE else View.GONE
+        findViewById<ImageButton>(R.id.search_pill_settings).visibility = View.GONE
+        val gridVisibility = if (preset.showGrid) View.VISIBLE else View.GONE
+        homeGrid.visibility = gridVisibility
+        findViewById<View>(R.id.home_grid_frame).visibility = gridVisibility
         homeContext.requestLayout()
-        homeGrid.visibility = View.VISIBLE
     }
 
     private fun updateIconSpec() {
@@ -1464,10 +1409,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         desktop.scaleY = scale
         desktop.alpha = (1f - 0.45f * drawerProgress) * (1f - 0.25f * folderProgress) * (0.6f + 0.4f * settleProgress)
         if (Build.VERSION.SDK_INT >= 31) {
-            // Blur is a theme material value, not only an effects-policy one:
-            // Signature asks for 26 dp, Atmosphere 34 and Monolith 0. A theme with
-            // no blur consequently draws none even on a device that supports it.
-            val themeBlur = theme.blurFactor
+            // Blur follows the shared sheet material budget, not a second
+            // per-screen constant. Monolith still resolves to zero blur.
+            val sheetBlur = glassPalette[GlassRole.SHEET].blurDp
+            val themeBlur = if (theme.blurDp > 0f) sheetBlur / theme.blurDp else 0f
             val radius = if (effects.blur && themeBlur > 0f) {
                 maxOf(20f * drawerProgress, 14f * folderProgress) * themeBlur * resources.displayMetrics.density
             } else 0f

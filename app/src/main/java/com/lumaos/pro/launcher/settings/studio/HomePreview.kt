@@ -1,7 +1,6 @@
 package com.lumaos.pro.launcher.settings.studio
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -23,24 +22,29 @@ import androidx.compose.ui.unit.IntSize
 import com.lumaos.pro.launcher.launcher.model.ClockStyle
 import com.lumaos.pro.launcher.launcher.model.DockStyle
 import com.lumaos.pro.launcher.launcher.model.HomePreset
+import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.ui.theme.AtmosphereLayer
 import com.lumaos.pro.launcher.ui.theme.AtmospherePlan
 import com.lumaos.pro.launcher.ui.theme.Backdrop
-import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.GlassBackdrop
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassGeometry
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.ui.theme.WallpaperSeeds
-import com.lumaos.pro.launcher.launcher.home.Typefaces
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Miniature of the home screen, drawn with the same atmosphere plan, theme
- * roles, typography and rendered icons as the real one. Icons are the user's
- * actual home apps rendered with the draft icon treatment; nothing is mocked.
- * When the backdrop is the wallpaper, LumaOS Pro cannot read the wallpaper image
- * without a storage permission, so its reported colours stand in for it.
+ * Miniature of the home screen using the real atmosphere plan, theme roles,
+ * typography, user icons and the shared Liquid Glass recipes. There is no
+ * decorative chronometer and no context chip: one clock/date, one search entry
+ * and one dock. When the backdrop is the wallpaper, reported wallpaper colours
+ * stand in because LumaOS Pro does not request storage permission.
  */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun HomePreview(
     theme: ResolvedTheme,
@@ -56,116 +60,131 @@ fun HomePreview(
     readout: String,
     modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(modifier.semantics { contentDescription = "Preview of ${theme.displayName} with the ${preset.displayName} layout" }) {
+    val palette = GlassMaterials.palette(
+        theme,
+        GlassCapabilities(translucency = true, blur = false, depth = true)
+    )
+    BoxWithConstraints(
+        modifier.semantics {
+            contentDescription = "Preview of ${theme.displayName} with the ${preset.displayName} layout"
+        }
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            drawBackdrop(theme, wallpaper, artwork)
             val c = theme.colors
-            val muted = Color(c.homeMuted)
             val unit = w / 100f
+            drawBackdrop(theme, wallpaper, artwork)
 
-            // Chronometer / clock block.
+            // One refined clock/date focal point.
             val top = h * 0.07f
+            val compact = preset.clock == ClockStyle.COMPACT
             val clockPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeForeground
                 typeface = Typefaces.clock(theme.typography)
                 letterSpacing = theme.typography.clockTracking
-                // A shadow only where text sits on artwork, mirroring the home screen.
-                if (theme.backdrop.usesArtwork) setShadowLayer(unit * 0.8f, 0f, unit * 0.2f, c.homeShadow)
+                textAlign = if (compact) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.CENTER
+                if (theme.backdrop.usesArtwork) setShadowLayer(unit * 0.6f, 0f, unit * 0.2f, c.homeShadow)
             }
             val readPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeMuted
                 typeface = Typefaces.readout(theme.typography)
                 letterSpacing = theme.typography.readoutTracking
                 textSize = unit * 3.1f
+                textAlign = clockPaint.textAlign
             }
-            fun readoutText(text: String) = if (theme.typography.readoutCaps) text.uppercase() else text
-            when (preset.clock) {
-                ClockStyle.DIAL -> {
-                    val r = unit * 8f
-                    val cx = unit * 6f + r
-                    val cy = top + r
-                    drawDial(cx, cy, r, theme)
-                    clockPaint.textSize = unit * 14f
-                    drawContext.canvas.nativeCanvas.drawText(timeText, cx + r + unit * 4f, cy + unit * 2f, clockPaint)
-                    readPaint.textSize = unit * 3.2f
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), cx + r + unit * 4.4f, cy + unit * 7.5f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), unit * 6f, cy + r + unit * 7f, readPaint)
-                }
-                ClockStyle.HERO -> {
-                    clockPaint.textSize = unit * 21f
-                    clockPaint.textAlign = android.graphics.Paint.Align.CENTER
-                    readPaint.textAlign = android.graphics.Paint.Align.CENTER
-                    drawContext.canvas.nativeCanvas.drawText(timeText, w / 2f, top + unit * 20f, clockPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), w / 2f, top + unit * 27f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), w / 2f, top + unit * 32f, readPaint)
-                }
-                ClockStyle.COMPACT -> {
-                    clockPaint.textSize = unit * 10f
-                    drawContext.canvas.nativeCanvas.drawText(timeText, unit * 6f, top + unit * 9f, clockPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(dateText), unit * 6f, top + unit * 14f, readPaint)
-                    drawContext.canvas.nativeCanvas.drawText(readoutText(readout), unit * 6f, top + unit * 19f, readPaint)
-                }
-            }
+            val dateOnly = if (theme.typography.readoutCaps) dateText.uppercase() else dateText
+            val x = if (compact) unit * 6f else w / 2f
+            clockPaint.textSize = if (compact) unit * 10f else unit * 21f
+            drawContext.canvas.nativeCanvas.drawText(timeText, x, top + unit * if (compact) 9f else 20f, clockPaint)
+            drawContext.canvas.nativeCanvas.drawText(dateOnly, x, top + unit * if (compact) 14f else 27f, readPaint)
 
-            // Icon grid.
+            // Clean, aligned icon grid.
+            val muted = Color(c.homeMuted)
             val columns = 4
             val rows = if (preset.showGrid) min(preset.defaultRows, 4) else 0
-            val gridTop = when (preset.clock) {
-                ClockStyle.DIAL -> top + unit * 36f
-                ClockStyle.HERO -> top + unit * 44f
-                ClockStyle.COMPACT -> top + unit * 26f
-            }
-            val cellW = (w - unit * 8f) / columns
+            val gridTop = top + unit * if (compact) 26f else 44f
+            val gutter = unit * (GlassGeometry.GUTTER_DP / 3.6f)
+            val cellW = (w - gutter * 2f) / columns
             val iconSize = min(cellW * 0.58f, unit * 14f)
             var index = 0
             for (r in 0 until rows) for (col in 0 until columns) {
                 val img = icons.getOrNull(index++) ?: continue
-                val x = unit * 4f + col * cellW + (cellW - iconSize) / 2f
-                val y = gridTop + r * (iconSize + unit * 9f)
-                if (y + iconSize > h * 0.74f) continue
-                drawImageFit(img, x, y, iconSize)
-                drawRoundRect(muted.copy(alpha = 0.55f), Offset(x + iconSize * 0.15f, y + iconSize + unit * 2f),
-                    Size(iconSize * 0.7f, unit * 1.2f), CornerRadius(unit))
-            }
-
-            // Search pill.
-            val pillH = unit * 9f
-            val pillY = h - unit * 34f
-            // Same 18 dp-cornered field as the home screen: a rounded rectangle,
-            // not a fully-round pill.
-            val pillRadius = pillH * 0.35f
-            drawRoundRect(
-                Color(ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(true) * 0.96f)),
-                Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillRadius)
-            )
-            drawRoundRect(Color(c.outline), Offset(unit * 8f, pillY), Size(w - unit * 16f, pillH), CornerRadius(pillRadius), style = Stroke(unit * 0.25f))
-            drawCircle(Color(c.onSurfaceMuted), unit * 1.6f, Offset(unit * 14f, pillY + pillH / 2f), style = Stroke(unit * 0.5f))
-            drawRoundRect(Color(c.onSurfaceMuted).copy(alpha = 0.5f), Offset(unit * 19f, pillY + pillH / 2f - unit * 0.6f),
-                Size(w * 0.35f, unit * 1.2f), CornerRadius(unit))
-
-            // Dock.
-            val dockH = unit * 18f
-            val dockY = h - unit * 22f
-            val inset = when (dock) { DockStyle.BEZEL -> unit * 4f; DockStyle.FLOAT -> unit * 11f; DockStyle.MINIMAL -> unit * 4f }
-            if (dock != DockStyle.MINIMAL) {
-                val radius = if (dock == DockStyle.FLOAT) dockH / 2f else unit * 6f * theme.cornerScale
-                drawRoundRect(Color(ColorMath.withAlpha(c.surface1, theme.surfaceAlpha(true) * 0.94f)),
-                    Offset(inset, dockY), Size(w - inset * 2, dockH), CornerRadius(radius))
-                // Hairline rim taken from the palette, not a fixed white.
+                val ix = gutter + col * cellW + (cellW - iconSize) / 2f
+                val iy = gridTop + r * (iconSize + unit * 9f)
+                if (iy + iconSize > h * 0.74f) continue
+                drawImageFit(img, ix, iy, iconSize)
                 drawRoundRect(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(ColorMath.lerp(c.surface3, ColorMath.WHITE, if (theme.isDark) 0.10f else 0.45f)),
-                            Color(ColorMath.withAlpha(c.outlineStrong, 0.5f))
-                        ),
-                        startY = dockY, endY = dockY + dockH
-                    ),
-                    Offset(inset, dockY), Size(w - inset * 2, dockH), CornerRadius(radius), style = Stroke(unit * 0.3f)
+                    muted.copy(alpha = 0.55f),
+                    Offset(ix + iconSize * 0.15f, iy + iconSize + unit * 2f),
+                    Size(iconSize * 0.7f, unit * 1.2f),
+                    CornerRadius(unit)
                 )
             }
-            val dockCell = (w - inset * 2) / 4f
+
+            // Primary search: translucent fill, directional edge, one reflection.
+            val search = palette[GlassRole.SEARCH].rest
+            val pillH = unit * 10f
+            val pillY = h - unit * 34f
+            val searchRadius = GlassGeometry.ROLE_RADIUS_DP.getValue(GlassRole.SEARCH) /
+                GlassGeometry.SEARCH_HEIGHT_DP * pillH
+            drawRoundRect(
+                Brush.verticalGradient(listOf(Color(search.fillTop), Color(search.fillBottom))),
+                Offset(gutter, pillY), Size(w - gutter * 2f, pillH), CornerRadius(searchRadius)
+            )
+            drawRoundRect(
+                Brush.verticalGradient(
+                    listOf(Color(search.edgeTop), Color(search.edgeBottom)),
+                    startY = pillY, endY = pillY + pillH
+                ),
+                Offset(gutter, pillY), Size(w - gutter * 2f, pillH), CornerRadius(searchRadius),
+                style = Stroke(unit * 0.25f)
+            )
+            drawRoundRect(
+                Brush.horizontalGradient(
+                    listOf(Color.Transparent, Color(search.specular), Color.Transparent)
+                ),
+                Offset(gutter + searchRadius, pillY + unit * 0.3f),
+                Size(w - gutter * 2f - searchRadius * 2f, unit * 0.25f),
+                CornerRadius(unit * 0.2f)
+            )
+            drawCircle(Color(search.muted), unit * 1.6f, Offset(gutter + unit * 3f, pillY + pillH / 2f), style = Stroke(unit * 0.5f))
+            drawRoundRect(
+                Color(search.muted).copy(alpha = 0.5f),
+                Offset(gutter + unit * 8f, pillY + pillH / 2f - unit * 0.6f),
+                Size(w * 0.35f, unit * 1.2f), CornerRadius(unit)
+            )
+
+            // Floating glass dock.
+            val dockSpec = palette[GlassRole.DOCK].rest
+            val dockH = unit * 18f
+            val dockY = h - unit * 22f
+            val inset = gutter
+            if (dock != DockStyle.MINIMAL) {
+                val dockRadius = GlassGeometry.ROLE_RADIUS_DP.getValue(GlassRole.DOCK) /
+                    GlassGeometry.DOCK_HEIGHT_DP * dockH
+                drawRoundRect(
+                    Brush.verticalGradient(listOf(Color(dockSpec.fillTop), Color(dockSpec.fillBottom))),
+                    Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius)
+                )
+                drawRoundRect(
+                    Brush.verticalGradient(
+                        listOf(Color(dockSpec.edgeTop), Color(dockSpec.edgeBottom)),
+                        startY = dockY, endY = dockY + dockH
+                    ),
+                    Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius),
+                    style = Stroke(unit * 0.3f)
+                )
+                drawRoundRect(
+                    Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color(dockSpec.specular), Color.Transparent)
+                    ),
+                    Offset(inset + dockRadius, dockY + unit * 0.3f),
+                    Size(w - inset * 2f - dockRadius * 2f, unit * 0.25f),
+                    CornerRadius(unit * 0.2f)
+                )
+            }
+            val dockCell = (w - inset * 2f) / 4f
             val dockIcon = min(dockCell * 0.6f, dockH * 0.62f)
             dockIcons.forEachIndexed { i, img ->
                 drawImageFit(img, inset + i * dockCell + (dockCell - dockIcon) / 2f, dockY + (dockH - dockIcon) / 2f, dockIcon)
@@ -190,8 +209,7 @@ private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSee
     if (theme.backdrop == Backdrop.WALLPAPER) {
         val colors = listOfNotNull(wallpaper?.primary, wallpaper?.secondary, wallpaper?.tertiary)
             // No wallpaper colours reported: stand in with the draft theme's own
-            // surface pair rather than a fixed colour, so the preview stays honest
-            // about "approximate" without inventing a palette.
+            // surface pair rather than inventing a palette.
             .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
             .map { Color(it) }
         drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
@@ -236,25 +254,10 @@ private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSee
             }
         }
     }
-}
-
-private fun DrawScope.drawDial(cx: Float, cy: Float, r: Float, theme: ResolvedTheme) {
-    val c = theme.colors
-    val wallpaper = theme.backdrop == Backdrop.WALLPAPER
-    val ring = Color(ColorMath.withAlpha(c.homeForeground, 0.42f))
-    for (hr in 0 until 24) {
-        val major = hr % 6 == 0
-        val a = Math.toRadians(hr * 15.0 - 90.0)
-        val len = if (major) r * 0.16f else r * 0.08f
-        drawLine(ring,
-            Offset(cx + ((r - len) * kotlin.math.cos(a)).toFloat(), cy + ((r - len) * kotlin.math.sin(a)).toFloat()),
-            Offset(cx + (r * kotlin.math.cos(a)).toFloat(), cy + (r * kotlin.math.sin(a)).toFloat()),
-            strokeWidth = if (major) r * 0.04f else r * 0.025f)
-    }
-    val pr = r * 0.74f
-    val day = java.util.Calendar.getInstance().let { (it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE)) / 1440f }
-    drawCircle(ring.copy(alpha = 0.15f), pr, Offset(cx, cy), style = Stroke(r * 0.06f))
-    val progress = Color(if (wallpaper) c.homeForeground else c.accent)
-    drawArc(progress, -90f, day * 360f, false, Offset(cx - pr, cy - pr), Size(pr * 2, pr * 2), style = Stroke(r * 0.06f))
-    drawCircle(progress, r * 0.07f, Offset(cx, cy))
+    val scrim = GlassBackdrop.scrim(theme)
+    drawRect(
+        Brush.verticalGradient(
+            listOf(Color(scrim.top), Color(scrim.center), Color(scrim.bottom))
+        )
+    )
 }

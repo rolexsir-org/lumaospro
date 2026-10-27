@@ -4,10 +4,12 @@ This checklist separates **what has been verified in this workspace** from **wha
 must be verified on a device or in a real build**. Nothing in the "device" section
 has been executed here.
 
-Environment of record: no JDK, Gradle, Android SDK, emulator or physical device was
-available. The project was therefore **not compiled, not linted, and not rendered**.
-Do not treat any screenshot-like description in the design document as evidence of
-on-device appearance.
+Environment of record: no full JDK, Gradle, Android SDK, emulator or physical
+device was available. The Android application was therefore **not compiled with
+Gradle, not linted, not linked and not rendered**. A standalone Kotlin compiler
+and JRE were bootstrapped locally for pure-JVM tests only. Do not treat any
+screenshot-like description in the design document as evidence of on-device
+appearance.
 
 The rows below cover two passes: the pre-3.2 design pass and the **Design System
 v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are marked.
@@ -45,12 +47,22 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A25 | **v3.2** clock size is a per-theme token, not a constant | `ResolvedTheme.clockSp` → `HomeActivity.applyPreset` | PASS (by inspection; 64 / 58 / 84 sp) |
 | A26 | Version identity is `1.0.0` / `versionCode` 100 in the build file and every document | Cross-check of `app/build.gradle.kts`, `README.md`, `RELEASE-1.0.0.md`, `CHANGELOG.md`, `BUILD_REPORT.md` | PASS |
 
-Not performed: Kotlin compilation, resource linking, lint, unit tests, Robolectric
-tests, APK/AAB assembly, signing, installation.
+Additional Luma Glass static checks (current branch): 72 XML files parsed; 130
+Kotlin sources checked for balanced comments/strings/delimiters; all XML and
+Kotlin resource references resolved; `activity_home.xml` runtime-test IDs and
+types preserved; no unused imports in modified Kotlin files; pure Kotlin token
+layer compiled with standalone `kotlinc` 2.2.21; 242 JVM-only unit tests passed
+with a JUnit shim (`GlassMaterialTest` included).
+
+Not performed: Gradle Kotlin compilation, resource linking, lint, Android unit
+tests, Robolectric tests, APK/AAB assembly, signing, installation, screenshots.
 
 ---
 
-## B. Automated tests that exist but were **not executed** here
+## B. Automated tests
+
+The pure JVM rows below were executed locally with a standalone Kotlin compiler
+and JUnit shim. The Android/Robolectric rows remain unexecuted here.
 
 Run with `./build.sh test` (or `./gradlew test`) on a machine with the toolchain.
 
@@ -63,6 +75,7 @@ Run with `./build.sh test` (or `./gradlew test`) on a machine with the toolchain
 | `robolectric/PreferencesAndSamplersRuntimeTest` | Preference round-trips, including typography enum | All pass |
 | `ui/theme/DesignTokensParityTest` **(v3.2)** | Kotlin tokens ↔ `docs/design/v3.2/tokens/*.json`, token by token, including the bundle version | All pass |
 | `ui/theme/DesignSystemV32Test` **(v3.2)** | Authored vs derived colour paths, radius roles (34/26/16/10/6, 38/30/20/12/8, 8/4/2/2/2), blur material (26/34/0), saturation, label sizes, motion characters, backdrop fallbacks, fresh-install defaults | All pass |
+| `ui/theme/GlassMaterialTest` **(Luma Glass)** | Role completeness, distinct geometry/opacity/blur, light/dark contrast, opaque capability fallbacks, scrim polarity, unified accent presets, motion-token aliasing | All pass |
 
 If `ThemeEngineTest` fails on contrast after these changes, the failure is a real
 regression in the palette — do not relax the assertion.

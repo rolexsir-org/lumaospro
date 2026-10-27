@@ -12,6 +12,30 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
 First public release. Configured but not yet built, tested, signed or verified on
 a device from this source.
 
+### Luma Glass v4.0 (unreleased)
+
+- Added one shared, role-based Liquid Glass material layer (`GlassMaterial.kt`)
+  with distinct recipes for primary surfaces, secondary panels, search fields,
+  dock, folders, menus, sheets, widgets, settings controls and overlays.
+- Added matching View (`GlassDrawable` / `GlassViews`) and Compose
+  (`GlassComponents`) adapters, including pressed/focused/selected states and
+  opaque fallbacks driven by the existing effects policy.
+- Simplified the home hierarchy to one centred clock/date, one primary search
+  entry, an aligned grid and one floating glass dock, while preserving the
+  runtime test IDs and hidden compatibility actions.
+- Unified settings, Studio, dashboard, preview, drawer, folders, menus, widget
+  picker and edit chrome on the same material tokens; default appearance now
+  uses the real system wallpaper with a polarity-aware legibility scrim.
+- Added studio accent presets that keep all nine legacy theme IDs/storage keys
+  but present them as accents within one Luma Glass identity.
+- Fixed a nested block comment in `LumaDesignTokens.kt` that prevented Kotlin
+  parsing, two backticked test names containing dots, `TypeStyle.entries` order,
+  the type-scale hierarchy, and atmosphere tests that unintentionally exercised
+  bundled artwork instead of the theme atmosphere.
+- Locally bootstrapped Kotlin 2.2.21 compiled the pure token/theme layer and ran
+  242 JVM-only unit tests with a lightweight JUnit shim; **Gradle, Android lint,
+  Robolectric, debug APK assembly and device rendering were not executed**.
+
 ### Design System v3.2
 
 - Adopted the LumaOS Design System v3.2 bundle (archived with provenance in

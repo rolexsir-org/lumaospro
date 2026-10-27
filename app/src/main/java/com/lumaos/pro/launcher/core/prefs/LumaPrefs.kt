@@ -157,9 +157,9 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
      *
      * Users of 0.1 had only a light/dark/system switch. Explicit legacy light
      * and dark choices keep their familiar presets; new installs follow the
-     * system and use the Signature (dark) / Zen (light) pair, which is Design
-     * System v3.2's dark-first trio plus the retained paper palette. Preset
-     * storage keys stay stable, so nothing is rewritten on upgrade.
+     * system and use the Signature (dark) / Zen (light) pair as the dark and
+     * light anchors of the single Luma Glass identity. Preset storage keys stay
+     * stable, so nothing is rewritten on upgrade.
      */
     val themeSettings: Flow<ThemeSettings> = dataStore.data
         .catch { e ->
@@ -197,7 +197,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
             typography = TypeStyle.fromStorageKey(p[Keys.TYPOGRAPHY]),
             iconShape = IconShape.fromStorageKey(p[Keys.ICON_SHAPE]),
             iconStyle = IconStyle.fromStorageKey(p[Keys.ICON_STYLE]),
-            backdrop = Backdrop.fromStorageKey(p[Keys.BACKDROP]),
+            backdrop = Backdrop.fromStorageKey(p[Keys.BACKDROP]) ?: Backdrop.WALLPAPER,
             profileThemes = profileThemes
         )
     }

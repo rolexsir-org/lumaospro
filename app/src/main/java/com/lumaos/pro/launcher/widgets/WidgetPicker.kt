@@ -14,13 +14,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.effects.EffectsDecision
-import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
-import com.lumaos.pro.launcher.ui.theme.LumaComponents
-import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import java.util.concurrent.Executors
@@ -39,6 +38,7 @@ class WidgetPicker(
     private val bottomInset: Int
 ) {
     private val density = context.resources.displayMetrics.density
+    private val glassPalette = GlassViews.palette(theme, effects)
     private fun dp(v: Float) = (v * density).toInt()
     private var overlay: FrameLayout? = null
     private val loader = Executors.newSingleThreadExecutor()
@@ -48,8 +48,8 @@ class WidgetPicker(
     fun show(providers: List<AppWidgetProviderInfo>, onPick: (AppWidgetProviderInfo) -> Unit) {
         dismiss()
         val c = theme.colors
-        val semantics = theme.semantics
-        val components = LumaComponents.of(theme)
+        val sheetSpec = glassPalette[GlassRole.SHEET]
+        val sheetColors = sheetSpec.rest
         val pm = context.packageManager
         val ov = FrameLayout(context)
         val scrim = View(context).apply {
@@ -61,23 +61,20 @@ class WidgetPicker(
 
         val sheet = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = ThemedDrawables.topRounded(
-                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(effects.translucency)),
-                theme.corner(components.shapes.sheetDp) * density
-            )
             setPadding(dp(20f), dp(14f), dp(20f), bottomInset + dp(12f))
             isClickable = true
         }
+        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false)
         sheet.addView(TextView(context).apply {
             text = context.getString(R.string.widgets_title)
-            setTextColor(c.onSurface)
+            setTextColor(sheetColors.content)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
             typeface = Typefaces.title(theme.typography)
             letterSpacing = theme.typography.titleTracking
         })
         sheet.addView(TextView(context).apply {
             text = context.getString(R.string.widgets_subtitle)
-            setTextColor(c.onSurfaceMuted)
+            setTextColor(sheetColors.muted)
             typeface = Typefaces.body(theme.typography)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
             setPadding(0, dp(2f), 0, dp(10f))
@@ -87,7 +84,7 @@ class WidgetPicker(
         if (providers.isEmpty()) {
             list.addView(TextView(context).apply {
                 text = context.getString(R.string.widgets_empty)
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(sheetColors.muted)
                 typeface = Typefaces.body(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
                 gravity = Gravity.CENTER
@@ -101,7 +98,7 @@ class WidgetPicker(
             val appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
             list.addView(TextView(context).apply {
                 text = if (theme.typography.readoutCaps) appLabel.uppercase() else appLabel
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(sheetColors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelMediumSp)
                 letterSpacing = theme.typography.readoutTracking
                 typeface = Typefaces.readout(theme.typography)
@@ -129,14 +126,16 @@ class WidgetPicker(
     }
 
     private fun row(info: AppWidgetProviderInfo, onClick: () -> Unit): View {
-        val c = theme.colors
+        val rowSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
+        val rowColors = rowSpec.rest
+        val widgetSpec = glassPalette[GlassRole.WIDGET]
         val label = runCatching { info.loadLabel(context.packageManager) }.getOrNull() ?: info.provider.className
         val cellsW = ((info.minWidth / density + 30) / 70).toInt().coerceAtLeast(1)
         val cellsH = ((info.minHeight / density + 30) / 70).toInt().coerceAtLeast(1)
         val preview = ImageView(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(96f), dp(64f)).apply { marginEnd = dp(14f) }
             scaleType = ImageView.ScaleType.FIT_CENTER
-            background = ThemedDrawables.surface(c.surface2, theme.corner(LumaComponents.of(theme).shapes.controlDp) * density)
+            background = GlassViews.drawable(widgetSpec, density, ripple = false)
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
@@ -153,7 +152,7 @@ class WidgetPicker(
             setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
             isClickable = true
             isFocusable = true
-            background = ThemedDrawables.ripple(c.ripple, null, theme.corner(LumaComponents.of(theme).shapes.cellDp) * density)
+            background = GlassViews.drawable(rowSpec, density, ripple = true)
             contentDescription = context.getString(R.string.widgets_row_description, label, cellsW, cellsH)
             setOnClickListener { onClick() }
             addView(preview)
@@ -161,14 +160,14 @@ class WidgetPicker(
                 orientation = LinearLayout.VERTICAL
                 addView(TextView(context).apply {
                     text = label
-                    setTextColor(c.onSurface)
+                    setTextColor(rowColors.content)
                     typeface = Typefaces.body(theme.typography)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleSmallSp)
                     maxLines = 2
                 })
                 addView(TextView(context).apply {
                     text = context.getString(R.string.widgets_size, cellsW, cellsH)
-                    setTextColor(c.onSurfaceMuted)
+                    setTextColor(rowColors.muted)
                     typeface = Typefaces.body(theme.typography)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
                 })

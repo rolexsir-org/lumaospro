@@ -21,7 +21,10 @@ import com.lumaos.pro.launcher.launcher.CellConfig
 import com.lumaos.pro.launcher.launcher.IconLoader
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
-import com.lumaos.pro.launcher.ui.theme.LumaComponents
+import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
@@ -67,8 +70,16 @@ class FolderOverlay(
         closeImmediately()
         val theme = host.theme()
         val c = theme.colors
-        val semantics = theme.semantics
-        val components = LumaComponents.of(theme)
+        val palette = GlassMaterials.palette(
+            theme,
+            GlassCapabilities(
+                translucency = host.translucency(),
+                blur = host.translucency(),
+                depth = true
+            )
+        )
+        val folderSpec = palette[GlassRole.FOLDER]
+        val colors = folderSpec.rest
         folderId = id
         originalName = name
 
@@ -83,18 +94,14 @@ class FolderOverlay(
         val p = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18f), dp(16f), dp(18f), dp(14f))
-            background = ThemedDrawables.surface(
-                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(host.translucency())),
-                theme.corner(components.shapes.folderDp) * dpScale, semantics.dialogBorder, dp(1f)
-            )
-            elevation = dp(components.surfaces.elevationDp + 6f).toFloat()
             isClickable = true
         }
+        GlassViews.apply(p, folderSpec, dpScale, ripple = false)
 
         if (smart) {
             p.addView(TextView(context).apply {
                 text = name
-                setTextColor(c.onSurface)
+                setTextColor(colors.content)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
                 letterSpacing = theme.typography.titleTracking
@@ -102,7 +109,7 @@ class FolderOverlay(
             })
             p.addView(TextView(context).apply {
                 text = context.getString(R.string.smart_folder_hint)
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(colors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
                 typeface = Typefaces.body(theme.typography)
                 setPadding(dp(6f), dp(2f), dp(6f), dp(8f))
@@ -110,12 +117,12 @@ class FolderOverlay(
         } else {
             titleField = EditText(context).apply {
                 setText(name)
-                setTextColor(c.onSurface)
+                setTextColor(colors.content)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
                 letterSpacing = theme.typography.titleTracking
-                background = null
-                setPadding(dp(6f), dp(4f), dp(6f), dp(10f))
+                background = GlassViews.drawable(palette[GlassRole.SEARCH], dpScale, ripple = false)
+                setPadding(dp(12f), dp(4f), dp(12f), dp(10f))
                 isSingleLine = true
                 imeOptions = EditorInfo.IME_ACTION_DONE
                 contentDescription = context.getString(R.string.folder_name_description)
@@ -152,7 +159,7 @@ class FolderOverlay(
         if (members.isEmpty()) {
             p.addView(TextView(context).apply {
                 text = context.getString(R.string.smart_folder_empty)
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(colors.muted)
                 typeface = Typefaces.body(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
                 gravity = Gravity.CENTER

@@ -24,7 +24,7 @@ class DesignSystemV32Test {
 
     // -------------------------------------------------------------- identity
 
-    @Test fun `the three v3.2 themes are the ones offered first`() {
+    @Test fun `the three v3_2 themes are the ones offered first`() {
         assertEquals(
             listOf("Signature", "Atmosphere", "Monolith"),
             ThemePresets.SIGNATURE.map { it.displayName }
@@ -125,7 +125,7 @@ class DesignSystemV32Test {
         assertTrue(ColorMath.contrast(themed.colors.onSurface, themed.colors.surface1) >= 7.0)
     }
 
-    @Test fun `the three v3.2 palettes all clear 7 to 1 body text`() {
+    @Test fun `the three v3_2 palettes all clear 7 to 1 body text`() {
         for (id in listOf(ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH)) {
             for (env in listOf(envDark, envLight)) {
                 val c = resolve(id, env).colors

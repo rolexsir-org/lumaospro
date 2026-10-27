@@ -3,15 +3,52 @@
 **Release:** 1.0.0 (`versionCode` 100).
 
 > **Verification status (read first).** This document describes the design system as
-> implemented in this checkout. The implementation was written in an environment
-> with **no JDK, Gradle, Android SDK or device access**, so it has **not** been
-> compiled, linted, or rendered on a phone. What *has* been checked mechanically is
-> listed in `QA_CHECKLIST.md`: XML well-formedness, resource-reference resolution,
-> Kotlin import resolution against declared packages, contrast mathematics in the
-> theme engine, and typography/geometry invariants. Nothing here should be
-> presented as device-verified until the checklist's manual rows are run.
+> implemented in this checkout. There is no Android SDK, Gradle distribution,
+> emulator or physical device in the current environment, so the Android app has
+> **not** been compiled with Gradle, linked, linted, or rendered on a phone. A
+> standalone Kotlin 2.2.21 compiler on a JRE was bootstrapped locally to compile
+> the pure token/theme layer and run 242 JVM-only unit tests with a JUnit shim;
+> that is not the Gradle test task and does not cover Robolectric or UI rendering.
+> Static resource, XML, delimiter and contract checks are listed in
+> `QA_CHECKLIST.md`. Nothing here should be presented as device-verified until
+> the checklist's manual rows are run.
 
 ---
+
+## Luma Glass v4.0 (current visual system)
+
+The v3.2 token bundle below remains the source of truth for colours, contrast,
+type, spacing and motion. **Luma Glass** is the shared material layer above it:
+one role-based recipe is consumed by both the Android Views launcher and the
+Compose settings/Studio/dashboard screens.
+
+- `GlassMaterial.kt` defines semantic roles (`PRIMARY`, `SECONDARY`, `SEARCH`,
+  `DOCK`, `FOLDER`, `MENU`, `SHEET`, `WIDGET`, `SETTINGS_CONTROL`, `OVERLAY`),
+  each with its own tint/opacity, blur budget, radius, elevation, edge highlight,
+  internal reflection and pressed/focused/selected colours. No screen owns a
+  private surface hex value.
+- `GlassViews` turns those recipes into one cached, stateful `GlassDrawable` for
+  Views; `GlassComponents` turns the same recipes into Compose brushes, borders,
+  shapes and state colours. `LumaOSTheme` maps MaterialTheme surface roles onto the same glass palette.
+- `GlassCapabilities` maps the existing `EffectsDecision` to a readable opaque
+  fallback when translucency, blur or depth are unavailable. There is no stacked
+  full-screen blur and no rainbow/chrome/bloom treatment.
+- The wallpaper contributes through the existing `AmbientBackdropView` and a
+  single polarity-aware `GlassBackdrop.scrim`; `FLAG_SHOW_WALLPAPER`, bundled
+  LUMA artwork and `Backdrop` preferences retain their existing behaviour.
+- Home now has one centred clock/date, one aligned app grid, one primary search
+  field and one floating glass dock. The decorative chronometer dial, header
+  action cluster and context chip are hidden compatibility views; their IDs and
+  actions remain bound (context selection on clock long-press, settings on date
+  or search long-press).
+- Legacy `ThemeId` values and storage keys are preserved. Studio's new accent
+  presets (`LumaGlassIdentity.ACCENTS`) change semantic colour within one
+  material system rather than creating another theme engine.
+
+The pure `GlassMaterialTest` checks role completeness, deliberate geometry,
+light/dark contrast, capability fallbacks, scrim polarity, accent presets and
+motion-token aliasing. Android/Robolectric rendering still requires a device or
+CI build.
 
 ## 0. Design System v3.2 (current)
 

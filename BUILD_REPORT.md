@@ -15,10 +15,37 @@ made executable. The command was then retried and reached provisioning, but
 could not download JDK 17 (`api.adoptium.net` is not reachable from this
 sandbox). No Java, Gradle, Android SDK, or `adb` executable is available in the
 current PATH, and no local toolchain cache was present. Consequently,
-current-source tests, lint, debug/release APK builds, and device installation
-could not be run here.
+Gradle/Robolectric tests, lint, debug/release APK builds, and device installation
+could not be run here. A standalone Kotlin compiler and JRE were later
+bootstrapped locally from npm/PyPI for pure-JVM validation only; no Android SDK
+or Gradle distribution became available.
 
 The current source still needs a fresh lint run; no lint result is claimed here.
+
+## Luma Glass pass — executed verification (current branch)
+
+The following checks were actually executed in this workspace:
+
+- Standalone `kotlinc` 2.2.21 on JRE 17 compiled the pure Kotlin token, theme,
+  motion, composition and model sources with `compile_exit=0`.
+- A lightweight JUnit 4 shim and reflection runner executed **242 JVM-only unit
+  tests** from 28 test classes: `RESULT passed=242 failed=0`. This includes all
+  existing pure theme/design/parity tests and the new `GlassMaterialTest`.
+  Android-dependent, Robolectric, coroutine and optimizer-dependent tests were
+  excluded because their runtime dependencies are unavailable.
+- 72 resource XML files parsed successfully; 130 Kotlin sources passed a
+  comment/string/delimiter state-machine check.
+- All XML and Kotlin resource references resolved: 61 IDs, 342 strings, 14
+  styles, 60 drawables, 7 fonts, 6 layouts, 3 plurals and the remaining declared
+  resources. `activity_home.xml` preserves every `HomeActivityRuntimeTest` ID
+  and view type.
+- Git diff was checked for unused imports in modified/untracked Kotlin files;
+  none remain.
+
+Not executed: `./build.sh test`, `./build.sh lint`, `assembleDebug`,
+`assembleRelease`, Robolectric UI inflation, resource linking, screenshots,
+contrast on a device, or touch-target verification on hardware. The standalone
+JVM run does not prove that the Android/Compose code compiles.
 
 ## Design-system pass (current branch)
 
