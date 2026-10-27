@@ -294,6 +294,27 @@ object HomeLayoutOps {
         return if (pages == layout.pages) layout else layout.copy(pages = pages)
     }
 
+    /**
+     * Keeps only widgets whose Android host id is still valid (the provider is
+     * installed and the binding survived). Everything else - apps, folders,
+     * smart folders, the dock and item order - is preserved exactly, so one
+     * uninstalled provider never resets the rest of the home screen.
+     *
+     * Returns the input unchanged when every widget is valid. The caller is
+     * responsible for deleting the released ids from the AppWidgetHost; the
+     * layout layer only owns placement metadata.
+     */
+    fun reconcileWidgets(layout: HomeLayout, validIds: Set<Int>): HomeLayout {
+        val pages = layout.pages.map { page ->
+            page.filterNot { it is HomeItem.Widget && it.appWidgetId !in validIds }
+        }
+        return if (pages == layout.pages) layout else layout.copy(pages = pages)
+    }
+
+    /** Ids of widgets whose host binding is no longer valid, for host-side cleanup. */
+    fun invalidWidgetIds(layout: HomeLayout, validIds: Set<Int>): Set<Int> =
+        layout.widgetIds().filterNot { it in validIds }.toSet()
+
     /** Removes every widget (used when restoring a backup on another device). */
     fun stripWidgets(layout: HomeLayout): HomeLayout = layout.copy(
         dock = layout.dock.filterNot { it is HomeItem.Widget },

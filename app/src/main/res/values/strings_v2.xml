@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Strings added with the pre-1.0 redesign (home, drawer, edit mode, widgets, Studio, backup). -->
 <resources>
+    <!-- Experience profiles -->
+    <string name="experience_pure">Pure</string>
+    <string name="experience_pure_desc">Calm light surfaces, solid materials, restrained motion.</string>
+    <string name="experience_liquid">Liquid</string>
+    <string name="experience_liquid_desc">Layered translucent glass with the floating signature dock.</string>
+    <string name="experience_midnight">Midnight</string>
+    <string name="experience_midnight_desc">Cinematic dark, wallpaper-led depth and quiet highlights.</string>
+    <string name="onboarding_profiles_title">Choose your experience</string>
+    <string name="onboarding_profiles_subtitle">A coordinated look you can change any time in Settings. Apps, widgets and layouts are never moved.</string>
+    <string name="settings_group_make_yours">Make it yours</string>
+    <string name="settings_group_fine_tune">Fine-tune</string>
+    <string name="settings_group_advanced">Advanced</string>
+    <string name="section_widgets">Widgets</string>
+    <string name="pref_widgets_manage_open">Open the widget picker on the home screen</string>
+
     <!-- Home -->
     <string name="search_pill_hint">Search apps and shortcuts</string>
     <string name="home_context_description">Status: %1$s. Double-tap to switch context.</string>
@@ -74,13 +89,27 @@
     <string name="widgets_title">Widgets</string>
     <string name="widgets_subtitle">From apps installed on this device</string>
     <string name="widgets_empty">No installed app offers widgets.</string>
-    <string name="widgets_size">%1$d × %2$d</string>
+    <string name="widgets_search_hint">Search widgets</string>
+    <string name="widgets_no_results">No widgets match “%1$s”.</string>
+    <string name="widgets_providers_failed">Widget information is not available right now.</string>
+    <string name="widgets_retry">Retry</string>
+    <string name="widgets_size">%1$d × %2$d cells</string>
     <string name="widgets_row_description">%1$s, about %2$d by %3$d cells</string>
+    <string name="widget_capability_resizable">Resizable height</string>
+    <string name="widget_capability_fixed">Fixed height</string>
+    <string name="widget_capability_configurable">Configurable</string>
     <string name="widget_unavailable">Widget unavailable. Its app may have been removed — long-press to remove.</string>
     <string name="widget_resize_description">Resize widget</string>
     <string name="widget_description">Widget, %1$d rows tall</string>
     <string name="widget_generic">Widget</string>
     <string name="toast_widget_failed">The widget could not be added</string>
+    <string name="toast_widget_added">Widget added</string>
+    <string name="toast_widget_no_space">No room for another widget on this page</string>
+    <string name="action_configure_widget">Configure widget</string>
+    <string name="widget_removed_message">Widget removed</string>
+    <string name="widget_undo">Undo</string>
+    <string name="widget_undo_description">Undo widget removal</string>
+    <string name="widget_removed_announcement">Widget removed. Use Undo to restore it.</string>
     <plurals name="widget_rows">
         <item quantity="one">Height: %d row</item>
         <item quantity="other">Height: %d rows</item>

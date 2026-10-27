@@ -69,10 +69,12 @@ import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.glass.LumaGlassChoice
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSectionTitle
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSlider
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSwitchRow
 import com.lumaos.pro.launcher.ui.glass.LumaGlassTextField
+import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
 import com.lumaos.pro.launcher.ui.theme.GlassGeometry
 import com.lumaos.pro.launcher.ui.theme.GlassMaterials
@@ -104,7 +106,8 @@ fun SettingsRoot(
     onOpenHomeSettings: () -> Unit,
     onRequestNotifications: () -> Unit,
     onExportBackup: () -> Unit,
-    onImportBackup: () -> Unit
+    onImportBackup: () -> Unit,
+    onOpenStudio: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -117,17 +120,127 @@ fun SettingsRoot(
                 ),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
+            // The Home role is the one system-level decision the launcher needs
+            // visible immediately, so it stays above the three customization levels.
             HomeRoleSection(viewModel, onRequestHomeRole, onOpenHomeSettings)
-            ContextSection(viewModel, onRequestNotifications)
+
+            SettingsGroupHeader(R.string.settings_group_make_yours)
+            ExperienceProfileSection(viewModel)
+            StudioSection(onOpenStudio)
+            WidgetsSection(viewModel)
+
+            SettingsGroupHeader(R.string.settings_group_fine_tune)
             AppearanceSection(viewModel)
             DrawerSection(viewModel)
-            GestureSection(viewModel)
             PerformanceSection(viewModel)
+
+            SettingsGroupHeader(R.string.settings_group_advanced)
+            ContextSection(viewModel, onRequestNotifications)
+            GestureSection(viewModel)
             PrivacySection()
             BackupSection(viewModel, onExportBackup, onImportBackup)
             AboutSection()
             Spacer(Modifier.height(LumaSpacing.screenEnd))
         }
+    }
+}
+
+@Composable
+private fun SettingsGroupHeader(titleRes: Int) {
+    val theme = LocalLumaTheme.current
+    LumaGlassSectionTitle(
+        theme = theme,
+        text = stringResource(titleRes),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = LumaSpacing.sectionGap, bottom = LumaSpacing.sm)
+    )
+}
+
+/**
+ * Level 1: the three coordinated experience profiles. Applying one writes only
+ * appearance preferences through [ExperienceProfileController], so layouts,
+ * widgets and folders are never moved or erased.
+ */
+@Composable
+private fun ExperienceProfileSection(viewModel: SettingsViewModel) {
+    val theme = LocalLumaTheme.current
+    val selected by viewModel.prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
+    val scope = rememberCoroutineScope()
+    SettingsSection(stringResource(R.string.onboarding_profiles_title), LumaIcon.APPEARANCE) {
+        ExperienceProfile.entries.forEach { profile ->
+            val title = when (profile) {
+                ExperienceProfile.PURE -> stringResource(R.string.experience_pure)
+                ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid)
+                ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight)
+            }
+            val description = when (profile) {
+                ExperienceProfile.PURE -> stringResource(R.string.experience_pure_desc)
+                ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid_desc)
+                ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight_desc)
+            }
+            LumaGlassSurface(
+                theme = theme,
+                role = GlassRole.SETTINGS_CONTROL,
+                selected = profile == selected,
+                onClick = { scope.launch { ExperienceProfileController.apply(viewModel.prefs, profile) } },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .semantics {
+                        role = Role.RadioButton
+                        this.selected = profile == selected
+                    }
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Level 1 shortcut into the full theme Studio, the single home for deep visual edits. */
+@Composable
+private fun StudioSection(onOpenStudio: () -> Unit) {
+    SettingsSection(stringResource(R.string.studio_themes), LumaIcon.APPEARANCE) {
+        LumaGlassChoice(
+            theme = LocalLumaTheme.current,
+            label = stringResource(R.string.tab_studio),
+            selected = false,
+            onClick = onOpenStudio,
+            caption = stringResource(R.string.onboarding_profiles_subtitle)
+        )
+    }
+}
+
+/** Level 1: widget controls in one approachable place, separate from grid tuning. */
+@Composable
+private fun WidgetsSection(viewModel: SettingsViewModel) {
+    val widgetsEnabled by viewModel.prefs.widgetsEnabled.collectAsState(true)
+    val scope = rememberCoroutineScope()
+    SettingsSection(stringResource(R.string.section_widgets), LumaIcon.WIDGETS) {
+        SwitchRow(
+            label = stringResource(R.string.pref_widgets),
+            checked = widgetsEnabled,
+            subtitle = stringResource(R.string.pref_widgets_desc)
+        ) { enabled -> scope.launch { viewModel.prefs.setWidgetsEnabled(enabled) } }
+        Text(
+            stringResource(R.string.pref_widgets_manage_open),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = LumaSpacing.sm)
+        )
     }
 }
 
@@ -358,7 +471,6 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val drawerPresentation by viewModel.prefs.drawerPresentation.collectAsState(DrawerPresentation.LIST)
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(48)
     val showLabels by viewModel.prefs.showLabels.collectAsState(true)
-    val widgetsEnabled by viewModel.prefs.widgetsEnabled.collectAsState(true)
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
     val scope = rememberCoroutineScope()
 
@@ -408,11 +520,6 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
         SwitchRow(stringResource(R.string.pref_show_labels), showLabels) {
             scope.launch { viewModel.prefs.setShowLabels(it) }
         }
-        SwitchRow(
-            label = stringResource(R.string.pref_widgets),
-            checked = widgetsEnabled,
-            subtitle = stringResource(R.string.pref_widgets_desc)
-        ) { scope.launch { viewModel.prefs.setWidgetsEnabled(it) } }
     }
 }
 

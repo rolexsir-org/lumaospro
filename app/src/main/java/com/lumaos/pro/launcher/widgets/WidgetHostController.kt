@@ -12,7 +12,12 @@ import android.os.Bundle
 import android.os.Process
 import android.util.SizeF
 import com.lumaos.pro.launcher.core.util.LumaLog
-import kotlin.math.ceil
+
+/** Result of querying the installed widget providers. */
+sealed class ProviderLoad {
+    data class Loaded(val providers: List<AppWidgetProviderInfo>) : ProviderLoad()
+    data object Failed : ProviderLoad()
+}
 
 /**
  * LumaOS Pro's AppWidgetHost.
@@ -46,11 +51,35 @@ class WidgetHostController(context: Context) {
         runCatching { host.stopListening() }
     }
 
-    fun providers(): List<AppWidgetProviderInfo> = runCatching {
-        manager.getInstalledProvidersForProfile(Process.myUserHandle())
-    }.getOrDefault(emptyList())
+    /** Queries the providers the current user can bind, distinguishing "none" from a failed query. */
+    fun providersState(): ProviderLoad =
+        runCatching { manager.getInstalledProvidersForProfile(Process.myUserHandle()) }
+            .fold(
+                onSuccess = { ProviderLoad.Loaded(it) },
+                onFailure = {
+                    LumaLog.e("Widget provider query failed", it)
+                    ProviderLoad.Failed
+                }
+            )
 
-    fun infoFor(appWidgetId: Int): AppWidgetProviderInfo? = runCatching { manager.getAppWidgetInfo(appWidgetId) }.getOrNull()
+    fun providers(): List<AppWidgetProviderInfo> =
+        (providersState() as? ProviderLoad.Loaded)?.providers ?: emptyList()
+
+    fun infoFor(appWidgetId: Int): AppWidgetProviderInfo? =
+        runCatching { manager.getAppWidgetInfo(appWidgetId) }.getOrNull()
+
+    /**
+     * True when Android still holds a binding for [appWidgetId] and its provider
+     * is installed. A removed app or a dead binding returns false so the layout
+     * layer can reconcile the widget out without leaving an unreachable card.
+     */
+    fun isWidgetValid(appWidgetId: Int): Boolean = infoFor(appWidgetId) != null
+
+    /** Host ids whose bindings are still alive. */
+    fun validWidgetIds(): Set<Int> {
+        val hosted = runCatching { host.appWidgetIds }.getOrNull() ?: return emptySet()
+        return hosted.filter { isWidgetValid(it) }.toHashSet()
+    }
 
     /** Host view for a bound widget, or null if its provider is gone. */
     fun viewFor(context: Context, appWidgetId: Int): AppWidgetHostView? {
@@ -88,6 +117,23 @@ class WidgetHostController(context: Context) {
         false
     }
 
+    /**
+     * Re-opens the configuration activity of an already-bound widget when the
+     * provider declares itself reconfigurable. The widget keeps its id and
+     * placement regardless of the outcome.
+     */
+    fun startReconfiguration(activity: Activity, appWidgetId: Int, requestCode: Int): Boolean {
+        val info = infoFor(appWidgetId) ?: return false
+        if (info.configure == null) return false
+        return runCatching {
+            host.startAppWidgetConfigureActivityForResult(activity, appWidgetId, 0, requestCode, null)
+            true
+        }.getOrElse {
+            LumaLog.w("Widget reconfiguration could not start")
+            false
+        }
+    }
+
     fun delete(appWidgetId: Int) {
         views.remove(appWidgetId)
         runCatching { host.deleteAppWidgetId(appWidgetId) }
@@ -99,10 +145,32 @@ class WidgetHostController(context: Context) {
         for (id in ids) if (id !in referenced) delete(id)
     }
 
+    /** Translates platform provider metadata into the pure, row-based capability model. */
+    fun capabilities(info: AppWidgetProviderInfo, rowHeightPx: Int): WidgetCapabilities {
+        val minResizeHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) info.minResizeHeight else 0
+        val maxResizeHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.maxResizeHeight else 0
+        val targetCellHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.targetCellHeight else 0
+        val minCellHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.minCellHeight else 0
+        val features = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.widgetFeatures else 0
+        return WidgetPlan.capabilities(
+            ProviderFacts(
+                resizeMode = info.resizeMode,
+                minHeightPx = info.minHeight,
+                minResizeHeightPx = minResizeHeight,
+                maxResizeHeightPx = maxResizeHeight,
+                targetCellHeight = targetCellHeight,
+                minCellHeight = minCellHeight,
+                hasConfigure = info.configure != null,
+                widgetFeatures = features,
+                rowHeightPx = rowHeightPx
+            )
+        )
+    }
+
     /** Rows a provider needs at minimum, given the grid row height in pixels. */
     fun defaultRows(info: AppWidgetProviderInfo, rowHeightPx: Int): Int {
         if (rowHeightPx <= 0) return 2
-        return ceil(info.minHeight / rowHeightPx.toDouble()).toInt().coerceIn(1, 4)
+        return capabilities(info, rowHeightPx).initialRows
     }
 
     /** Tells the provider the size it is drawn at, so it can choose its layout. */

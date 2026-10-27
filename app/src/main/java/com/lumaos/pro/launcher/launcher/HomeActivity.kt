@@ -13,6 +13,8 @@ import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.UserHandle
 import android.speech.RecognizerIntent
 import android.text.format.DateFormat
@@ -117,8 +119,11 @@ import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import com.lumaos.pro.launcher.ui.theme.WallpaperArt
+import com.lumaos.pro.launcher.widgets.InsertionPlan
+import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetHostController
 import com.lumaos.pro.launcher.widgets.WidgetPicker
+import com.lumaos.pro.launcher.widgets.WidgetPlan
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -254,6 +259,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var appsLoadedOnce = false
     private var orphanSweepDone = false
     private var pendingWidget: WidgetHostController.Pending? = null
+    private var pendingWidgetRemoval: PendingWidgetRemoval? = null
+    private val undoHandler = Handler(Looper.getMainLooper())
+    private var undoBar: LinearLayout? = null
     private var themeAnimator: SpringAnimator? = null
     /** True while colour roles are interpolating; cells are re-bound once at the end. */
     private var themeAnimating = false
@@ -351,6 +359,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     override fun onDestroy() {
+        undoHandler.removeCallbacks(widgetRemovalTimeout)
+        // A removal whose undo window never closed must still release its id.
+        pendingWidgetRemoval?.let { widgets.delete(it.widget.appWidgetId) }
+        pendingWidgetRemoval = null
+        widgetPicker?.shutdown()
         iconLoader.shutdown()
         widgets.clearViews()
         super.onDestroy()
@@ -372,11 +385,19 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CONFIGURE_WIDGET) {
-            val pending = pendingWidget ?: return
-            if (resultCode == RESULT_OK) finishWidgetAdd(pending) else {
-                widgets.delete(pending.appWidgetId)
-                pendingWidget = null
+        when (requestCode) {
+            REQUEST_CONFIGURE_WIDGET -> {
+                val pending = pendingWidget ?: return
+                if (resultCode == RESULT_OK) finishWidgetAdd(pending) else {
+                    widgets.delete(pending.appWidgetId)
+                    pendingWidget = null
+                }
+            }
+            // Re-configuring an already placed widget never changes its id or
+            // placement; just refresh its reported size when the provider accepts.
+            REQUEST_RECONFIGURE_WIDGET -> if (resultCode == RESULT_OK) {
+                val item = homeAdapter.items.filterIsInstance<HomeItem.Widget>().firstOrNull()
+                item?.let { reportWidgetSize(it.appWidgetId, it.rows) }
             }
         }
     }
@@ -486,6 +507,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 override fun handle() = ThemedDrawables.surface(theme.colors.accent, dp(12).toFloat())
                 override fun frame() = widgetFrameDrawable()
                 override fun frameRadiusPx() = theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density
+                override fun capabilitiesFor(item: HomeItem.Widget): WidgetCapabilities? =
+                    widgets.infoFor(item.appWidgetId)?.let { widgets.capabilities(it, cellHeightPx) }
             },
             listener = gridListener
         )
@@ -909,6 +932,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 if (!orphanSweepDone) {
                     launch {
                         orphanSweepDone = true
+                        // First reconcile placements against the live host: a widget
+                        // whose provider was uninstalled is removed from every saved
+                        // layout and its host id is released, instead of leaving an
+                        // unreachable "unavailable" card forever.
+                        val valid = widgets.validWidgetIds()
+                        val dead = viewModel.reconcileWidgets(valid)
+                        dead.forEach { widgets.delete(it) }
                         val referenced = viewModel.allWidgetIds()
                         val pending = pendingWidget?.appWidgetId
                         widgets.releaseOrphans(if (pending != null) referenced + pending else referenced)
@@ -1508,8 +1538,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun remove(item: HomeItem) {
         if (item is HomeItem.Widget) {
-            widgets.delete(item.appWidgetId)
-            viewModel.removeWidget(item.appWidgetId)
+            removeWidgetWithUndo(item)
             return
         }
         val display = viewModel.layout.value.page(0)
@@ -1663,22 +1692,35 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 }
             }
             is HomeItem.Widget -> {
+                val info = widgets.infoFor(item.appWidgetId)
+                val caps = info?.let { widgets.capabilities(it, cellHeightPx) }
                 val entries = ArrayList<MenuEntry>()
-                for (rows in 1..4) {
-                    entries += MenuEntry(M_RESIZE_BASE + rows,
-                        resources.getQuantityString(R.plurals.widget_rows, rows, rows),
-                        if (rows == item.rows) R.drawable.ic_rx_done else R.drawable.ic_rx_resize)
+                // Only providers that declare vertical resize get height options,
+                // and only inside their own min/max row range.
+                if (caps?.resizableVertical == true) {
+                    for (rows in caps.minRows..caps.maxRows) {
+                        entries += MenuEntry(M_RESIZE_BASE + rows,
+                            resources.getQuantityString(R.plurals.widget_rows, rows, rows),
+                            if (rows == item.rows) R.drawable.ic_rx_done else R.drawable.ic_rx_resize)
+                    }
+                }
+                if (caps?.reconfigurable == true) {
+                    entries += MenuEntry(M_CONFIGURE, getString(R.string.action_configure_widget), R.drawable.ic_rx_settings, group = 0)
                 }
                 if (!edit.isActive) entries += MenuEntry(M_EDIT_HOME, getString(R.string.action_edit_home), R.drawable.ic_rx_move, group = 1)
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_widget), R.drawable.ic_rx_remove, destructive = true, group = 1)
-                val label = widgets.infoFor(item.appWidgetId)?.loadLabel(packageManager) ?: getString(R.string.widget_generic)
+                val label = info?.loadLabel(packageManager) ?: getString(R.string.widget_generic)
                 menu().show(anchor, label, entries) { e ->
                     when {
-                        e.id > M_RESIZE_BASE && e.id <= M_RESIZE_BASE + 4 -> {
+                        e.id in (M_RESIZE_BASE + 1)..(M_RESIZE_BASE + 4) -> {
                             val rows = e.id - M_RESIZE_BASE
-                            viewModel.resizeWidget(item.appWidgetId, rows)
-                            reportWidgetSize(item.appWidgetId, rows)
+                            val safeRows = caps?.let { WidgetPlan.clampRows(rows, it) } ?: rows
+                            viewModel.resizeWidget(item.appWidgetId, safeRows)
+                            reportWidgetSize(item.appWidgetId, safeRows)
                         }
+                        e.id == M_CONFIGURE -> widgets.startReconfiguration(
+                            this, item.appWidgetId, REQUEST_RECONFIGURE_WIDGET
+                        )
                         e.id == M_EDIT_HOME -> edit.enter()
                         e.id == M_REMOVE -> remove(item)
                     }
@@ -1832,8 +1874,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             toast(getString(R.string.toast_widgets_disabled))
             return
         }
-        val picker = widgetPicker ?: WidgetPicker(this, homeRoot, theme, effects, motion, bottomInset).also { widgetPicker = it }
-        picker.show(widgets.providers()) { info -> beginWidgetAdd(info) }
+        val picker = widgetPicker ?: WidgetPicker(
+            this, homeRoot, theme, effects, motion, bottomInset,
+            capabilities = { info -> widgets.capabilities(info, cellHeightPx) }
+        ).also { widgetPicker = it }
+        picker.show(
+            state = widgets.providersState(),
+            onPick = ::beginWidgetAdd,
+            onRetry = ::showWidgetPicker
+        )
     }
 
     private fun beginWidgetAdd(info: AppWidgetProviderInfo) {
@@ -1862,8 +1911,25 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun finishWidgetAdd(pending: WidgetHostController.Pending) {
         pendingWidget = null
-        val rows = widgets.defaultRows(pending.info, cellHeightPx)
-        viewModel.addWidget(HomeItem.Widget(pending.appWidgetId, pending.info.provider.flattenToString(), rows), position = 0)
+        val caps = widgets.capabilities(pending.info, cellHeightPx)
+        val widget = HomeItem.Widget(
+            pending.appWidgetId,
+            pending.info.provider.flattenToString(),
+            caps.initialRows
+        )
+        // The planner owns the only insertion decision: it refuses duplicates and
+        // over-budget pages instead of displacing existing content.
+        val page = viewModel.layout.value.page(0)
+        when (val plan = WidgetPlan.planInsertion(page, widget)) {
+            is InsertionPlan.AtIndex -> {
+                viewModel.addWidget(widget, position = plan.index)
+                toast(getString(R.string.toast_widget_added))
+            }
+            InsertionPlan.NoSpace -> {
+                widgets.delete(pending.appWidgetId)
+                toast(getString(R.string.toast_widget_no_space))
+            }
+        }
     }
 
     private fun reportWidgetSize(appWidgetId: Int, rows: Int) {
@@ -1871,6 +1937,114 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val w = (homeGrid.width - homeGrid.paddingLeft - homeGrid.paddingRight) / d
         val h = (cellHeightPx * rows) / d
         if (w > 0 && h > 0) widgets.reportSize(appWidgetId, w, h)
+    }
+
+    /** A removed widget kept alive (host id included) until the undo window closes. */
+    private data class PendingWidgetRemoval(val widget: HomeItem.Widget, val position: Int)
+
+    private val widgetRemovalTimeout = Runnable {
+        pendingWidgetRemoval?.let { widgets.delete(it.widget.appWidgetId) }
+        pendingWidgetRemoval = null
+        hideUndoBar()
+    }
+
+    /**
+     * Removes a widget from the layout but keeps its host id until the undo
+     * window closes, so Undo restores the exact same bound widget rather than
+     * allocating a new id. If the process dies first, the orphan sweep releases
+     * the unreferenced id on the next start.
+     */
+    private fun removeWidgetWithUndo(item: HomeItem.Widget) {
+        val position = viewModel.layout.value.page(0).indexOfFirst {
+            it is HomeItem.Widget && it.appWidgetId == item.appWidgetId
+        }
+        viewModel.removeWidget(item.appWidgetId)
+        // A second removal finalises the first one; only one undo slot is offered.
+        pendingWidgetRemoval?.let { widgets.delete(it.widget.appWidgetId) }
+        pendingWidgetRemoval = PendingWidgetRemoval(item, position.coerceAtLeast(0))
+        undoHandler.removeCallbacks(widgetRemovalTimeout)
+        undoHandler.postDelayed(widgetRemovalTimeout, WIDGET_UNDO_WINDOW_MS)
+        showUndoBar()
+    }
+
+    private fun undoWidgetRemoval() {
+        val pending = pendingWidgetRemoval ?: return
+        undoHandler.removeCallbacks(widgetRemovalTimeout)
+        pendingWidgetRemoval = null
+        hideUndoBar()
+        viewModel.addWidget(pending.widget, pending.position)
+        reportWidgetSize(pending.widget.appWidgetId, pending.widget.rows)
+    }
+
+    private fun showUndoBar() {
+        val bar = undoBar ?: buildUndoBar().also { undoBar = it }
+        if (bar.parent == null) {
+            homeRoot.addView(
+                bar,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                ).apply {
+                    bottomMargin = bottomInset + dp(96)
+                    marginStart = dp(20)
+                    marginEnd = dp(20)
+                }
+            )
+        }
+        bar.alpha = 0f
+        bar.translationY = dp(12).toFloat()
+        if (motion.enabled && !motion.reduced) {
+            SpringAnimator(0f) { p ->
+                bar.alpha = p
+                bar.translationY = (1f - p) * dp(12)
+            }.animateTo(1f, MotionTokens.SNAPPY, motion)
+        } else {
+            bar.alpha = 1f
+            bar.translationY = 0f
+        }
+        bar.announceForAccessibility(getString(R.string.widget_removed_announcement))
+    }
+
+    private fun hideUndoBar() {
+        val bar = undoBar ?: return
+        val done = {
+            (bar.parent as? ViewGroup)?.removeView(bar)
+        }
+        if (motion.enabled && !motion.reduced) {
+            SpringAnimator(1f) { p -> bar.alpha = p }.animateTo(0f, MotionTokens.SNAPPY, motion) { done() }
+        } else done()
+    }
+
+    private fun buildUndoBar(): LinearLayout {
+        val spec = glassPalette[GlassRole.MENU]
+        val colors = spec.rest
+        val density = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(10), dp(8), dp(10))
+            isClickable = true
+            GlassViews.apply(this, spec, density, ripple = false)
+            addView(TextView(this@HomeActivity).apply {
+                text = getString(R.string.widget_removed_message)
+                setTextColor(colors.content)
+                typeface = Typefaces.body(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
+            })
+            addView(TextView(this@HomeActivity).apply {
+                text = getString(R.string.widget_undo)
+                setTextColor(colors.focusRing)
+                typeface = Typefaces.label(theme.typography)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
+                setPadding(dp(14), dp(6), dp(10), dp(6))
+                isClickable = true
+                isFocusable = true
+                contentDescription = getString(R.string.widget_undo_description)
+                background = GlassViews.drawable(glassPalette[GlassRole.SETTINGS_CONTROL], density, ripple = true)
+                setOnClickListener { undoWidgetRemoval() }
+            })
+        }
     }
 
     // ---------------------------------------------------------- navigation
@@ -1962,6 +2136,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     companion object {
         private const val SWIPE_MIN_DISTANCE_DP = 60
         private const val REQUEST_CONFIGURE_WIDGET = 4101
+        private const val REQUEST_RECONFIGURE_WIDGET = 4102
+        private const val WIDGET_UNDO_WINDOW_MS = 6000L
 
         private const val M_ADD_HOME = 1
         private const val M_ADD_DOCK = 2
@@ -1977,6 +2153,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val M_PIN = 12
         private const val M_UNPIN = 13
         private const val M_RESIZE_BASE = 100
+        private const val M_CONFIGURE = 150
         private const val M_PRESET_BASE = 200
         private const val M_SMART_BASE = 300
         private const val M_SHORTCUT_BASE = 1000

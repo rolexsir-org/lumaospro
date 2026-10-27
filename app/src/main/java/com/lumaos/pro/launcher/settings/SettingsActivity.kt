@@ -161,7 +161,8 @@ class SettingsActivity : ComponentActivity() {
                                         importBackupLauncher.launch(
                                             arrayOf("application/json", "text/plain", "application/octet-stream")
                                         )
-                                    }
+                                    },
+                                    onOpenStudio = { tab = 1 }
                                 )
                                 1 -> StudioRoot(viewModel = viewModel)
                                 else -> DashboardRoot(viewModel = viewModel)

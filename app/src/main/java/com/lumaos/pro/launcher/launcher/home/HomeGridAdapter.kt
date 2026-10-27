@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import com.lumaos.pro.launcher.launcher.view.FolderIconDrawable
+import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import java.util.Collections
 import kotlin.math.roundToInt
 
@@ -64,6 +65,12 @@ class HomeGridAdapter(
         fun frame(): Drawable? = null
         /** Corner radius of that frame, used to clip the provider's content to it. */
         fun frameRadiusPx(): Float = 0f
+        /**
+         * Provider-aware resize capabilities for the widget, or null when the
+         * provider information is no longer available. Null degrades to the
+         * legacy fixed 1..4 row range rather than hiding every affordance.
+         */
+        fun capabilitiesFor(item: HomeItem.Widget): WidgetCapabilities? = null
     }
 
     val items = ArrayList<HomeItem>()
@@ -202,7 +209,14 @@ class HomeGridAdapter(
     private fun bindWidget(holder: WidgetHolder, item: HomeItem.Widget) {
         val host = widgetHost
         val rowHeight = host?.rowHeightPx() ?: 0
-        val height = (rowHeight * item.rows).coerceAtLeast(rowHeight)
+        // Provider-aware resize range. Without provider info we keep the legacy
+        // 1..4 behaviour; with it, fixed-height widgets collapse to one legal size.
+        val caps = host?.capabilitiesFor(item)
+        val minRows = caps?.minRows ?: HomeLayout.MIN_WIDGET_ROWS
+        val maxRows = caps?.maxRows ?: HomeLayout.MAX_WIDGET_ROWS
+        val verticallyResizable = caps?.resizableVertical ?: true
+        val displayRows = item.rows.coerceIn(minRows, maxRows)
+        val height = (rowHeight * displayRows).coerceAtLeast(rowHeight)
         holder.setHeight(height)
         val frameDrawable = widgetFrameBackground ?: host?.frame()
         if (host != null && frameDrawable != null) {
@@ -225,9 +239,10 @@ class HomeGridAdapter(
         } else {
             holder.missing.visibility = View.VISIBLE
         }
-        holder.itemView.contentDescription = holder.itemView.context.getString(R.string.widget_description, item.rows)
+        holder.itemView.contentDescription = holder.itemView.context.getString(R.string.widget_description, displayRows)
         holder.outline.visibility = if (editMode) View.VISIBLE else View.GONE
-        holder.handle.visibility = if (editMode) View.VISIBLE else View.GONE
+        // Fixed-height providers get no resize affordance at all.
+        holder.handle.visibility = if (editMode && verticallyResizable) View.VISIBLE else View.GONE
         if (editMode && host != null) {
             holder.outline.background = host.editOutline()
             holder.handle.background = host.handle()
@@ -240,11 +255,12 @@ class HomeGridAdapter(
             val pos = holder.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION && editMode) listener.onItemClick(items[pos], pos, it)
         }
-        // Drag the handle to resize in whole rows, with the height following the finger.
+        // Drag the handle to resize in whole rows, with the height following the
+        // finger, clamped to the provider's declared min/max rather than a fixed range.
         var startY = 0f
         var startHeight = 0
         holder.handle.setOnTouchListener { v, ev ->
-            if (rowHeight <= 0) return@setOnTouchListener false
+            if (rowHeight <= 0 || !verticallyResizable) return@setOnTouchListener false
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = ev.rawY
@@ -254,14 +270,14 @@ class HomeGridAdapter(
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val h = (startHeight + (ev.rawY - startY)).toInt()
-                        .coerceIn(rowHeight * HomeLayout.MIN_WIDGET_ROWS, rowHeight * HomeLayout.MAX_WIDGET_ROWS)
+                        .coerceIn(rowHeight * minRows, rowHeight * maxRows)
                     holder.setHeight(h)
                     listener.onWidgetResize(item, (h / rowHeight.toFloat()).roundToInt(), commit = false)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val rows = (holder.itemView.height / rowHeight.toFloat()).roundToInt()
-                        .coerceIn(HomeLayout.MIN_WIDGET_ROWS, HomeLayout.MAX_WIDGET_ROWS)
+                        .coerceIn(minRows, maxRows)
                     holder.setHeight(rowHeight * rows)
                     listener.onWidgetResize(item, rows, commit = true)
                     true
