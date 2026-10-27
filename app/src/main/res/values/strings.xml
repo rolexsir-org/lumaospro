@@ -16,6 +16,8 @@
     <string name="home_clock_description">Current time</string>
     <string name="home_search_description">Search installed apps</string>
     <string name="home_settings_description">Launcher settings</string>
+    <string name="home_clock_long_press_hint">Long-press the time to choose a context</string>
+    <string name="home_date_long_press_hint">Long-press the date or search to open settings</string>
     <string name="voice_command_description">Use a voice command to switch profile or open an app</string>
     <string name="voice_command_prompt">Android speech recognition will process your voice. Say “switch to Work” or “open Calendar”.</string>
     <string name="voice_command_unavailable">No speech recognition service is available</string>

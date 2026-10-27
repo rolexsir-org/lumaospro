@@ -17,8 +17,8 @@ import com.lumaos.pro.launcher.effects.EffectsDecision
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
-import com.lumaos.pro.launcher.ui.theme.LumaComponents
-import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 
@@ -50,34 +50,30 @@ class LumaMenu(
     private val motion: MotionPolicy
 ) {
     private val density = context.resources.displayMetrics.density
+    private val glassPalette = GlassViews.palette(theme, effects)
     private fun dp(v: Float) = (v * density).toInt()
 
     fun show(anchor: View, title: String?, entries: List<MenuEntry>, onSelect: (MenuEntry) -> Unit): PopupWindow {
         val c = theme.colors
-        val semantics = theme.semantics
-        val components = LumaComponents.of(theme)
-        val radius = theme.corner(components.shapes.menuDp) * density
+        val menuSpec = glassPalette[GlassRole.MENU]
+        val menuColors = menuSpec.rest
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
-            background = ThemedDrawables.surface(
-                ColorMath.withAlpha(semantics.dialogSurface, theme.surfaceAlpha(effects.translucency)),
-                radius, semantics.dialogBorder, dp(components.sizes.borderDp).coerceAtLeast(1)
-            )
-            elevation = dp(components.surfaces.elevationDp + 4f).toFloat()
             minimumWidth = dp(220f)
         }
+        GlassViews.apply(content, menuSpec, density, ripple = false)
         val popup = PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true
-        popup.elevation = dp(components.surfaces.elevationDp + 4f).toFloat()
+        popup.elevation = menuSpec.elevationDp * density
 
         if (!title.isNullOrBlank()) {
             content.addView(TextView(context).apply {
                 text = if (theme.typography.readoutCaps) title.uppercase() else title
                 typeface = Typefaces.readout(theme.typography)
                 letterSpacing = theme.typography.readoutTracking
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(menuColors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelMediumSp)
                 setPadding(dp(14f), dp(8f), dp(14f), dp(6f))
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -87,7 +83,7 @@ class LumaMenu(
         for (entry in entries) {
             if (lastGroup != null && entry.group != lastGroup) {
                 content.addView(View(context).apply {
-                    setBackgroundColor(c.outline)
+                    setBackgroundColor(menuColors.edgeTop)
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1f).coerceAtLeast(1)).apply {
                         setMargins(dp(10f), dp(4f), dp(10f), dp(4f))
                     }
@@ -138,7 +134,8 @@ class LumaMenu(
 
     private fun row(entry: MenuEntry, onClick: () -> Unit): View {
         val c = theme.colors
-        val tint = if (entry.destructive) c.danger else c.onSurface
+        val rowColors = glassPalette[GlassRole.SETTINGS_CONTROL].rest
+        val tint = if (entry.destructive) c.danger else rowColors.content
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -147,9 +144,10 @@ class LumaMenu(
             isClickable = true
             isFocusable = true
             contentDescription = entry.label
-            background = ThemedDrawables.ripple(
-                c.ripple, null,
-                theme.corner(LumaComponents.of(theme).shapes.controlDp) * density
+            background = GlassViews.drawable(
+                glassPalette[GlassRole.SETTINGS_CONTROL],
+                density,
+                ripple = true
             )
             setOnClickListener { onClick() }
             val iconView = ImageView(context).apply {

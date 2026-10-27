@@ -7,6 +7,12 @@ LumaOS Pro runs its own launcher logic, resource monitoring and optimization
 routines. It does not depend on Brave, another launcher, or a third-party
 optimizer to function.
 
+Its current visual identity is **Luma Glass**: a restrained Liquid Glass /
+Glassmorphism system driven by shared semantic tokens and used by both the
+Views home screen and the Compose settings surfaces. The system wallpaper shows
+through a legibility scrim; effects fall back to opaque, readable surfaces on
+devices without blur support. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+
 ---
 
 ## Quick start

@@ -4,7 +4,7 @@ package com.lumaos.pro.launcher.ui.theme
  * LumaOS Design System **v3.2** tokens.
  *
  * This file is the Kotlin transcription of the authored token bundle that ships
- * in `docs/design/v3.2/tokens/*.json` (exported by the LumaOS Studio). It is the
+ * in the token JSON files under `docs/design/v3.2/tokens` (exported by the LumaOS Studio). It is the
  * single source of numbers for the three v3.2 themes — Signature, Atmosphere and
  * Monolith — and it is deliberately plain Kotlin with no Android imports so
  * `DesignTokensParityTest` can compare it against the JSON on the JVM, pixel for

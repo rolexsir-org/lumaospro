@@ -18,7 +18,11 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
-import com.lumaos.pro.launcher.ui.theme.LumaComponents
+import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassPalette
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
@@ -68,6 +72,11 @@ class EditModeController(
 
     private val density = context.resources.displayMetrics.density
     private fun dp(v: Float) = (v * density).toInt()
+
+    private fun glassPalette(): GlassPalette = GlassMaterials.palette(
+        host.theme(),
+        GlassCapabilities(translucency = true, blur = false, depth = host.depthAllowed())
+    )
 
     var isActive = false
         private set
@@ -276,54 +285,50 @@ class EditModeController(
     fun applyTheme() {
         val theme = host.theme()
         val c = theme.colors
-        styleTopBar()
+        val palette = glassPalette()
+        val secondary = palette[GlassRole.SECONDARY]
+        val control = palette[GlassRole.SETTINGS_CONTROL]
+        styleTopBar(palette)
         topBar.findViewById<TextView>(R.id.edit_title)?.apply {
-            setTextColor(c.homeForeground)
+            setTextColor(secondary.rest.content)
             typeface = Typefaces.title(theme.typography)
-            setShadowLayer(4f, 0f, 1f, c.homeShadow)
+            setShadowLayer(0f, 0f, 0f, 0)
         }
         topBar.findViewById<TextView>(R.id.edit_hint)?.apply {
-            setTextColor(c.homeMuted)
+            setTextColor(secondary.rest.muted)
             typeface = Typefaces.body(theme.typography)
-            setShadowLayer(3f, 0f, 1f, c.homeShadow)
+            setShadowLayer(0f, 0f, 0f, 0)
         }
-        val components = LumaComponents.of(theme)
-        doneButton.setTextColor(c.onAccent)
+        doneButton.setTextColor(control.rest.content)
         doneButton.typeface = Typefaces.label(theme.typography)
         doneButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
-        val doneRadius = theme.corner(components.shapes.chipDp) * density
-        doneButton.background = ThemedDrawables.ripple(
-            c.ripple, ThemedDrawables.surface(c.accent, doneRadius), doneRadius
-        )
-        toolbar.background = ThemedDrawables.surface(
-            ColorMath.withAlpha(theme.semantics.dialogSurface, theme.surfaceAlpha(true)),
-            theme.corner(components.shapes.menuDp) * density, theme.semantics.dialogBorder, dp(1f)
-        )
+        doneButton.background = GlassViews.drawable(control, density, ripple = true)
+        GlassViews.apply(toolbar, palette[GlassRole.MENU], density, ripple = false)
         guide.guideColor = ColorMath.withAlpha(c.homeForeground, 0.22f)
-        guide.accentColor = c.accent
-        guide.cornerPx = theme.corner(16f) * density
+        guide.accentColor = control.rest.focusRing
+        guide.cornerPx = control.radiusDp * density
         for (i in 0 until toolbar.childCount) {
             val item = toolbar.getChildAt(i) as? LinearLayout ?: continue
-            (item.getChildAt(0) as? ImageView)?.imageTintList = android.content.res.ColorStateList.valueOf(c.onSurface)
+            (item.getChildAt(0) as? ImageView)?.imageTintList = android.content.res.ColorStateList.valueOf(control.rest.content)
             (item.getChildAt(1) as? TextView)?.apply {
-                setTextColor(c.onSurfaceMuted)
+                setTextColor(control.rest.muted)
                 typeface = Typefaces.label(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelSmallSp)
             }
-            item.background = ThemedDrawables.ripple(
-                c.ripple, null, theme.corner(LumaComponents.of(theme).shapes.cellDp) * density
-            )
+            item.background = GlassViews.drawable(control, density, ripple = true)
         }
     }
 
-    private fun styleTopBar() {
-        val c = host.theme().colors
-        topBar.background = if (removeArmed) {
-            ThemedDrawables.surface(ColorMath.withAlpha(c.danger, 0.28f), 0f)
-        } else null
-        topBar.findViewById<TextView>(R.id.edit_hint)?.text = context.getString(
-            if (removeArmed) R.string.edit_release_to_remove else R.string.edit_hint
-        )
+    private fun styleTopBar(palette: GlassPalette = glassPalette()) {
+        val spec = palette[GlassRole.SECONDARY]
+        GlassViews.apply(topBar, spec, density, ripple = false)
+        topBar.isSelected = removeArmed
+        topBar.findViewById<TextView>(R.id.edit_hint)?.apply {
+            text = context.getString(
+                if (removeArmed) R.string.edit_release_to_remove else R.string.edit_hint
+            )
+            setTextColor(if (removeArmed) spec.states.selected.content else spec.rest.muted)
+        }
     }
 
     private fun buildToolbar() {

@@ -1,6 +1,5 @@
 package com.lumaos.pro.launcher.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
@@ -42,7 +38,8 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.settings.LocalLumaSemantics
 import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.LumaSpacing
-import com.lumaos.pro.launcher.ui.LumaCorners
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.diagnostics.OptimizationEvent
 import com.lumaos.pro.launcher.diagnostics.Reading
 import com.lumaos.pro.launcher.diagnostics.StartupStats
@@ -93,14 +90,18 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
     }
 }
 
+/** All dashboard panels share one secondary glass recipe. */
+@Composable
+private fun DashboardGlassCard(content: @Composable BoxScope.() -> Unit) {
+    val theme = LocalLumaTheme.current
+    LumaGlassSurface(theme, GlassRole.SECONDARY, Modifier.fillMaxWidth()) {
+        content()
+    }
+}
+
 @Composable
 private fun MeasurementsCard(state: IntelligenceState, startupStats: StartupStats?, capability: com.lumaos.pro.launcher.intelligence.DeviceCapability) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shape = RoundedCornerShape(LumaCorners.card),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    DashboardGlassCard {
         Column(Modifier.padding(LumaSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_measurements))
 
@@ -238,12 +239,7 @@ private fun ActionsCard(
 ) {
     var confirmReset by remember { mutableStateOf(false) }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shape = RoundedCornerShape(LumaCorners.card),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    DashboardGlassCard {
         Column(Modifier.padding(LumaSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_actions_title))
             Text(
@@ -311,11 +307,7 @@ private fun ActionsCard(
 
     if (confirmReset) {
         Dialog(onDismissRequest = { confirmReset = false }) {
-            Card(
-                shape = RoundedCornerShape(LumaCorners.large),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
+            DashboardGlassCard {
                 Column(Modifier.padding(LumaSpacing.contentPadding)) {
                     Text(
                         stringResource(R.string.dash_reset_title),
@@ -345,12 +337,7 @@ private fun ActionsCard(
 
 @Composable
 private fun HistoryCard(events: List<OptimizationEvent>, loading: Boolean) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shape = RoundedCornerShape(LumaCorners.card),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    DashboardGlassCard {
         Column(Modifier.padding(LumaSpacing.contentPadding)) {
             CardTitle(stringResource(R.string.dash_recent_actions))
             if (events.isEmpty() && loading) {
@@ -427,12 +414,7 @@ private fun HistoryCard(events: List<OptimizationEvent>, loading: Boolean) {
 
 @Composable
 private fun StatusCard(message: String, onDismiss: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        shape = RoundedCornerShape(LumaCorners.card),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    DashboardGlassCard {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.width(8.dp))

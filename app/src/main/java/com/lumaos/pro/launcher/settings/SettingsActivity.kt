@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -20,13 +21,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -39,6 +37,7 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.settings.studio.StudioRoot
+import com.lumaos.pro.launcher.ui.glass.LumaGlassTopBar
 
 /**
  * LumaOS Pro settings and diagnostics.
@@ -116,16 +115,19 @@ class SettingsActivity : ComponentActivity() {
                 )
 
                 Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
                     topBar = {
                         Column {
-                            TopAppBar(
-                                title = { Text("LumaOS Pro") },
-                                colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                                )
+                            LumaGlassTopBar(
+                                theme = theme,
+                                title = "LumaOS Pro",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
-                            PrimaryTabRow(selectedTabIndex = tab) {
+                            PrimaryTabRow(
+                                selectedTabIndex = tab,
+                                containerColor = MaterialTheme.colorScheme.background,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ) {
                                 tabs.forEachIndexed { index, title ->
                                     Tab(
                                         selected = tab == index,

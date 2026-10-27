@@ -34,15 +34,17 @@ class AtmosphereTest {
     }
 
     @Test fun `grid hairlines are dropped when detail is off`() {
-        val withDetail = AtmospherePlan.layers(theme(ThemeId.VECTOR), 0f, true)
-        val without = AtmospherePlan.layers(theme(ThemeId.VECTOR), 0f, false)
+        // A bundled LUMA backdrop intentionally replaces the theme atmosphere
+        // with artwork; the grid belongs to the THEME backdrop path.
+        val withDetail = AtmospherePlan.layers(theme(ThemeId.VECTOR, Backdrop.THEME), 0f, true)
+        val without = AtmospherePlan.layers(theme(ThemeId.VECTOR, Backdrop.THEME), 0f, false)
         assertTrue(withDetail.any { it is AtmosphereLayer.Lines })
         assertTrue(without.none { it is AtmosphereLayer.Lines })
     }
 
     @Test fun `aurora drifts with phase`() {
-        val a = AtmospherePlan.layers(theme(ThemeId.AURORA), 0f, true)
-        val b = AtmospherePlan.layers(theme(ThemeId.AURORA), 0.25f, true)
+        val a = AtmospherePlan.layers(theme(ThemeId.AURORA, Backdrop.THEME), 0f, true)
+        val b = AtmospherePlan.layers(theme(ThemeId.AURORA, Backdrop.THEME), 0.25f, true)
         assertNotEquals(a, b)
     }
 

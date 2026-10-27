@@ -11,6 +11,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -23,8 +24,11 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.ui.LumaCorners
+import com.lumaos.pro.launcher.ui.glass.LocalGlassPalette
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.ThemeMode
-import com.lumaos.pro.launcher.ui.theme.ComponentTokens
 import com.lumaos.pro.launcher.ui.theme.FontFace
 import com.lumaos.pro.launcher.ui.theme.FontFamilyId
 import com.lumaos.pro.launcher.ui.theme.FontWeightToken
@@ -33,7 +37,6 @@ import com.lumaos.pro.launcher.ui.theme.LumaMotionProfiles
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.MotionProfile
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
-import com.lumaos.pro.launcher.ui.theme.SemanticColors
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeId
@@ -81,11 +84,13 @@ fun LumaOSTheme(
     val semantics = theme.semantics
     val motion = theme.motionProfile
     val components = LumaComponents.of(theme)
+    val glassPalette = remember(theme) { GlassMaterials.palette(theme, GlassCapabilities.SOLID) }
     CompositionLocalProvider(
         LocalLumaTheme provides theme,
         LocalLumaSemantics provides semantics,
         LocalLumaMotion provides motion,
         LocalLumaComponents provides components,
+        LocalGlassPalette provides glassPalette,
         LocalDensity provides Density(
             density = density.density,
             fontScale = density.fontScale * textScale.coerceIn(0.75f, 1.6f)
@@ -124,6 +129,10 @@ fun LumaOSTheme(
 fun colorSchemeFor(theme: ResolvedTheme): ColorScheme {
     val c = theme.colors
     val s = theme.semantics
+    val glass = GlassMaterials.palette(theme, GlassCapabilities.SOLID)
+    val secondary = glass[GlassRole.SECONDARY].rest
+    val control = glass[GlassRole.SETTINGS_CONTROL].rest
+    val folder = glass[GlassRole.FOLDER].rest
     fun col(v: Int) = Color(v)
     return if (c.isDark) {
         darkColorScheme(
@@ -133,17 +142,17 @@ fun colorSchemeFor(theme: ResolvedTheme): ColorScheme {
             secondaryContainer = col(c.surface3), onSecondaryContainer = col(c.onSurface),
             tertiary = col(c.secondary), onTertiary = col(c.onAccent),
             background = col(c.background), onBackground = col(c.onBackground),
-            surface = col(c.surface0), onSurface = col(c.onSurface),
-            surfaceVariant = col(c.surface2), onSurfaceVariant = col(c.onSurfaceMuted),
+            surface = col(secondary.fillBottom), onSurface = col(secondary.content),
+            surfaceVariant = col(control.fillBottom), onSurfaceVariant = col(secondary.muted),
             surfaceTint = col(c.accent),
-            outline = col(c.outlineStrong), outlineVariant = col(c.outline),
+            outline = col(secondary.edgeTop), outlineVariant = col(secondary.edgeBottom),
             error = col(s.danger), onError = col(s.onDanger),
             errorContainer = col(s.dangerContainer), onErrorContainer = col(s.onDangerContainer),
             scrim = col(c.scrim),
             inverseSurface = col(s.inverseSurface), inverseOnSurface = col(s.inverseOnSurface),
-            surfaceContainerLowest = col(c.surface0), surfaceContainerLow = col(c.surface1),
-            surfaceContainer = col(c.surface1), surfaceContainerHigh = col(c.surface2),
-            surfaceContainerHighest = col(c.surface3), surfaceBright = col(c.surface3), surfaceDim = col(c.background)
+            surfaceContainerLowest = col(c.background), surfaceContainerLow = col(control.fillBottom),
+            surfaceContainer = col(secondary.fillBottom), surfaceContainerHigh = col(folder.fillBottom),
+            surfaceContainerHighest = col(folder.fillTop), surfaceBright = col(folder.fillTop), surfaceDim = col(c.background)
         )
     } else {
         lightColorScheme(
@@ -153,17 +162,17 @@ fun colorSchemeFor(theme: ResolvedTheme): ColorScheme {
             secondaryContainer = col(c.surface3), onSecondaryContainer = col(c.onSurface),
             tertiary = col(c.secondary), onTertiary = col(c.onAccent),
             background = col(c.background), onBackground = col(c.onBackground),
-            surface = col(c.surface0), onSurface = col(c.onSurface),
-            surfaceVariant = col(c.surface2), onSurfaceVariant = col(c.onSurfaceMuted),
+            surface = col(secondary.fillBottom), onSurface = col(secondary.content),
+            surfaceVariant = col(control.fillBottom), onSurfaceVariant = col(secondary.muted),
             surfaceTint = col(c.accent),
-            outline = col(c.outlineStrong), outlineVariant = col(c.outline),
+            outline = col(secondary.edgeTop), outlineVariant = col(secondary.edgeBottom),
             error = col(s.danger), onError = col(s.onDanger),
             errorContainer = col(s.dangerContainer), onErrorContainer = col(s.onDangerContainer),
             scrim = col(c.scrim),
             inverseSurface = col(s.inverseSurface), inverseOnSurface = col(s.inverseOnSurface),
-            surfaceContainerLowest = col(c.surface1), surfaceContainerLow = col(c.surface0),
-            surfaceContainer = col(c.surface0), surfaceContainerHigh = col(c.surface2),
-            surfaceContainerHighest = col(c.surface3), surfaceBright = col(c.surface1), surfaceDim = col(c.surface3)
+            surfaceContainerLowest = col(c.background), surfaceContainerLow = col(control.fillBottom),
+            surfaceContainer = col(secondary.fillBottom), surfaceContainerHigh = col(folder.fillBottom),
+            surfaceContainerHighest = col(folder.fillTop), surfaceBright = col(folder.fillTop), surfaceDim = col(c.background)
         )
     }
 }
