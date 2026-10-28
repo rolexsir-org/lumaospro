@@ -22,6 +22,11 @@ fi
 # shellcheck disable=SC1091
 source "$TOOLS/env.sh"
 
+# Gradle itself reads GRADLE_USER_HOME, not a gradle.properties key. Give it a
+# writable default when the provisioned env does not set one explicitly.
+: "${GRADLE_USER_HOME:=$HOME/.gradle}"
+export GRADLE_USER_HOME
+
 # ---------------------------------------------------------------------------
 # Robolectric's Android framework image.
 #

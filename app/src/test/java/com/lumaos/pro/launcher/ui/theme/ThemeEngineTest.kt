@@ -236,4 +236,18 @@ class ThemeEngineTest {
         assertEquals(a, ThemeColors.lerp(a, b, 0f))
         assertEquals(b, ThemeColors.lerp(a, b, 1f))
     }
+
+    @Test fun `glass shadow colour is a themed role and interpolates with scrim`() {
+        // Regression: GlassComponents asks for colors.shadowColor. It must stay a
+        // derived role so every identity keeps its own tint without adding a new
+        // persisted colour slot to ThemeColors.
+        for (id in ThemeId.entries) {
+            val colors = ThemeEngine.resolve(ThemeSettings().pinned(id), envDark).colors
+            assertEquals("$id shadow", colors.scrim, colors.shadowColor)
+        }
+        val a = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.SIGNATURE), envLight).colors
+        val b = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.ATMOSPHERE), envDark).colors
+        val middle = ThemeColors.lerp(a, b, 0.5f)
+        assertEquals(middle.scrim, middle.shadowColor)
+    }
 }

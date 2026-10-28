@@ -46,7 +46,11 @@ data class ProviderFacts(
     val maxResizeHeightPx: Int,
     /** API 31+ target height in grid cells; 0 when unavailable. */
     val targetCellHeight: Int,
-    /** API 31+ minimum height in grid cells; 0 when unavailable. */
+    /**
+     * Optional launcher-side minimum height in grid cells; 0 when unavailable.
+     * The public Android SDK has no `minCellHeight` platform field: providers
+     * express their minimum through [minResizeHeightPx] and [targetCellHeight].
+     */
     val minCellHeight: Int,
     val hasConfigure: Boolean,
     /** API 28+ feature bitfield; 0 below API 28. */
