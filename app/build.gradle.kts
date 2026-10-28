@@ -153,8 +153,14 @@ dependencies {
 // --- Test JVM tuning --------------------------------------------------------
 // Robolectric loads a full Android framework image, so the test JVM needs more
 // than Gradle's 512 MB default. Robolectric's ~150 MB android-all jar is
-// fetched into .cache/ so it stays out of the project snapshot.
+// cached outside the project. If it is not prefetched, leave dependency
+// resolution to Robolectric rather than forcing it to use an empty directory.
+val robolectricDir = System.getenv("ROBOLECTRIC_DEPENDENCY_DIR")
+    ?: "${System.getProperty("user.home")}/.cache/robolectric"
+val robolectricImage = file("$robolectricDir/android-all-instrumented-14-robolectric-10818077-i7.jar")
 tasks.withType<Test>().configureEach {
     maxHeapSize = "900m"
-    systemProperty("robolectric.dependency.dir", file("${rootDir}/.cache/robolectric").absolutePath)
+    if (robolectricImage.isFile) {
+        systemProperty("robolectric.dependency.dir", file(robolectricDir).absolutePath)
+    }
 }

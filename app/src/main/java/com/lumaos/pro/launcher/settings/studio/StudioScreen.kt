@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -49,7 +52,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextProfile
@@ -61,6 +63,7 @@ import com.lumaos.pro.launcher.motion.MotionPreference
 import com.lumaos.pro.launcher.settings.LocalLumaTheme
 import com.lumaos.pro.launcher.settings.SettingsViewModel
 import com.lumaos.pro.launcher.settings.StudioConfiguration
+import com.lumaos.pro.launcher.settings.StudioApplyState
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
 import com.lumaos.pro.launcher.ui.LumaSizes
 import com.lumaos.pro.launcher.ui.LumaSpacing
@@ -77,6 +80,7 @@ import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemeCardPalette
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSpec
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
@@ -93,7 +97,14 @@ import java.util.Locale
  */
 @Composable
 fun StudioRoot(viewModel: SettingsViewModel) {
-    val saved by viewModel.studioConfiguration.collectAsState()
+    val loaded by viewModel.studioConfiguration.collectAsState()
+    val saved = loaded
+    if (saved == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.studio_loading), style = MaterialTheme.typography.bodyMedium)
+        }
+        return
+    }
     var draft by remember { mutableStateOf(saved) }
     var lastSaved by remember { mutableStateOf(saved) }
     LaunchedEffect(saved) {
@@ -102,6 +113,8 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         if (wasClean) draft = saved
     }
     val dirty = draft != saved
+    val applyState by viewModel.studioApplyState.collectAsState()
+    val applying = applyState == StudioApplyState.APPLYING
 
     val environment by viewModel.themes.environment.collectAsState()
     val wallpaper by viewModel.themes.wallpaper.seeds.collectAsState()
@@ -206,21 +219,37 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
 
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(if (dirty) R.string.studio_unsaved else R.string.studio_applied),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(onClick = { draft = saved }, enabled = dirty) {
+            Text(
+                stringResource(
+                    when {
+                        applying -> R.string.studio_applying
+                        dirty -> R.string.studio_unsaved
+                        else -> R.string.studio_applied
+                    }
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = { draft = saved }, enabled = dirty && !applying) {
                     Text(stringResource(R.string.studio_revert))
                 }
-                Button(onClick = { viewModel.applyStudio(draft) }, enabled = dirty) {
+                Button(onClick = { viewModel.applyStudio(draft) }, enabled = dirty && !applying) {
                     Text(stringResource(R.string.studio_apply))
                 }
             }
-            TextButton(onClick = { draft = StudioConfiguration() }, enabled = dirty || saved != StudioConfiguration()) {
+            if (applyState == StudioApplyState.FAILED) {
+                Text(
+                    stringResource(R.string.studio_apply_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            TextButton(onClick = { draft = StudioConfiguration() }, enabled = !applying && (dirty || saved != StudioConfiguration())) {
                 Text(stringResource(R.string.studio_reset))
             }
 
@@ -259,7 +288,10 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
 
             StudioSection(LumaGlassIdentity.NAME) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     LumaGlassIdentity.ACCENTS.forEach { accent ->
                         LumaGlassChoice(
                             theme = resolved,
@@ -267,7 +299,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                             selected = draft.theme.accentOverride == accent.color &&
                                 draft.theme.themeId == accent.darkAnchor,
                             onClick = { draft = draft.copy(theme = accent.applyTo(draft.theme)) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.widthIn(min = 112.dp)
                         )
                     }
                 }
@@ -312,7 +344,10 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     )
                 }
                 if (draft.theme.switching == ThemeSwitching.SCHEDULE) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         TimeButton(stringResource(R.string.studio_dark_from), draft.theme.darkWindow.startMinute) { minute ->
                             draft = draft.copy(theme = draft.theme.copy(darkWindow = draft.theme.darkWindow.copy(startMinute = minute)))
                         }
@@ -329,51 +364,6 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selected = draft.theme.accentOverride,
                     defaultLabel = stringResource(R.string.studio_theme_default),
                     onSelected = { draft = draft.copy(theme = draft.theme.copy(accentOverride = it)) }
-                )
-            }
-
-            StudioSection(stringResource(R.string.studio_background)) {
-                SwatchRow(
-                    colors = ThemePresets.BACKGROUND_SWATCHES,
-                    selected = draft.theme.backgroundOverride,
-                    defaultLabel = stringResource(R.string.studio_theme_default),
-                    onSelected = { draft = draft.copy(theme = draft.theme.copy(backgroundOverride = it)) }
-                )
-                val backdropOptions = listOf<Backdrop?>(null, Backdrop.WALLPAPER, Backdrop.THEME) +
-                    listOfNotNull(Backdrop.LUMA.takeIf { WallpaperArt.forTheme(resolved.id) != null })
-                StudioChoice(
-                    label = stringResource(R.string.studio_backdrop),
-                    selected = backdropLabel(draft.theme.backdrop, resolved.id),
-                    options = backdropOptions,
-                    optionLabel = { backdropLabel(it, resolved.id) },
-                    onSelected = { draft = draft.copy(theme = draft.theme.copy(backdrop = it)) }
-                )
-                if (WallpaperArt.forTheme(resolved.id) != null) {
-                    Text(
-                        stringResource(R.string.studio_luma_wallpaper_note),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            StudioSection(stringResource(R.string.studio_typography)) {
-                StudioChoice(
-                    label = stringResource(R.string.studio_typography),
-                    selected = draft.theme.typography?.let { typeLabel(it) } ?: stringResource(R.string.studio_theme_default),
-                    options = listOf<TypeStyle?>(null) + TypeStyle.entries,
-                    optionLabel = { it?.let { value -> typeLabel(value) } ?: stringResource(R.string.studio_theme_default) },
-                    onSelected = { draft = draft.copy(theme = draft.theme.copy(typography = it)) }
-                )
-                Text(
-                    stringResource(R.string.studio_typography_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    stringResource(R.string.studio_motion_character, resolved.motionCharacter.name.lowercase()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -438,48 +428,105 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
 
-            StudioSection(stringResource(R.string.studio_effects)) {
-                StudioChoice(
-                    label = stringResource(R.string.studio_effects),
-                    selected = effectsLabel(draft.effects),
-                    options = EffectsPreference.entries.toList(),
-                    optionLabel = { effectsLabel(it) },
-                    onSelected = { draft = draft.copy(effects = it) }
-                )
-                StudioChoice(
-                    label = stringResource(R.string.studio_motion),
-                    selected = motionLabel(draft.motion),
-                    options = MotionPreference.entries.toList(),
-                    optionLabel = { motionLabel(it) },
-                    onSelected = { draft = draft.copy(motion = it) }
-                )
-                Text(
-                    stringResource(R.string.studio_effects_now, effectsLevelLabel(effectsDecision.level)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                effectsDecision.reasons.take(3).forEach { reason ->
-                    Text(reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            StudioSection(stringResource(R.string.studio_profile_themes)) {
-                ContextProfile.entries.forEach { profile ->
-                    StudioChoice(
-                        label = profile.title,
-                        selected = draft.theme.profileThemes[profile]?.let { ThemePresets.of(it).displayName }
-                            ?: stringResource(R.string.studio_profile_theme_none),
-                        options = listOf<ThemeId?>(null) + ThemePresets.ALL.map { it.id },
-                        optionLabel = {
-                            it?.let { id -> ThemePresets.of(id).displayName }
-                                ?: stringResource(R.string.studio_profile_theme_none)
-                        },
-                        onSelected = { id ->
-                            val mapping = draft.theme.profileThemes.toMutableMap()
-                            if (id == null) mapping.remove(profile) else mapping[profile] = id
-                            draft = draft.copy(theme = draft.theme.copy(profileThemes = mapping))
-                        }
+            var advancedOpen by rememberSaveable { mutableStateOf(false) }
+            Spacer(Modifier.height(LumaSpacing.sectionGap))
+            LumaGlassChoice(
+                theme = LocalLumaTheme.current,
+                label = stringResource(if (advancedOpen) R.string.studio_advanced_hide else R.string.studio_advanced_show),
+                caption = stringResource(R.string.studio_advanced_summary),
+                selected = advancedOpen,
+                onClick = { advancedOpen = !advancedOpen },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (advancedOpen) {
+                StudioSection(stringResource(R.string.studio_background)) {
+                    SwatchRow(
+                        colors = ThemePresets.BACKGROUND_SWATCHES,
+                        selected = draft.theme.backgroundOverride,
+                        defaultLabel = stringResource(R.string.studio_theme_default),
+                        onSelected = { draft = draft.copy(theme = draft.theme.copy(backgroundOverride = it)) }
                     )
+                    val backdropOptions = listOf<Backdrop?>(null, Backdrop.WALLPAPER, Backdrop.THEME) +
+                        listOfNotNull(Backdrop.LUMA.takeIf { WallpaperArt.forTheme(resolved.id) != null })
+                    StudioChoice(
+                        label = stringResource(R.string.studio_backdrop),
+                        selected = backdropLabel(draft.theme.backdrop, resolved.id),
+                        options = backdropOptions,
+                        optionLabel = { backdropLabel(it, resolved.id) },
+                        onSelected = { draft = draft.copy(theme = draft.theme.copy(backdrop = it)) }
+                    )
+                    if (WallpaperArt.forTheme(resolved.id) != null) {
+                        Text(
+                            stringResource(R.string.studio_luma_wallpaper_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                StudioSection(stringResource(R.string.studio_typography)) {
+                    StudioChoice(
+                        label = stringResource(R.string.studio_typography),
+                        selected = draft.theme.typography?.let { typeLabel(it) } ?: stringResource(R.string.studio_theme_default),
+                        options = listOf<TypeStyle?>(null) + TypeStyle.entries,
+                        optionLabel = { it?.let { value -> typeLabel(value) } ?: stringResource(R.string.studio_theme_default) },
+                        onSelected = { draft = draft.copy(theme = draft.theme.copy(typography = it)) }
+                    )
+                    Text(
+                        stringResource(R.string.studio_typography_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        stringResource(R.string.studio_motion_character, resolved.motionCharacter.name.lowercase()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                StudioSection(stringResource(R.string.studio_effects)) {
+                    StudioChoice(
+                        label = stringResource(R.string.studio_effects),
+                        selected = effectsLabel(draft.effects),
+                        options = EffectsPreference.entries.toList(),
+                        optionLabel = { effectsLabel(it) },
+                        onSelected = { draft = draft.copy(effects = it) }
+                    )
+                    StudioChoice(
+                        label = stringResource(R.string.studio_motion),
+                        selected = motionLabel(draft.motion),
+                        options = MotionPreference.entries.toList(),
+                        optionLabel = { motionLabel(it) },
+                        onSelected = { draft = draft.copy(motion = it) }
+                    )
+                    Text(
+                        stringResource(R.string.studio_effects_now, effectsLevelLabel(effectsDecision.level)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    effectsDecision.reasons.take(3).forEach { reason ->
+                        Text(reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                StudioSection(stringResource(R.string.studio_profile_themes)) {
+                    ContextProfile.entries.forEach { profile ->
+                        StudioChoice(
+                            label = profile.title,
+                            selected = draft.theme.profileThemes[profile]?.let { ThemePresets.of(it).displayName }
+                                ?: stringResource(R.string.studio_profile_theme_none),
+                            options = listOf<ThemeId?>(null) + ThemePresets.ALL.map { it.id },
+                            optionLabel = {
+                                it?.let { id -> ThemePresets.of(id).displayName }
+                                    ?: stringResource(R.string.studio_profile_theme_none)
+                            },
+                            onSelected = { id ->
+                                val mapping = draft.theme.profileThemes.toMutableMap()
+                                if (id == null) mapping.remove(profile) else mapping[profile] = id
+                                draft = draft.copy(theme = draft.theme.copy(profileThemes = mapping))
+                            }
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(LumaSpacing.screenEnd))
@@ -534,12 +581,15 @@ private fun ThemePresetRow(
 @Composable
 private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> Unit) {
     val theme = LocalLumaTheme.current
-    val textColor = Color(ThemeEngine.bestTextOn(spec.background))
+    val card = remember(spec) { ThemeCardPalette.forSpec(spec) }
+    val textColor = Color(card.content)
+    val cardMinimum = LumaSizes.studioThemeCardHeight * LocalDensity.current.fontScale.coerceAtLeast(1f)
     LumaGlassSurface(
         theme = theme,
         role = GlassRole.PRIMARY,
         modifier = Modifier
-            .size(width = LumaSizes.studioThemeCardWidth, height = LumaSizes.studioThemeCardHeight)
+            .width(LumaSizes.studioThemeCardWidth)
+            .heightIn(min = cardMinimum)
             .semantics(mergeDescendants = true) {
                 role = Role.RadioButton
                 this.selected = selected
@@ -550,18 +600,13 @@ private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> U
     ) {
         Column(
             Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .heightIn(min = cardMinimum)
                 .background(
-                    Brush.linearGradient(
-                        listOf(
-                            Color(spec.background),
-                            Color(ColorMath.withAlpha(spec.secondary, 0.10f)),
-                            Color(ColorMath.withAlpha(spec.accent, 0.08f))
-                        )
-                    )
+                    Brush.linearGradient(listOf(Color(card.background), Color(card.middle), Color(card.end)))
                 )
                 .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(spec.accent, spec.secondary, spec.neutralTint).forEach { swatch ->
@@ -579,23 +624,17 @@ private fun ThemePresetCard(spec: ThemeSpec, selected: Boolean, onClick: () -> U
                     spec.displayName,
                     color = textColor,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     spec.tagline,
-                    color = textColor.copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = Color(card.muted),
+                    style = MaterialTheme.typography.labelSmall
                 )
                 Text(
                     "${spec.typography.character} · ${spec.motionCharacter.name.lowercase()}",
-                    color = textColor.copy(alpha = 0.62f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = Color(card.muted),
+                    style = MaterialTheme.typography.labelSmall
                 )
             }
         }
@@ -613,12 +652,8 @@ private fun <T> StudioChoice(
     val theme = LocalLumaTheme.current
     var expanded by remember { mutableStateOf(false) }
     val selectedText = selected
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.width(8.dp))
+    @Composable
+    fun ChoiceControl() {
         Box {
             LumaGlassChoice(
                 theme = theme,
@@ -649,6 +684,22 @@ private fun <T> StudioChoice(
                         }
                     }
                 }
+            }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        val stack = maxWidth < 300.dp || LocalDensity.current.fontScale > 1.3f
+        if (stack) {
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(6.dp))
+                ChoiceControl()
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.width(8.dp))
+                ChoiceControl()
             }
         }
     }

@@ -27,6 +27,7 @@ import com.lumaos.pro.launcher.launcher.model.HomeLayoutOps
 import com.lumaos.pro.launcher.launcher.model.ShortcutRef
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -196,7 +197,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             if (result.successful) {
                 seedDefaultDockIfNeeded(result.apps)
                 pruneUninstalled(result.apps)
-                history.retainOnly(result.apps.mapTo(HashSet()) { it.key })
+                if (result.apps.isNotEmpty()) {
+                    history.retainOnly(result.apps.mapTo(HashSet()) { it.key })
+                } else {
+                    LumaLog.w("Empty app scan; retaining saved placements and history")
+                }
             }
             // A failed query is not proof that every app was uninstalled. Keep
             // the layout, dock, and launch history until a full scan succeeds.
@@ -226,7 +231,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (keys.isEmpty()) return
 
         val profile = activeContextProfile.value
-        val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
+        val snapshot = prefs.allHomeLayoutsRaw()
+        val baseRaw = snapshot.first()
+        val currentRaw = snapshot[1 + ContextProfile.entries.indexOf(profile)] ?: baseRaw
+        if (!HomeLayoutCodec.canSafelyRewrite(currentRaw) || !HomeLayoutCodec.canSafelyRewrite(baseRaw)) {
+            LumaLog.w("Default dock not seeded: a saved layout needs recovery")
+            return
+        }
+        val current = HomeLayoutCodec.decode(currentRaw)
         if (hasLayoutContent(current) || hasLayoutContent(_layout.value)) {
             // A restored or user-arranged layout wins over first-run defaults.
             prefs.setLayoutSeeded(true)
@@ -235,12 +247,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val seeded = HomeLayoutOps.seedDockIfEmpty(current, keys)
         if (seeded == current) return
 
-        persistLayout(seeded, profile)
-        // Keep the base layout as a seed for profiles not customized yet, but
-        // never replace an existing user's layout with first-run defaults.
-        val base = HomeLayoutCodec.decode(prefs.homeLayoutRaw.first())
-        val seededBase = HomeLayoutOps.seedDockIfEmpty(base, keys)
-        if (seededBase != base) prefs.setHomeLayoutRaw(HomeLayoutCodec.encode(seededBase))
+        if (!prefs.setHomeLayoutRawIfUnchanged(profile, currentRaw, HomeLayoutCodec.encode(seeded))) return
+        // Seed the base only while it is still empty and unchanged. User edits
+        // that race this work win, and DataStore's normal flow updates the UI.
+        val base = HomeLayoutCodec.decode(baseRaw)
+        if (!hasLayoutContent(base)) {
+            val seededBase = HomeLayoutOps.seedDockIfEmpty(base, keys)
+            if (seededBase != base) {
+                prefs.setHomeLayoutRawIfUnchanged(null, baseRaw, HomeLayoutCodec.encode(seededBase))
+            }
+        }
         prefs.setLayoutSeeded(true)
     }
 
@@ -248,20 +264,24 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         layout.dock.isNotEmpty() || layout.pages.any { it.isNotEmpty() }
 
     /**
-     * Removes home items whose app is gone, and collapses folders that have
-     * fallen to a single member. Runs after every package change so the home
-     * screen never shows a dead icon.
+     * Reconciles entries absent from a non-empty successful app scan. Unknown
+     * layouts and concurrent edits are never rewritten by this maintenance pass.
      */
     private suspend fun pruneUninstalled(apps: List<AppEntry>) {
         val installed = apps.mapTo(HashSet()) { it.key }
-        for (profile in ContextProfile.entries) {
-            val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
-            val pruned = HomeLayoutOps.prune(current, installed)
+        if (installed.isEmpty()) return
+        val snapshot = prefs.allHomeLayoutsRaw()
+        val baseRaw = snapshot.first()
+        for ((index, profile) in ContextProfile.entries.withIndex()) {
+            val raw = snapshot[index + 1] ?: baseRaw
+            if (!HomeLayoutCodec.canSafelyRewrite(raw)) {
+                LumaLog.w("App reconciliation skipped: a saved layout needs recovery")
+                continue
+            }
+            val current = HomeLayoutCodec.decode(raw)
+            val pruned = HomeLayoutOps.pruneAfterScan(current, installed)
             if (pruned != current) {
-                prefs.setHomeLayoutRaw(profile, HomeLayoutCodec.encode(pruned))
-                if (profile == activeContextProfile.value) {
-                    withContext(Dispatchers.Main) { _layout.value = pruned }
-                }
+                prefs.setHomeLayoutRawIfUnchanged(profile, raw, HomeLayoutCodec.encode(pruned))
             }
         }
     }
@@ -421,7 +441,30 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         HomeLayoutOps.moveDockToHome(layout, stored)
     }
 
-    fun addWidget(widget: HomeItem.Widget, position: Int = 0) = mutate { HomeLayoutOps.addWidget(it, 0, widget, position) }
+    /** Report success only after the layout transaction has reached DataStore. */
+    fun addWidget(widget: HomeItem.Widget, position: Int = 0, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val before = _layout.value
+            val next = HomeLayoutOps.addWidget(before, 0, widget, position)
+            if (next == before) {
+                onResult(false)
+                return@launch
+            }
+            val saved = try {
+                persistLayout(next)
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Widget placement could not be saved", e)
+                // Do not overwrite another change that happened while the write
+                // was suspended. The host id is retained on failure.
+                if (_layout.value == next) _layout.value = before
+                false
+            }
+            onResult(saved)
+        }
+    }
 
     fun resizeWidget(appWidgetId: Int, rows: Int) = mutate { HomeLayoutOps.resizeWidget(it, appWidgetId, rows) }
 
@@ -467,6 +510,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     /** Widget ids referenced by any profile's layout (for orphan clean-up). */
     suspend fun allWidgetIds(): Set<Int> = ContextProfile.entries.flatMapTo(HashSet()) { profile ->
         HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first()).widgetIds()
+    }
+
+    /** True also for pending writes or unknown/corrupt data; a failed read is never "empty". */
+    suspend fun mayReferenceWidgetId(id: Int): Boolean {
+        if (id in _layout.value.widgetIds()) return true
+        val storedReference = prefs.allHomeLayoutsRaw().any { HomeLayoutCodec.mayReferenceWidget(it, id) }
+        return storedReference || id in _layout.value.widgetIds()
     }
 
     private fun mutate(transform: (HomeLayout) -> HomeLayout) {

@@ -15,6 +15,7 @@ import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.util.RoleHelper
+import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.diagnostics.OptimizationEvent
 import com.lumaos.pro.launcher.diagnostics.StartupStats
 import com.lumaos.pro.launcher.intelligence.DeviceCapability
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
 /** Whether LumaOS Pro currently owns the Home screen, and what it was replaced by. */
@@ -63,6 +65,8 @@ data class StudioConfiguration(
 )
 
 data class StudioPreviewIcons(val home: List<Bitmap>, val dock: List<Bitmap>)
+
+enum class StudioApplyState { IDLE, APPLYING, FAILED }
 
 data class BackupUiState(val busy: Boolean = false, val message: String? = null)
 
@@ -91,7 +95,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val themes = core.themes
     val effectsState = core.effects.decision
 
-    val studioConfiguration: StateFlow<StudioConfiguration> = combine(
+    // Null until every backing preference has emitted, so Studio cannot apply
+    // its placeholder defaults over a previously saved appearance at startup.
+    val studioConfiguration: StateFlow<StudioConfiguration?> = combine(
         combine(
             prefs.themeSettings, prefs.iconPack, prefs.homePreset, prefs.dockStyleOverride
         ) { theme, pack, preset, dock -> StudioVisuals(theme, pack, preset, dock) },
@@ -101,7 +107,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         StudioConfiguration(
             visuals.theme, visuals.iconPack, visuals.homePreset, visuals.dockStyle, effects, motion
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, StudioConfiguration())
+    }.stateIn<StudioConfiguration?>(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _studioApplyState = MutableStateFlow(StudioApplyState.IDLE)
+    val studioApplyState: StateFlow<StudioApplyState> = _studioApplyState.asStateFlow()
 
     private val _iconPacks = MutableStateFlow<List<IconPackInfo>>(emptyList())
     val iconPacks: StateFlow<List<IconPackInfo>> = _iconPacks.asStateFlow()
@@ -172,19 +181,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun applyStudio(configuration: StudioConfiguration) {
+        if (_studioApplyState.value == StudioApplyState.APPLYING) return
+        _studioApplyState.value = StudioApplyState.APPLYING
         viewModelScope.launch {
-            val previous = studioConfiguration.value
-            prefs.applyThemeSettings(configuration.theme)
-            prefs.setIconPack(configuration.iconPack)
-            // setHomePreset intentionally adopts its default row count. Do not
-            // call it for an unrelated colour edit: existing row customisation
-            // and, most importantly, the saved arrangement must remain intact.
-            if (previous.homePreset != configuration.homePreset) {
-                prefs.setHomePreset(configuration.homePreset)
+            try {
+                prefs.applyStudioSettings(
+                    theme = configuration.theme,
+                    iconPack = configuration.iconPack,
+                    homePreset = configuration.homePreset,
+                    dockStyle = configuration.dockStyle,
+                    effects = configuration.effects,
+                    motion = configuration.motion
+                )
+                _studioApplyState.value = StudioApplyState.IDLE
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Could not apply Studio appearance", e)
+                _studioApplyState.value = StudioApplyState.FAILED
             }
-            prefs.setDockStyle(configuration.dockStyle)
-            prefs.setEffectsPreference(configuration.effects)
-            prefs.setMotionPreference(configuration.motion)
         }
     }
 

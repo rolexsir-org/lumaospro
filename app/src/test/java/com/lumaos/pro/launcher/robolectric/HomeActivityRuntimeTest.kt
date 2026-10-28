@@ -1,5 +1,7 @@
 package com.lumaos.pro.launcher.robolectric
 
+import android.appwidget.AppWidgetProviderInfo
+import android.content.ComponentName
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -11,6 +13,8 @@ import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.launcher.HomeActivity
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
+import com.lumaos.pro.launcher.widgets.WidgetHostController
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -92,6 +96,16 @@ class HomeActivityRuntimeTest {
     }
 
     @Test
+    fun `setting the same search text does not hide existing drawer results`() {
+        val activity = buildHome()
+        val grid = activity.findViewById<RecyclerView>(R.id.drawer_grid)
+        val search = activity.findViewById<EditText>(R.id.search_field)
+        grid.visibility = android.view.View.VISIBLE
+        search.setText(search.text.toString())
+        assertEquals(android.view.View.VISIBLE, grid.visibility)
+    }
+
+    @Test
     fun `the drawer starts hidden`() {
         val activity = buildHome()
         val drawer = activity.findViewById<FrameLayout>(R.id.drawer_container)
@@ -122,8 +136,7 @@ class HomeActivityRuntimeTest {
 
     @Test
     fun `the home screen survives a configuration change`() {
-        // Orientation change with stateNotNeeded: the activity is destroyed and
-        // recreated with no saved state, so it must rebuild from DataStore.
+        // The activity must rebind from persisted layout after recreation.
         val controller = Robolectric.buildActivity(HomeActivity::class.java).setup()
         val recreated = controller.configurationChange(
             android.content.res.Configuration().apply {
@@ -133,6 +146,27 @@ class HomeActivityRuntimeTest {
 
         assertNotNull(recreated.findViewById<RecyclerView>(R.id.home_grid))
         assertNotNull("grids must be re-bound after recreation", recreated.findViewById<RecyclerView>(R.id.home_grid).adapter)
+    }
+
+    @Test
+    fun `pending widget operations retain their ids across recreation`() {
+        val controller = Robolectric.buildActivity(HomeActivity::class.java).setup()
+        val activity = controller.get()
+        val pendingField = HomeActivity::class.java.getDeclaredField("pendingWidget").apply { isAccessible = true }
+        val reconfigureField = HomeActivity::class.java.getDeclaredField("pendingReconfigureWidgetId").apply { isAccessible = true }
+        val info = AppWidgetProviderInfo().apply {
+            provider = ComponentName(activity.packageName, "example.WidgetProvider")
+        }
+        pendingField.set(activity, WidgetHostController.Pending(42, info))
+        reconfigureField.set(activity, 73)
+
+        val recreated = controller.configurationChange(
+            android.content.res.Configuration().apply {
+                orientation = android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            }
+        ).get()
+        assertEquals(42, (pendingField.get(recreated) as WidgetHostController.Pending).appWidgetId)
+        assertEquals(73, reconfigureField.get(recreated))
     }
 
     @Test

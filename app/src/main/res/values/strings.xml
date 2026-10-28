@@ -32,10 +32,11 @@
     <string name="home_empty_hint">Swipe up to explore your apps</string>
     <string name="drawer_title">Apps</string>
     <string name="drawer_close_description">Close app drawer</string>
-    <string name="drawer_alphabet_index_description">Alphabetical app index</string>
+    <string name="drawer_alphabet_index_description">Alphabetical app index. Scroll to choose a letter.</string>
     <string name="search_hint">Search apps</string>
     <string name="empty_no_apps">No apps found</string>
     <string name="drawer_loading_apps">Loading apps…</string>
+    <string name="drawer_searching_apps">Searching apps…</string>
     <string name="drawer_retry_apps">Couldn’t load apps. Tap to try again.</string>
     <string name="empty_no_results">No apps match “%1$s”</string>
 
@@ -171,7 +172,7 @@
     <string name="role_switch_away_desc">Opens the system launcher picker so you can hand the Home role back safely. LumaOS Pro stays installed and your settings are kept.</string>
 
     <!-- Privacy -->
-    <string name="privacy_summary">LumaOS Pro reads app names and icons to build your launcher and stores preferences, home layouts, launch history and diagnostics locally. Android backup may transfer your settings and layouts; device-to-device transfer can include diagnostics history. If you use voice commands, Android hands audio to the speech-recognition app on your device, which may process it on-device or remotely under its own privacy policy. LumaOS Pro receives recognized text to carry out the command and does not retain transcripts. LumaOS Pro has no account, analytics, advertising SDK, app server or app network permission and does not send this data itself.</string>
+    <string name="privacy_summary">LumaOS Pro reads app names and icons to build your launcher and stores preferences, home layouts, launch history and diagnostics locally. Android backup may transfer your settings and layouts; device-to-device transfer can include diagnostics history. If you use voice commands, Android hands audio to the speech-recognition app on your device, which may process it on-device or remotely under its own privacy policy. LumaOS Pro receives recognized text to carry out the command and does not retain transcripts. Wallpaper photos you choose are copied privately and excluded from backup. The optional music widget asks for notification access; Android grants access to all notifications, but Luma uses it only for media sessions and does not read or store notification contents. The widget host may cache displayed media details. LumaOS Pro has no account, analytics, advertising SDK, app server or app network permission and does not send this data itself.</string>
 
     <string name="about_version">Version %1$s (%2$d)</string>
 

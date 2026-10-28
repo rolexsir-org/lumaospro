@@ -6,9 +6,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,10 +48,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -67,6 +74,7 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppMatcher
+import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.glass.LumaGlassChoice
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSectionTitle
@@ -85,6 +93,7 @@ import com.lumaos.pro.launcher.intelligence.ProfileId
 import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.launcher.model.GestureAction
 import com.lumaos.pro.launcher.ui.ThemeMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import java.time.DayOfWeek
@@ -107,7 +116,8 @@ fun SettingsRoot(
     onRequestNotifications: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
-    onOpenStudio: () -> Unit
+    onOpenStudio: () -> Unit,
+    onOpenWallpaper: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -127,6 +137,10 @@ fun SettingsRoot(
             SettingsGroupHeader(R.string.settings_group_make_yours)
             ExperienceProfileSection(viewModel)
             StudioSection(onOpenStudio)
+            SettingsSection(stringResource(R.string.wallpaper_studio_title), LumaIcon.APPEARANCE) {
+                LumaGlassChoice(theme = LocalLumaTheme.current, label = stringResource(R.string.wallpaper_discover),
+                    selected = false, onClick = onOpenWallpaper, caption = stringResource(R.string.wallpaper_discover_caption))
+            }
             WidgetsSection(viewModel)
 
             SettingsGroupHeader(R.string.settings_group_fine_tune)
@@ -135,11 +149,23 @@ fun SettingsRoot(
             PerformanceSection(viewModel)
 
             SettingsGroupHeader(R.string.settings_group_advanced)
-            ContextSection(viewModel, onRequestNotifications)
-            GestureSection(viewModel)
-            PrivacySection()
-            BackupSection(viewModel, onExportBackup, onImportBackup)
-            AboutSection()
+            var advancedOpen by rememberSaveable { mutableStateOf(false) }
+            LumaGlassChoice(
+                theme = LocalLumaTheme.current,
+                label = stringResource(if (advancedOpen) R.string.settings_advanced_hide else R.string.settings_advanced_show),
+                caption = stringResource(R.string.settings_advanced_summary),
+                selected = advancedOpen,
+                onClick = { advancedOpen = !advancedOpen },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (advancedOpen) {
+                Spacer(Modifier.height(LumaSpacing.sectionGap))
+                ContextSection(viewModel, onRequestNotifications)
+                GestureSection(viewModel)
+                PrivacySection()
+                BackupSection(viewModel, onExportBackup, onImportBackup)
+                AboutSection()
+            }
             Spacer(Modifier.height(LumaSpacing.screenEnd))
         }
     }
@@ -165,6 +191,7 @@ private fun SettingsGroupHeader(titleRes: Int) {
 @Composable
 private fun ExperienceProfileSection(viewModel: SettingsViewModel) {
     val theme = LocalLumaTheme.current
+    val context = LocalContext.current
     val selected by viewModel.prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
     val scope = rememberCoroutineScope()
     SettingsSection(stringResource(R.string.onboarding_profiles_title), LumaIcon.APPEARANCE) {
@@ -183,7 +210,18 @@ private fun ExperienceProfileSection(viewModel: SettingsViewModel) {
                 theme = theme,
                 role = GlassRole.SETTINGS_CONTROL,
                 selected = profile == selected,
-                onClick = { scope.launch { ExperienceProfileController.apply(viewModel.prefs, profile) } },
+                onClick = {
+                    scope.launch {
+                        try {
+                            ExperienceProfileController.apply(viewModel.prefs, profile)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            LumaLog.e("Could not apply experience", e)
+                            Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
@@ -235,6 +273,12 @@ private fun WidgetsSection(viewModel: SettingsViewModel) {
             checked = widgetsEnabled,
             subtitle = stringResource(R.string.pref_widgets_desc)
         ) { enabled -> scope.launch { viewModel.prefs.setWidgetsEnabled(enabled) } }
+        val context = LocalContext.current
+        LumaGlassChoice(theme = LocalLumaTheme.current, label = stringResource(R.string.music_widget_name),
+            selected = false, onClick = {
+                context.startActivity(Intent(context, com.lumaos.pro.launcher.widgets.music.MusicAccessActivity::class.java))
+            }, caption = stringResource(R.string.music_widget_description),
+            modifier = Modifier.padding(top = LumaSpacing.sm))
         Text(
             stringResource(R.string.pref_widgets_manage_open),
             style = MaterialTheme.typography.bodySmall,
@@ -327,6 +371,7 @@ private fun HomeRoleSection(
 
 // --------------------------------------------------------- context profiles
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications: () -> Unit) {
     val active by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
@@ -366,7 +411,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         ) { enabled -> viewModel.setSchedule(active, schedule.copy(enabled = enabled)) }
 
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -388,24 +433,24 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             }) { Text("Until ${schedule.end}") }
         }
         Text("Active days", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             val labels = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
             DayOfWeek.values().forEachIndexed { index, day ->
                 val selected = day in schedule.days
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable {
-                            val days = if (selected) schedule.days - day else schedule.days + day
+                        .toggleable(value = selected, role = Role.Checkbox) { checked ->
+                            val days = if (checked) schedule.days + day else schedule.days - day
                             viewModel.setSchedule(active, schedule.copy(days = days))
                         }
                         .semantics {
                             contentDescription = day.getDisplayName(TextStyle.FULL, Locale.getDefault())
-                            role = Role.Checkbox
-                            this.selected = selected
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -988,17 +1033,8 @@ private fun <T> ChoiceRow(
     var expanded by remember { mutableStateOf(false) }
     val selectedText = selected
 
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(GlassMaterials.palette(theme, GlassCapabilities.SOLID)[GlassRole.SETTINGS_CONTROL].rest.content),
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(Modifier.width(8.dp))
+    @Composable
+    fun ChoiceControl() {
         LumaGlassChoice(
             theme = theme,
             label = selected,
@@ -1006,6 +1042,28 @@ private fun <T> ChoiceRow(
             onClick = { expanded = true },
             modifier = Modifier.widthIn(max = 164.dp)
         )
+    }
+    val labelColor = Color(GlassMaterials.palette(theme, GlassCapabilities.SOLID)[GlassRole.SETTINGS_CONTROL].rest.content)
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        val stack = maxWidth < 280.dp || LocalDensity.current.fontScale > 1.3f
+        if (stack) {
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor)
+                Spacer(Modifier.height(6.dp))
+                ChoiceControl()
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = labelColor,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                ChoiceControl()
+            }
+        }
     }
 
     if (expanded) {

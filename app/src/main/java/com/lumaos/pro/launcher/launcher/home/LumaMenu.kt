@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.effects.EffectsDecision
@@ -62,8 +63,11 @@ class LumaMenu(
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
             minimumWidth = dp(220f)
         }
-        GlassViews.apply(content, menuSpec, density, ripple = false)
-        val popup = PopupWindow(content, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        val scroll = ScrollView(context).apply {
+            addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        GlassViews.apply(scroll, menuSpec, density, ripple = false)
+        val popup = PopupWindow(scroll, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true
         popup.elevation = menuSpec.elevationDp * density
@@ -96,36 +100,49 @@ class LumaMenu(
             })
         }
 
-        // Place above the anchor when there is room, otherwise below; centred
-        // horizontally on the anchor and kept on screen.
-        content.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        // Measure against the visible frame before placing the popup. Long
+        // menus and large fonts scroll instead of extending beyond the screen.
         val loc = IntArray(2)
-        anchor.getLocationInWindow(loc)
+        anchor.getLocationOnScreen(loc)
         val frame = Rect()
         anchor.getWindowVisibleDisplayFrame(frame)
-        val w = content.measuredWidth
-        val h = content.measuredHeight
+        if (frame.isEmpty) {
+            val metrics = context.resources.displayMetrics
+            frame.set(0, 0, metrics.widthPixels, metrics.heightPixels)
+        }
         val margin = dp(8f)
-        var x = loc[0] + anchor.width / 2 - w / 2
-        x = x.coerceIn(frame.left + margin, (frame.right - w - margin).coerceAtLeast(frame.left + margin))
+        val maxWidth = (frame.width() - 2 * margin).coerceAtLeast(1)
+        val maxHeight = (frame.height() - 2 * margin).coerceAtLeast(1)
+        content.minimumWidth = minOf(dp(220f), maxWidth)
+        scroll.measure(
+            View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST)
+        )
+        val w = scroll.measuredWidth.coerceAtLeast(1)
+        val h = scroll.measuredHeight.coerceAtLeast(1)
+        popup.width = w
+        popup.height = h
+        val x = (loc[0] + anchor.width / 2 - w / 2)
+            .coerceIn(frame.left + margin, (frame.right - w - margin).coerceAtLeast(frame.left + margin))
         val above = loc[1] - h - margin >= frame.top + margin
-        val y = if (above) loc[1] - h - margin else (loc[1] + anchor.height + margin).coerceAtMost(frame.bottom - h - margin)
-        content.pivotX = (loc[0] + anchor.width / 2 - x).toFloat().coerceIn(0f, w.toFloat())
-        content.pivotY = if (above) h.toFloat() else 0f
+        val desiredY = if (above) loc[1] - h - margin else loc[1] + anchor.height + margin
+        val y = desiredY.coerceIn(frame.top + margin, (frame.bottom - h - margin).coerceAtLeast(frame.top + margin))
+        scroll.pivotX = (loc[0] + anchor.width / 2 - x).toFloat().coerceIn(0f, w.toFloat())
+        scroll.pivotY = if (above) h.toFloat() else 0f
         popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
 
         if (motion.enabled && !motion.reduced) {
             // Enters from the theme's own popup scale; Void opens a little larger
             // than Aurora, and both honour reduced motion by skipping this block.
             val from = theme.motionProfile.popupScaleFrom
-            content.alpha = 0f
-            content.scaleX = from
-            content.scaleY = from
+            scroll.alpha = 0f
+            scroll.scaleX = from
+            scroll.scaleY = from
             SpringAnimator(0f) { p ->
-                content.alpha = p.coerceIn(0f, 1f)
+                scroll.alpha = p.coerceIn(0f, 1f)
                 val s = from + (1f - from) * p
-                content.scaleX = s
-                content.scaleY = s
+                scroll.scaleX = s
+                scroll.scaleY = s
             }.animateTo(1f, MotionTokens.SNAPPY, motion)
         }
         content.getChildAt(if (title.isNullOrBlank()) 0 else 1)?.requestFocus()
@@ -168,7 +185,6 @@ class LumaMenu(
                 setTextColor(tint)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleSmallSp)
                 typeface = Typefaces.body(theme.typography)
-                maxLines = 2
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             })
         }

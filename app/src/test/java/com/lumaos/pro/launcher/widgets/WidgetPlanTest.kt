@@ -28,6 +28,18 @@ class WidgetPlanTest {
     )
 
     @Test
+    fun `music provider uses normal widget placement and local layout restoration`() {
+        val caps = WidgetPlan.capabilities(facts(resizeMode = WidgetResizeFlags.BOTH, minHeightPx = 180,
+            minResizeHeightPx = 160, targetCellHeight = 3, rowHeightPx = 80))
+        assertEquals(3, caps.initialRows)
+        val music = HomeItem.Widget(37, "com.lumaos.pro.launcher/com.lumaos.pro.launcher.widgets.music.MusicWidgetProvider", caps.initialRows)
+        val original = HomeLayout(pages = listOf(listOf(music, app())))
+        assertEquals(original, com.lumaos.pro.launcher.launcher.model.HomeLayoutCodec.decode(
+            com.lumaos.pro.launcher.launcher.model.HomeLayoutCodec.encode(original)))
+        assertEquals(InsertionPlan.AlreadyPresent, WidgetPlan.planInsertion(original.page(0), music))
+    }
+
+    @Test
     fun `fixed widget spans exactly its minimum rows and cannot resize`() {
         val caps = WidgetPlan.capabilities(facts(resizeMode = WidgetResizeFlags.NONE, minHeightPx = 250))
         assertFalse(caps.resizable)
@@ -116,7 +128,7 @@ class WidgetPlanTest {
     @Test
     fun `duplicate widget id is refused rather than inserted twice`() {
         val page = listOf(widget(7, 2), app())
-        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(page, widget(7, 1)))
+        assertEquals(InsertionPlan.AlreadyPresent, WidgetPlan.planInsertion(page, widget(7, 1)))
     }
 
     @Test

@@ -517,7 +517,7 @@
 
                 <com.lumaos.pro.launcher.launcher.view.AlphaIndexView
                     android:id="@+id/alpha_index"
-                    android:layout_width="26dp"
+                    android:layout_width="48dp"
                     android:layout_height="match_parent"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/drawer_alphabet_index_description" />

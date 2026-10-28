@@ -55,6 +55,7 @@ class DrawerAdapter(
         is DrawerRow.Header -> TYPE_HEADER
         is DrawerRow.App -> if (presentation() == DrawerPresentation.LIST) TYPE_APP_LIST else TYPE_APP
         is DrawerRow.Shortcut, is DrawerRow.Action -> TYPE_ROW
+        is DrawerRow.Empty -> TYPE_EMPTY
     }
 
     fun isFullSpan(position: Int): Boolean =
@@ -67,6 +68,7 @@ class DrawerAdapter(
         return when (viewType) {
             TYPE_HEADER -> HeaderHolder(inflater.inflate(R.layout.item_drawer_header, parent, false) as TextView)
             TYPE_ROW -> RowHolder(inflater.inflate(R.layout.item_drawer_row, parent, false))
+            TYPE_EMPTY -> EmptyHolder(inflater.inflate(R.layout.item_drawer_empty, parent, false) as TextView)
             TYPE_APP_LIST -> AppCellViewHolder(inflater.inflate(R.layout.item_drawer_app, parent, false))
             else -> AppCellViewHolder(inflater.inflate(R.layout.item_app, parent, false))
         }
@@ -87,6 +89,12 @@ class DrawerAdapter(
                 style.headerTypeface?.let { holder.text.typeface = it }
                 // Heading semantics without requiring API 28 XML attributes.
                 androidx.core.view.ViewCompat.setAccessibilityHeading(holder.text, true)
+            }
+            is EmptyHolder -> {
+                row as DrawerRow.Empty
+                holder.text.text = holder.text.context.getString(R.string.empty_no_results, row.query)
+                holder.text.setTextColor(style.subtitleColor)
+                style.subtitleTypeface?.let { holder.text.typeface = it }
             }
             is AppCellViewHolder -> {
                 val app = (row as DrawerRow.App).entry
@@ -134,6 +142,7 @@ class DrawerAdapter(
     }
 
     private class HeaderHolder(val text: TextView) : RecyclerView.ViewHolder(text)
+    private class EmptyHolder(val text: TextView) : RecyclerView.ViewHolder(text)
 
     private class RowHolder(view: View) : RecyclerView.ViewHolder(view) {
         val icon: ImageView = view.findViewById(R.id.row_icon)
@@ -152,5 +161,6 @@ class DrawerAdapter(
         const val TYPE_APP = 1
         const val TYPE_ROW = 2
         const val TYPE_APP_LIST = 3
+        const val TYPE_EMPTY = 4
     }
 }

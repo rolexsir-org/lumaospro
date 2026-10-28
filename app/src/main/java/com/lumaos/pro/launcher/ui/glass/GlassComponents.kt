@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -50,6 +51,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -384,8 +386,9 @@ fun LumaGlassSlider(
     val spec = rememberGlassSpec(theme, GlassRole.SETTINGS_CONTROL)
     val colors = spec.rest
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = Color(colors.content), fontSize = 14.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f), color = Color(colors.content), fontSize = 14.sp)
+            Spacer(Modifier.width(8.dp))
             Text(
                 valueLabel ?: String.format(Locale.US, "%.2f", value),
                 color = Color(colors.muted),
@@ -415,7 +418,7 @@ fun LumaGlassSlider(
 @Composable
 fun LumaGlassSwitch(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+    onCheckedChange: ((Boolean) -> Unit)?,
     theme: ResolvedTheme,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
@@ -455,6 +458,8 @@ fun LumaGlassSwitchRow(
         Row(
             Modifier
                 .fillMaxWidth()
+                .heightIn(min = GlassGeometry.CONTROL_DP.dp)
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
                 .padding(GlassGeometry.GUTTER_DP.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -465,7 +470,9 @@ fun LumaGlassSwitchRow(
                     Text(subtitle, color = Color(colors.muted), fontSize = 12.sp)
                 }
             }
-            LumaGlassSwitch(checked, onCheckedChange, theme, enabled = enabled)
+            Spacer(Modifier.width(12.dp))
+            // The parent owns the single labelled accessibility toggle and target.
+            LumaGlassSwitch(checked, null, theme, enabled = enabled)
         }
     }
 }

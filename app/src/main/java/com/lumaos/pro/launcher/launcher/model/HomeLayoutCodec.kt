@@ -70,6 +70,26 @@ object HomeLayoutCodec {
         return HomeLayout(dock = dock, pages = if (pages.isEmpty()) listOf(emptyList()) else pages)
     }
 
+    /** The forgiving decoder must not be used to rewrite unknown or partial data. */
+    fun canSafelyRewrite(raw: String?): Boolean =
+        raw == null || (raw.isNotBlank() && encode(decode(raw)) == raw)
+
+    /**
+     * Conservative check for releasing a platform widget id. Unlike [decode],
+     * an unknown version or malformed record is not treated as an empty layout:
+     * retaining an id is safer than deleting a binding that might be referenced.
+     */
+    fun mayReferenceWidget(raw: String?, appWidgetId: Int): Boolean {
+        if (raw == null) return false
+        // The normal parser intentionally skips malformed or truncated records.
+        // Only a complete, canonical round trip can prove that it skipped none.
+        if (!canSafelyRewrite(raw)) return true
+        val layout = decode(raw)
+        if ((layout.dock + layout.pages.flatten()).filterIsInstance<HomeItem.Widget>()
+                .any { it.provider.isBlank() }) return true
+        return appWidgetId in layout.widgetIds()
+    }
+
     private fun encodeItem(item: HomeItem): String = when (item) {
         is HomeItem.App -> "A${SEP}${item.key.serialize()}"
         is HomeItem.Folder -> buildString {

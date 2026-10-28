@@ -162,7 +162,8 @@ class SettingsActivity : ComponentActivity() {
                                             arrayOf("application/json", "text/plain", "application/octet-stream")
                                         )
                                     },
-                                    onOpenStudio = { tab = 1 }
+                                    onOpenStudio = { tab = 1 },
+                                    onOpenWallpaper = { startActivity(android.content.Intent(this@SettingsActivity, com.lumaos.pro.launcher.wallpaper.WallpaperActivity::class.java)) }
                                 )
                                 1 -> StudioRoot(viewModel = viewModel)
                                 else -> DashboardRoot(viewModel = viewModel)

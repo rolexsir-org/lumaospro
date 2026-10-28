@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -21,6 +22,8 @@ import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import com.lumaos.pro.launcher.launcher.view.FolderIconDrawable
 import com.lumaos.pro.launcher.widgets.WidgetCapabilities
+import com.lumaos.pro.launcher.widgets.WidgetResizeGesture
+import com.lumaos.pro.launcher.widgets.WidgetResizeResult
 import java.util.Collections
 import kotlin.math.roundToInt
 
@@ -52,6 +55,9 @@ class HomeGridAdapter(
     interface Listener {
         fun onItemClick(item: HomeItem, position: Int, view: View)
         fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean
+        fun onWidgetResizeOptions(item: HomeItem.Widget, position: Int, view: View) {
+            onItemLongClick(item, position, view)
+        }
         fun onWidgetResize(item: HomeItem.Widget, rows: Int, commit: Boolean) {}
     }
 
@@ -205,7 +211,6 @@ class HomeGridAdapter(
         if (widgetFrameBackground != null) notifyItemRangeChanged(0, itemCount)
     }
 
-    @SuppressLint("ClickableViewAccessibility")
     private fun bindWidget(holder: WidgetHolder, item: HomeItem.Widget) {
         val host = widgetHost
         val rowHeight = host?.rowHeightPx() ?: 0
@@ -245,7 +250,7 @@ class HomeGridAdapter(
         holder.handle.visibility = if (editMode && verticallyResizable) View.VISIBLE else View.GONE
         if (editMode && host != null) {
             holder.outline.background = host.editOutline()
-            holder.handle.background = host.handle()
+            holder.handleIndicator.background = host.handle()
         }
         holder.itemView.setOnLongClickListener {
             val pos = holder.bindingAdapterPosition
@@ -255,31 +260,48 @@ class HomeGridAdapter(
             val pos = holder.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION && editMode) listener.onItemClick(items[pos], pos, it)
         }
-        // Drag the handle to resize in whole rows, with the height following the
-        // finger, clamped to the provider's declared min/max rather than a fixed range.
-        var startY = 0f
-        var startHeight = 0
+        // A click/keyboard activation opens the existing height menu, giving
+        // TalkBack users the same resize options as a drag gesture.
+        holder.handle.setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            val current = items.getOrNull(pos) as? HomeItem.Widget
+            if (current != null) listener.onWidgetResizeOptions(current, pos, holder.itemView)
+        }
+        // Drag the handle in whole rows within the provider's min/max range.
+        var gesture: WidgetResizeGesture? = null
+        val touchSlop = ViewConfiguration.get(holder.itemView.context).scaledTouchSlop
         holder.handle.setOnTouchListener { v, ev ->
             if (rowHeight <= 0 || !verticallyResizable) return@setOnTouchListener false
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    startY = ev.rawY
-                    startHeight = holder.itemView.height
+                    gesture = WidgetResizeGesture(ev.rawY, holder.itemView.height, rowHeight, minRows, maxRows, touchSlop)
                     v.parent.requestDisallowInterceptTouchEvent(true)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val h = (startHeight + (ev.rawY - startY)).toInt()
-                        .coerceIn(rowHeight * minRows, rowHeight * maxRows)
-                    holder.setHeight(h)
-                    listener.onWidgetResize(item, (h / rowHeight.toFloat()).roundToInt(), commit = false)
+                    gesture?.let { current ->
+                        val h = current.move(ev.rawY)
+                        if (current.dragged) {
+                            holder.setHeight(h)
+                            listener.onWidgetResize(item, (h / rowHeight.toFloat()).roundToInt(), commit = false)
+                        }
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val rows = (holder.itemView.height / rowHeight.toFloat()).roundToInt()
-                        .coerceIn(minRows, maxRows)
-                    holder.setHeight(rowHeight * rows)
-                    listener.onWidgetResize(item, rows, commit = true)
+                    v.parent.requestDisallowInterceptTouchEvent(false)
+                    gesture?.let { current ->
+                        if (ev.actionMasked == MotionEvent.ACTION_UP) current.move(ev.rawY)
+                        when (val result = current.finish(cancelled = ev.actionMasked == MotionEvent.ACTION_CANCEL)) {
+                            is WidgetResizeResult.Commit -> {
+                                holder.setHeight(rowHeight * result.rows)
+                                listener.onWidgetResize(item, result.rows, commit = true)
+                            }
+                            is WidgetResizeResult.Cancel -> holder.setHeight(result.originalHeight)
+                            WidgetResizeResult.OpenMenu -> v.performClick()
+                        }
+                    }
+                    gesture = null
                     true
                 }
                 else -> false
@@ -298,6 +320,7 @@ class HomeGridAdapter(
         val missing: TextView = view.findViewById(R.id.widget_missing)
         val outline: View = view.findViewById(R.id.widget_outline)
         val handle: View = view.findViewById(R.id.widget_resize)
+        val handleIndicator: View = view.findViewById(R.id.widget_resize_indicator)
 
         fun setHeight(h: Int) {
             val lp = itemView.layoutParams
