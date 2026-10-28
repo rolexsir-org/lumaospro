@@ -71,6 +71,9 @@ import com.lumaos.pro.launcher.ui.glass.LumaGlassChoice
 import com.lumaos.pro.launcher.ui.glass.LumaGlassPreviewFrame
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSectionTitle
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
+import com.lumaos.pro.launcher.ui.glass.LumaGlassSwitchRow
+import com.lumaos.pro.launcher.wallpaper.WallpaperActivity
+import com.lumaos.pro.launcher.wallpaper.WallpaperImageStore
 import com.lumaos.pro.launcher.ui.theme.GlassGeometry
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaGlassIdentity
@@ -117,7 +120,8 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     val applying = applyState == StudioApplyState.APPLYING
 
     val environment by viewModel.themes.environment.collectAsState()
-    val wallpaper by viewModel.themes.wallpaper.seeds.collectAsState()
+    val wallpaper = environment.wallpaper
+    val activeWallpaper by viewModel.themes.activeWallpaper.collectAsState()
     val effectsDecision by viewModel.effectsState.collectAsState()
     val packs by viewModel.iconPacks.collectAsState()
     val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
@@ -134,19 +138,35 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         value = viewModel.loadPreviewIcons(resolved, draft.iconPack, previewDepth)
     }
     val context = LocalContext.current
-    val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, resolved.id, resolved.backdrop) {
-        value = if (resolved.backdrop == Backdrop.LUMA) {
-            WallpaperArt.forTheme(resolved.id)?.let { art ->
+    val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        null,
+        resolved.id,
+        resolved.backdrop,
+        activeWallpaper?.id
+    ) {
+        val selectedEntry = activeWallpaper
+        value = when {
+            selectedEntry != null && (resolved.backdrop == Backdrop.LUMA || resolved.backdrop == Backdrop.WALLPAPER) -> {
                 runCatching {
-                    val res = WallpaperArtResources.res(art)
-                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
-                    context.resources.openRawResource(res).use {
-                        android.graphics.BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
-                    }
+                    WallpaperImageStore(context.applicationContext).preview(selectedEntry, 640)?.asImageBitmap()
                 }.getOrNull()
             }
-        } else null
+            resolved.backdrop == Backdrop.LUMA -> {
+                WallpaperArt.forTheme(resolved.id)?.let { art ->
+                    runCatching {
+                        val res = WallpaperArtResources.res(art)
+                        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                        context.resources.openRawResource(res).use {
+                            android.graphics.BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
+                        }
+                    }.getOrNull()
+                }
+            }
+            else -> null
+        }
     }
+    val previewFocalX = activeWallpaper?.focalX ?: WallpaperArt.forTheme(resolved.id)?.focalX
+    val previewFocalY = activeWallpaper?.focalY ?: WallpaperArt.forTheme(resolved.id)?.focalY
     val homeIcons = remember(bitmaps) { bitmaps.home.map { it.asImageBitmap() } }
     val dockIcons = remember(bitmaps) { bitmaps.dock.map { it.asImageBitmap() } }
 
@@ -182,6 +202,8 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     dockIcons = dockIcons,
                     wallpaper = wallpaper,
                     artwork = artwork,
+                    focalX = previewFocalX,
+                    focalY = previewFocalY,
                     timeText = timeText,
                     dateText = dateText,
                     readout = activeProfile.title,
@@ -359,11 +381,40 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
 
             StudioSection(stringResource(R.string.studio_accent)) {
+                LumaGlassSwitchRow(
+                    label = stringResource(R.string.wallpaper_dynamic_title),
+                    subtitle = stringResource(R.string.wallpaper_dynamic_subtitle),
+                    checked = draft.theme.dynamicWallpaperColors,
+                    onCheckedChange = { enabled ->
+                        draft = draft.copy(
+                            theme = draft.theme
+                                .withDynamicWallpaperColors(enabled)
+                                .let { next ->
+                                    if (enabled) next.copy(accentOverride = null, backgroundOverride = null)
+                                    else next
+                                }
+                        )
+                    },
+                    theme = resolved
+                )
+                Spacer(Modifier.height(LumaSpacing.elementGap))
                 SwatchRow(
                     colors = ThemePresets.ACCENT_SWATCHES,
                     selected = draft.theme.accentOverride,
                     defaultLabel = stringResource(R.string.studio_theme_default),
                     onSelected = { draft = draft.copy(theme = draft.theme.copy(accentOverride = it)) }
+                )
+                Spacer(Modifier.height(LumaSpacing.elementGap))
+                LumaGlassChoice(
+                    theme = resolved,
+                    label = stringResource(R.string.wallpaper_studio_title),
+                    caption = activeWallpaper?.let { "${it.title} · ${it.mood.ifBlank { it.description }}" }
+                        ?: stringResource(R.string.wallpaper_discover_caption),
+                    selected = activeWallpaper != null,
+                    onClick = {
+                        context.startActivity(android.content.Intent(context, WallpaperActivity::class.java))
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -446,16 +497,17 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                         defaultLabel = stringResource(R.string.studio_theme_default),
                         onSelected = { draft = draft.copy(theme = draft.theme.copy(backgroundOverride = it)) }
                     )
+                    val hasLumaArt = WallpaperArt.forTheme(resolved.id) != null || activeWallpaper != null
                     val backdropOptions = listOf<Backdrop?>(null, Backdrop.WALLPAPER, Backdrop.THEME) +
-                        listOfNotNull(Backdrop.LUMA.takeIf { WallpaperArt.forTheme(resolved.id) != null })
+                        listOfNotNull(Backdrop.LUMA.takeIf { hasLumaArt })
                     StudioChoice(
                         label = stringResource(R.string.studio_backdrop),
-                        selected = backdropLabel(draft.theme.backdrop, resolved.id),
+                        selected = backdropLabel(draft.theme.backdrop, resolved.id, hasLumaArt),
                         options = backdropOptions,
-                        optionLabel = { backdropLabel(it, resolved.id) },
+                        optionLabel = { backdropLabel(it, resolved.id, hasLumaArt) },
                         onSelected = { draft = draft.copy(theme = draft.theme.copy(backdrop = it)) }
                     )
-                    if (WallpaperArt.forTheme(resolved.id) != null) {
+                    if (hasLumaArt) {
                         Text(
                             stringResource(R.string.studio_luma_wallpaper_note),
                             style = MaterialTheme.typography.bodySmall,
@@ -790,13 +842,17 @@ private fun typeLabel(value: TypeStyle): String = stringResource(
     }
 )
 
-/** Backdrop labels, including the bundled LumaOS wallpaper only where one exists. */
+/** Backdrop labels, including the bundled or Studio-selected LumaOS wallpaper when available. */
 @Composable
-private fun backdropLabel(value: Backdrop?, themeId: ThemeId): String = when (value) {
+private fun backdropLabel(
+    value: Backdrop?,
+    themeId: ThemeId,
+    hasSelectedArtwork: Boolean = false
+): String = when (value) {
     null -> stringResource(R.string.studio_theme_default)
     Backdrop.WALLPAPER -> stringResource(R.string.studio_backdrop_wallpaper)
     Backdrop.THEME -> stringResource(R.string.studio_backdrop_theme)
-    Backdrop.LUMA -> if (WallpaperArt.forTheme(themeId) != null) {
+    Backdrop.LUMA -> if (WallpaperArt.forTheme(themeId) != null || hasSelectedArtwork) {
         stringResource(R.string.studio_backdrop_luma)
     } else {
         stringResource(R.string.studio_backdrop_theme)

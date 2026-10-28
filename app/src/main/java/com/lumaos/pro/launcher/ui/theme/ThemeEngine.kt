@@ -81,7 +81,14 @@ data class ThemeSettings(
     /** Luma Glass defaults to the real system wallpaper, with a legibility scrim. */
     val backdrop: Backdrop? = Backdrop.WALLPAPER,
     /** Context profiles that force a theme while active (e.g. Sleep -> Obsidian). */
-    val profileThemes: Map<ContextProfile, ThemeId> = emptyMap()
+    val profileThemes: Map<ContextProfile, ThemeId> = emptyMap(),
+    /**
+     * When true, derives surface, background, border and accent seeds from the
+     * active wallpaper while preserving the chosen [ThemeId]'s geometry, blur,
+     * typography and motion character. Turning this off returns cleanly to the
+     * preset and any manual [accentOverride] / [backgroundOverride].
+     */
+    val dynamicWallpaperColors: Boolean = false
 ) {
     /** Which preset is in force right now. */
     fun effectiveThemeId(systemDark: Boolean, minuteOfDay: Int, profile: ContextProfile?): ThemeId {
@@ -102,13 +109,19 @@ data class ThemeSettings(
      * icon treatment, backdrop, or per-profile choices.
      */
     fun withPreset(id: ThemeId): ThemeSettings = copy(themeId = id, switching = ThemeSwitching.FIXED)
+
+    /** Toggle automatic wallpaper-derived theming while preserving preset identity. */
+    fun withDynamicWallpaperColors(enabled: Boolean): ThemeSettings =
+        copy(dynamicWallpaperColors = enabled)
 }
 
 data class ThemeEnvironment(
     val systemDark: Boolean,
     val minuteOfDay: Int,
     val profile: ContextProfile? = null,
-    val wallpaper: WallpaperSeeds? = null
+    val wallpaper: WallpaperSeeds? = null,
+    /** True when an explicit Wallpaper Studio artwork or photo is active for Luma Home. */
+    val hasSelectedArtwork: Boolean = false
 )
 
 /**
@@ -132,15 +145,22 @@ object ThemeEngine {
 
     fun resolve(settings: ThemeSettings, env: ThemeEnvironment): ResolvedTheme {
         val id = settings.effectiveThemeId(env.systemDark, env.minuteOfDay, env.profile)
-        val base = if (id == ThemeId.CHROMA) chromaSpec(env.wallpaper, env.systemDark) else ThemePresets.of(id)
+        val rawBase = ThemePresets.of(id)
+        val dynamicActive = id == ThemeId.CHROMA || (settings.dynamicWallpaperColors && env.wallpaper != null)
+        val base = if (dynamicActive) {
+            wallpaperSpec(rawBase, env.wallpaper, env.systemDark)
+        } else {
+            rawBase
+        }
         val background = settings.backgroundOverride?.let { ColorMath.opaque(it) } ?: base.background
         val dark = if (settings.backgroundOverride != null) ColorMath.isDark(background) else base.dark
         val accent = settings.accentOverride?.let { ColorMath.opaque(it) } ?: base.accent
-        // LUMA is only meaningful for themes with bundled artwork. A backup or
-        // an older preference that asks for it elsewhere falls back to the
-        // theme's own atmosphere instead of a blank backdrop.
+        // LUMA is meaningful for themes with bundled artwork or when the user has
+        // chosen an active Wallpaper Studio item. An older preference without
+        // either falls back to the theme's own atmosphere instead of a blank frame.
         val requestedBackdrop = settings.backdrop ?: base.defaultBackdrop
-        val backdrop = if (requestedBackdrop == Backdrop.LUMA && WallpaperArt.forTheme(id) == null) {
+        val hasLumaArt = WallpaperArt.forTheme(id) != null || env.hasSelectedArtwork
+        val backdrop = if (requestedBackdrop == Backdrop.LUMA && !hasLumaArt) {
             Backdrop.THEME
         } else {
             requestedBackdrop
@@ -158,15 +178,16 @@ object ThemeEngine {
                 min(Oklch.fromArgb(background).c, 0.03)
             } else base.neutralChroma
         )
-        // Authored v3.2 roles are used whenever the user has not replaced the
-        // theme's own accent or background; a custom colour falls back to the
-        // seed-derived path, which can guarantee contrast for any input.
+        // Authored v3.2 roles are used whenever dynamic wallpaper derivation is off
+        // and the user has not replaced the theme's own accent or background;
+        // dynamic or custom colours use the seed-derived path, which guarantees
+        // contrast for arbitrary inputs while keeping the theme's geometry/blur tokens.
         val tokens = base.tokens
-        val curated = settings.accentOverride == null && settings.backgroundOverride == null
+        val curated = !dynamicActive && settings.accentOverride == null && settings.backgroundOverride == null
         val colors = if (tokens != null && curated) {
-            authoredColors(spec, tokens, backdrop, env.wallpaper)
+            authoredColors(spec, tokens, backdrop, env.wallpaper, env.hasSelectedArtwork)
         } else {
-            deriveColors(spec, backdrop, env.wallpaper)
+            deriveColors(spec, backdrop, env.wallpaper, env.hasSelectedArtwork)
         }
         return ResolvedTheme(
             id = id,
@@ -180,34 +201,90 @@ object ThemeEngine {
             surfaceStyle = base.surfaceStyle,
             backdrop = backdrop,
             cornerScale = base.cornerScale,
-            tokens = tokens
+            tokens = tokens,
+            wallpaperSeeds = env.wallpaper
         )
     }
 
-    /** Wallpaper-derived spec. Falls back to the static Chroma seeds when colours are unknown. */
-    fun chromaSpec(seeds: WallpaperSeeds?, systemDark: Boolean): ThemeSpec {
-        val base = ThemePresets.CHROMA
+    /** Wallpaper-derived spec for [ThemePresets.CHROMA]. */
+    fun chromaSpec(seeds: WallpaperSeeds?, systemDark: Boolean): ThemeSpec =
+        wallpaperSpec(ThemePresets.CHROMA, seeds, systemDark)
+
+    /**
+     * Derives coordinated dark/light polarity, unmuddied neutral surfaces, background
+     * and vivid-yet-controlled accent seeds from [seeds] while preserving [base]'s
+     * typography, motion character, geometry, and blur material.
+     */
+    fun wallpaperSpec(base: ThemeSpec, seeds: WallpaperSeeds?, systemDark: Boolean): ThemeSpec {
         if (seeds == null) {
-            return if (systemDark) base else base.copy(dark = false, background = 0xFFF3F5F8.toInt())
+            return if (base.id == ThemeId.CHROMA && !systemDark) {
+                base.copy(dark = false, background = 0xFFF3F5F8.toInt())
+            } else {
+                base
+            }
         }
-        val p = Oklch.fromArgb(seeds.primary)
+        val dom = Oklch.fromArgb(ColorMath.opaque(seeds.primary))
         val dark = seeds.supportsDarkText?.let { !it } ?: systemDark
-        val hue = p.h
-        val chroma = p.c.coerceIn(0.04, 0.16)
-        val secondaryHue = seeds.secondary
-            ?.let { Oklch.fromArgb(it) }
-            ?.takeIf { it.c > 0.02 && Oklch.hueDistance(it.h, hue) > 0.35 }
-            ?.h ?: (hue + 1.0)
+        val accentSource = ColorMath.opaque(seeds.accent ?: seeds.primary)
+        val accLch = Oklch.fromArgb(accentSource)
+        val isMonochrome = accLch.c < 0.022 && dom.c < 0.022
+        val accentHue = if (accLch.c >= 0.015) accLch.h else dom.h
+        val domHue = if (dom.c >= 0.012) dom.h else accentHue
+
+        // Warm yellow/ochre hues (~55..125 deg -> 0.96..2.18 rad) turn muddy olive
+        // if darkened at moderate chroma, so tighten neutral chroma in that band.
+        val normDomHue = ((domHue % (Math.PI * 2.0)) + Math.PI * 2.0) % (Math.PI * 2.0)
+        val warmOchreZone = normDomHue in 0.96..2.18
+        val maxNeutralChroma = when {
+            isMonochrome -> 0.005
+            dark && warmOchreZone -> 0.013
+            dark -> 0.024
+            warmOchreZone -> 0.011
+            else -> 0.016
+        }
+        val neutralChroma = if (isMonochrome) {
+            min(dom.c * 0.4, 0.005)
+        } else {
+            (max(dom.c, accLch.c * 0.45) * if (dark) 0.22 else 0.16).coerceIn(0.006, maxNeutralChroma)
+        }
+
+        val keepAmoled = base.amoled && dark && dom.l < 0.12
+        val background = when {
+            keepAmoled -> ColorMath.BLACK
+            dark -> {
+                val bgL = (0.115 + dom.l.coerceIn(0.0, 0.35) * 0.14).coerceIn(0.115, 0.165)
+                Oklch(bgL, min(neutralChroma * 1.15, 0.026), domHue).toArgb()
+            }
+            else -> Oklch(0.965, min(neutralChroma, 0.014), domHue).toArgb()
+        }
+
+        val accent = if (isMonochrome) {
+            val monoC = max(accLch.c, dom.c).coerceIn(0.006, 0.024)
+            if (dark) Oklch(0.84, monoC, accentHue).toArgb()
+            else Oklch(0.38, monoC, accentHue).toArgb()
+        } else {
+            val rawC = max(accLch.c, 0.055)
+            if (dark) Oklch(0.81, (rawC * 1.22).coerceIn(0.075, 0.150), accentHue).toArgb()
+            else Oklch(0.46, (rawC * 1.28).coerceIn(0.080, 0.155), accentHue).toArgb()
+        }
+
+        val secondaryCandidate = listOfNotNull(seeds.secondary, seeds.tertiary)
+            .map { Oklch.fromArgb(ColorMath.opaque(it)) }
+            .firstOrNull { it.c > 0.022 && Oklch.hueDistance(it.h, accentHue) > 0.35 }
+        val secondaryHue = secondaryCandidate?.h ?: (accentHue + 0.85)
+        val secondaryChroma = if (isMonochrome) 0.016 else (secondaryCandidate?.c?.coerceIn(0.06, 0.12) ?: 0.09)
+        val secondary = if (dark) Oklch(0.80, secondaryChroma, secondaryHue).toArgb()
+        else Oklch(0.50, min(secondaryChroma + 0.01, 0.12), secondaryHue).toArgb()
+
+        val neutralTint = Oklch(if (dark) 0.50 else 0.65, neutralChroma.coerceAtLeast(0.005), domHue).toArgb()
         return base.copy(
             dark = dark,
-            background = if (dark) Oklch(0.17, min(chroma * 0.25, 0.03), hue).toArgb()
-            else Oklch(0.965, min(chroma * 0.12, 0.015), hue).toArgb(),
-            accent = if (dark) Oklch(0.82, min(chroma * 1.2, 0.14), hue).toArgb()
-            else Oklch(0.46, min(chroma * 1.3, 0.15), hue).toArgb(),
-            secondary = if (dark) Oklch(0.80, 0.09, secondaryHue).toArgb()
-            else Oklch(0.50, 0.10, secondaryHue).toArgb(),
-            neutralTint = seeds.primary,
-            neutralChroma = min(chroma * 0.2, 0.03)
+            amoled = keepAmoled,
+            background = background,
+            accent = accent,
+            secondary = secondary,
+            neutralTint = neutralTint,
+            neutralChroma = neutralChroma
         )
     }
 
@@ -236,7 +313,8 @@ object ThemeEngine {
         spec: ThemeSpec,
         tokens: ThemeTokens,
         backdrop: Backdrop,
-        wallpaper: WallpaperSeeds?
+        wallpaper: WallpaperSeeds?,
+        hasSelectedArtwork: Boolean = false
     ): ThemeColors {
         val t = tokens.colors
         val surface0 = ColorMath.opaque(t.background1)
@@ -249,6 +327,7 @@ object ThemeEngine {
             spec = spec,
             backdrop = backdrop,
             wallpaper = wallpaper,
+            hasSelectedArtwork = hasSelectedArtwork,
             neutral = neutralFn(spec),
             surfaces = intArrayOf(surface0, surface1, surface2, surface3),
             text = RawText(ColorMath.opaque(t.text1), ColorMath.opaque(t.text2), ColorMath.opaque(t.text3)),
@@ -266,7 +345,12 @@ object ThemeEngine {
         )
     }
 
-    private fun deriveColors(spec: ThemeSpec, backdrop: Backdrop, wallpaper: WallpaperSeeds?): ThemeColors {
+    private fun deriveColors(
+        spec: ThemeSpec,
+        backdrop: Backdrop,
+        wallpaper: WallpaperSeeds?,
+        hasSelectedArtwork: Boolean = false
+    ): ThemeColors {
         val neutral = neutralFn(spec)
         val bg = spec.background
         val bgL = Oklch.fromArgb(bg).l
@@ -324,6 +408,7 @@ object ThemeEngine {
             spec = spec,
             backdrop = backdrop,
             wallpaper = wallpaper,
+            hasSelectedArtwork = hasSelectedArtwork,
             neutral = neutral,
             surfaces = intArrayOf(surface0, surface1, surface2, surface3),
             text = RawText(onSurface, muted, faint),
@@ -347,6 +432,7 @@ object ThemeEngine {
         spec: ThemeSpec,
         backdrop: Backdrop,
         wallpaper: WallpaperSeeds?,
+        hasSelectedArtwork: Boolean = false,
         neutral: (Double, Double) -> Int,
         surfaces: IntArray,
         text: RawText,
@@ -399,7 +485,11 @@ object ThemeEngine {
             // light/dark property (bundled art knows itself; system wallpaper
             // provides a platform hint when available) and back it with a shadow.
             val lightWallpaper = if (backdrop == Backdrop.LUMA) {
-                WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+                if (hasSelectedArtwork) {
+                    wallpaper?.supportsDarkText ?: WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+                } else {
+                    WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+                }
             } else {
                 wallpaper?.supportsDarkText ?: false
             }

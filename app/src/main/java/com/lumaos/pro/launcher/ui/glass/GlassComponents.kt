@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.lumaos.pro.launcher.ui.theme.ColorMath
@@ -623,3 +624,57 @@ fun LumaGlassPreviewFrame(
 ) {
     LumaGlassSurface(theme, GlassRole.PRIMARY, modifier, content = content)
 }
+
+@Composable
+fun LumaGlassDialog(
+    theme: ResolvedTheme,
+    title: String,
+    message: String,
+    confirmLabel: String,
+    dismissLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    destructive: Boolean = false
+) {
+    val colors = rememberGlassSpec(theme, GlassRole.PRIMARY).rest
+    Dialog(onDismissRequest = onDismiss) {
+        LumaGlassSurface(theme, GlassRole.PRIMARY, Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(GlassGeometry.GUTTER_DP.dp)) {
+                Text(
+                    title,
+                    color = Color(colors.content),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    message,
+                    color = Color(colors.muted),
+                    fontSize = 14.sp
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LumaGlassChoice(
+                        theme = theme,
+                        label = dismissLabel,
+                        selected = false,
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
+                    LumaGlassChoice(
+                        theme = theme,
+                        label = confirmLabel,
+                        selected = true,
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        caption = if (destructive) null else null
+                    )
+                }
+            }
+        }
+    }
+}
+

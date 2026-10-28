@@ -153,7 +153,8 @@ data class LumaGlassAccent(
         switching = ThemeSwitching.SYSTEM,
         accentOverride = color,
         backgroundOverride = null,
-        backdrop = Backdrop.WALLPAPER
+        backdrop = Backdrop.WALLPAPER,
+        dynamicWallpaperColors = false
     )
 }
 
@@ -188,14 +189,31 @@ object GlassBackdrop {
     fun scrim(theme: ResolvedTheme): GlassScrim {
         val darkText = ColorMath.isDark(ColorMath.opaque(theme.colors.homeForeground))
         val tint = if (darkText) ColorMath.WHITE else ColorMath.BLACK
+        val seeds = theme.wallpaperSeeds
+        val topLum = seeds?.topLuminance
+        val botLum = seeds?.bottomLuminance
+        val topAlpha = when {
+            !darkText && topLum != null && topLum > 0.30f ->
+                (0.08f + (topLum - 0.30f) * 0.55f).coerceIn(0.08f, 0.34f)
+            darkText && topLum != null && topLum < 0.25f ->
+                (0.08f + (0.25f - topLum) * 0.50f).coerceIn(0.08f, 0.30f)
+            else -> 0.08f
+        }
+        val bottomAlpha = when {
+            !darkText && botLum != null && botLum > 0.30f ->
+                (0.12f + (botLum - 0.30f) * 0.55f).coerceIn(0.12f, 0.38f)
+            darkText && botLum != null && botLum < 0.25f ->
+                (0.12f + (0.25f - botLum) * 0.50f).coerceIn(0.12f, 0.34f)
+            else -> 0.12f
+        }
         return GlassScrim(
             tint = tint,
             // The atmosphere view already paints the wallpaper legibility
-            // gradients. This is a very light material veil, not a second
-            // opaque scrim.
-            top = ColorMath.withAlpha(tint, 0.08f),
+            // gradients. This is a light material veil that reinforces split-
+            // horizon regions only when the wallpaper requires it.
+            top = ColorMath.withAlpha(tint, topAlpha),
             center = ColorMath.withAlpha(tint, 0.01f),
-            bottom = ColorMath.withAlpha(tint, 0.12f)
+            bottom = ColorMath.withAlpha(tint, bottomAlpha)
         )
     }
 }
@@ -237,22 +255,40 @@ object GlassMaterials {
         val shapeScale = (theme.radius(RadiusRole.MEDIUM) / 16f).coerceIn(0.78f, 1.15f)
         val blurAvailable = capabilities.translucency && capabilities.blur && theme.usesBlur
         val themeBlur = theme.blurDp.coerceIn(0f, 34f)
-        val darkText = ColorMath.isDark(ColorMath.opaque(theme.colors.homeForeground))
-        val fillTint = if (darkText) ColorMath.WHITE else ColorMath.BLACK
-        val edgeTint = if (darkText) ColorMath.BLACK else ColorMath.WHITE
+        // Glass surfaces carry theme.colors.onSurface, so their base plate polarity
+        // must match !theme.isDark (not homeForeground, which flips independently on
+        // manual dark-theme-over-light-wallpaper combinations).
+        val surfaceDarkText = !theme.isDark
+        val wallpaperDarkText = ColorMath.isDark(ColorMath.opaque(theme.colors.homeForeground))
+        val crossPolarity = theme.backdrop.usesArtwork && (surfaceDarkText != wallpaperDarkText)
+        val fillAnchor = if (surfaceDarkText) ColorMath.WHITE else ColorMath.BLACK
+        val edgeAnchor = if (surfaceDarkText) ColorMath.BLACK else ColorMath.WHITE
+        val surfaceTinted = ColorMath.lerp(
+            ColorMath.opaque(fillAnchor),
+            ColorMath.opaque(theme.colors.surface1),
+            0.34f
+        )
         val identityTint = ColorMath.lerp(
-            ColorMath.opaque(fillTint),
+            surfaceTinted,
             ColorMath.opaque(theme.colors.accent),
-            0.025f
+            0.045f
+        )
+        val edgeTint = ColorMath.lerp(
+            ColorMath.opaque(edgeAnchor),
+            ColorMath.opaque(theme.colors.accent),
+            if (theme.isDark) 0.08f else 0.05f
         )
         val accent = ColorMath.opaque(theme.colors.accent)
 
         val specs = GlassRole.entries.associateWith { role ->
             val recipe = RECIPES.getValue(role)
             val baseAlpha = if (theme.isDark) recipe.darkFill else recipe.lightFill
-            val resolvedAlpha = if (!capabilities.translucency) 1f
-            else if (!blurAvailable) (baseAlpha + 0.22f).coerceAtMost(0.94f)
-            else baseAlpha
+            val resolvedAlpha = when {
+                !capabilities.translucency -> 1f
+                !blurAvailable -> (baseAlpha + 0.22f).coerceAtMost(0.94f)
+                crossPolarity -> (baseAlpha + 0.58f).coerceIn(0.76f, 0.90f)
+                else -> baseAlpha
+            }
 
             // Glass is a surface, so its text uses the contrast-checked
             // onSurface role. homeForeground is reserved for clock text drawn

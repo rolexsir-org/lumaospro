@@ -48,6 +48,8 @@ object BackupCodec {
         "icon_style" to ValueType.STRING,
         "icon_pack" to ValueType.STRING,
         "backdrop" to ValueType.STRING,
+        "dynamic_wallpaper_colors" to ValueType.BOOLEAN,
+        "active_wallpaper_id" to ValueType.STRING,
         "effects_pref" to ValueType.STRING,
         "motion_pref" to ValueType.STRING,
         "home_preset" to ValueType.STRING,
@@ -108,6 +110,8 @@ object BackupCodec {
         for ((key, raw) in values.toSortedMap()) {
             val type = expectedType(key) ?: continue
             val value = coerce(raw, type) ?: continue
+            // Private imported photo IDs reference device-local files not carried in backups.
+            if (key == "active_wallpaper_id" && !(value as String).startsWith("art:")) continue
             val stored = if (isLayoutKey(key)) sanitizeLayout(value as String) else value
             settings[key] = linkedMapOf("t" to type.tag, "v" to stored)
         }

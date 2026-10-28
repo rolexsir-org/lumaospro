@@ -63,6 +63,48 @@ class MusicLogicTest {
         }
     }
 
+    @Test fun `dynamic widget glass palette stays WCAG AA legible over white and black across all 30 wallpapers`() {
+        val math = com.lumaos.pro.launcher.ui.theme.ColorMath
+        val engine = com.lumaos.pro.launcher.ui.theme.ThemeEngine
+        val bundled = com.lumaos.pro.launcher.wallpaper.WallpaperCatalog.bundled()
+        for (entry in bundled) {
+            for (dynamic in listOf(true, false)) {
+                for (themeId in listOf(
+                    com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE,
+                    com.lumaos.pro.launcher.ui.theme.ThemeId.PORCELAIN,
+                    com.lumaos.pro.launcher.ui.theme.ThemeId.OBSIDIAN
+                )) {
+                    val resolved = engine.resolve(
+                        com.lumaos.pro.launcher.ui.theme.ThemeSettings(
+                            themeId = themeId,
+                            switching = com.lumaos.pro.launcher.ui.theme.ThemeSwitching.FIXED,
+                            dynamicWallpaperColors = dynamic
+                        ),
+                        com.lumaos.pro.launcher.ui.theme.ThemeEnvironment(
+                            systemDark = true,
+                            minuteOfDay = 0,
+                            wallpaper = entry.precomputedSeeds
+                        )
+                    )
+                    val palette = com.lumaos.pro.launcher.widgets.WidgetGlassPalette.fromTheme(resolved)
+                    for (fill in listOf(palette.fillTop, palette.fillBottom)) {
+                        for (under in listOf(math.WHITE, math.BLACK)) {
+                            val composited = math.composite(fill, under)
+                            assertTrue(
+                                "${entry.id}/$themeId/dyn=$dynamic primary contrast",
+                                math.contrast(palette.primaryText, composited) >= 4.5
+                            )
+                            assertTrue(
+                                "${entry.id}/$themeId/dyn=$dynamic muted contrast",
+                                math.contrast(palette.mutedText, composited) >= 4.5
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun `progress uses real elapsed time and clamps to duration`() {
         assertEquals(4000L, MusicLogic.position(3000, 10000, 1000, 2000, true))
         assertEquals(3000L, MusicLogic.position(3000, 10000, 1000, 2000, false))

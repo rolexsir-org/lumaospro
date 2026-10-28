@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.settings.studio.StudioRoot
+import com.lumaos.pro.launcher.ui.glass.LumaGlassDialog
 import com.lumaos.pro.launcher.ui.glass.LumaGlassTopBar
 
 /**
@@ -72,16 +74,12 @@ class SettingsActivity : ComponentActivity() {
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let(viewModel::exportBackup) }
 
+    private var pendingImportUri by mutableStateOf<android.net.Uri?>(null)
+
     private val importBackupLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri == null) return@registerForActivityResult
-        android.app.AlertDialog.Builder(this)
-            .setTitle(R.string.backup_confirm_title)
-            .setMessage(R.string.backup_confirm_generic)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.backup_confirm_restore) { _, _ -> viewModel.importBackup(uri) }
-            .show()
+        pendingImportUri = uri
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -168,6 +166,20 @@ class SettingsActivity : ComponentActivity() {
                                 1 -> StudioRoot(viewModel = viewModel)
                                 else -> DashboardRoot(viewModel = viewModel)
                             }
+                            pendingImportUri?.let { uri ->
+                                LumaGlassDialog(
+                                    theme = theme,
+                                    title = stringResource(R.string.backup_confirm_title),
+                                    message = stringResource(R.string.backup_confirm_generic),
+                                    confirmLabel = stringResource(R.string.backup_confirm_restore),
+                                    dismissLabel = stringResource(android.R.string.cancel),
+                                    onDismiss = { pendingImportUri = null },
+                                    onConfirm = {
+                                        pendingImportUri = null
+                                        viewModel.importBackup(uri)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -177,6 +189,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        (application as LumaApp).core.themes.refresh()
         // The system emits nothing when the default launcher changes, so the
         // role is re-resolved every time this screen appears.
         viewModel.refreshRoleStatus()

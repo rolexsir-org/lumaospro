@@ -53,8 +53,10 @@ fun HomePreview(
     icons: List<ImageBitmap>,
     dockIcons: List<ImageBitmap>,
     wallpaper: WallpaperSeeds?,
-    /** Bundled wallpaper art for the draft theme, when it has one. */
+    /** Bundled or Studio-selected wallpaper art, when available. */
     artwork: ImageBitmap? = null,
+    focalX: Float? = null,
+    focalY: Float? = null,
     timeText: String,
     dateText: String,
     readout: String,
@@ -62,7 +64,7 @@ fun HomePreview(
 ) {
     val palette = GlassMaterials.palette(
         theme,
-        GlassCapabilities(translucency = true, blur = false, depth = true)
+        GlassCapabilities(translucency = true, blur = theme.usesBlur, depth = true)
     )
     BoxWithConstraints(
         modifier.semantics {
@@ -74,7 +76,7 @@ fun HomePreview(
             val h = size.height
             val c = theme.colors
             val unit = w / 100f
-            drawBackdrop(theme, wallpaper, artwork)
+            drawBackdrop(theme, wallpaper, artwork, focalX, focalY)
 
             // One refined clock/date focal point.
             val top = h * 0.07f
@@ -203,29 +205,27 @@ private fun DrawScope.drawImageFit(img: ImageBitmap, x: Float, y: Float, size: F
     )
 }
 
-private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSeeds?, artwork: ImageBitmap?) {
+private fun DrawScope.drawBackdrop(
+    theme: ResolvedTheme,
+    wallpaper: WallpaperSeeds?,
+    artwork: ImageBitmap?,
+    focalX: Float?,
+    focalY: Float?
+) {
     val w = size.width
     val h = size.height
-    if (theme.backdrop == Backdrop.WALLPAPER) {
-        val colors = listOfNotNull(wallpaper?.primary, wallpaper?.secondary, wallpaper?.tertiary)
-            // No wallpaper colours reported: stand in with the draft theme's own
-            // surface pair rather than inventing a palette.
-            .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
-            .map { Color(it) }
-        drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
-    }
-    if (theme.backdrop == Backdrop.LUMA && artwork != null) {
-        // Centre-crop with the artwork's focal point, exactly as the home screen does.
+    if (artwork != null && (theme.backdrop == Backdrop.LUMA || theme.backdrop == Backdrop.WALLPAPER)) {
+        // Centre-crop with the artwork's focal point, matching WallpaperArtView.
         val art = WallpaperArt.forTheme(theme.id)
-        val focalX = art?.focalX ?: 0.5f
-        val focalY = art?.focalY ?: 0.5f
+        val fx = (focalX ?: art?.focalX ?: 0.5f).coerceIn(0f, 1f)
+        val fy = (focalY ?: art?.focalY ?: 0.5f).coerceIn(0f, 1f)
         val iw = artwork.width.toFloat()
         val ih = artwork.height.toFloat()
         val scale = max(w / iw, h / ih)
         val dw = iw * scale
         val dh = ih * scale
-        val left = (w - dw) * focalX
-        val top = (h - dh) * focalY
+        val left = (w - dw) * fx
+        val top = (h - dh) * fy
         drawImage(
             artwork,
             srcOffset = IntOffset.Zero,
@@ -233,6 +233,19 @@ private fun DrawScope.drawBackdrop(theme: ResolvedTheme, wallpaper: WallpaperSee
             dstOffset = IntOffset(left.toInt(), top.toInt()),
             dstSize = IntSize(dw.toInt(), dh.toInt())
         )
+    } else if (theme.backdrop == Backdrop.WALLPAPER) {
+        val colors = listOfNotNull(
+            wallpaper?.primary,
+            wallpaper?.accent,
+            wallpaper?.secondary,
+            wallpaper?.tertiary
+        )
+            .distinct()
+            // No wallpaper colours reported: stand in with the draft theme's own
+            // surface pair rather than inventing a palette.
+            .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
+            .map { Color(it) }
+        drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
     }
     for (layer in AtmospherePlan.layers(theme, 0.18f, true)) when (layer) {
         is AtmosphereLayer.Solid -> drawRect(Color(layer.color))

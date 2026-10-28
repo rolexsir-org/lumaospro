@@ -82,6 +82,42 @@ class SettingsPersistenceRegressionTest {
     }
 
     @Test
+    fun `applied wallpaper selection dynamic toggle and cached seeds persist cleanly across restarts`() = runBlocking {
+        val file = temporaryFolder.newFile("wallpaper-active.preferences_pb")
+        val firstJob = SupervisorJob()
+        val firstScope = CoroutineScope(firstJob + Dispatchers.Default)
+        try {
+            val prefs = LumaPrefs(dataStore(firstScope, file))
+            prefs.recordAppliedWallpaper(
+                wallpaperId = "art:05_emerald_northern_lights",
+                systemWallpaperId = 77,
+                backdrop = Backdrop.WALLPAPER,
+                enableDynamicColors = true
+            )
+            prefs.setCachedWallpaperSeedsRaw("art:05_emerald_northern_lights|-16775417|-16636633||0|-14444971|0.0|0.11")
+            assertEquals("art:05_emerald_northern_lights", prefs.activeWallpaperId.first())
+            assertEquals(77, prefs.activeWallpaperSystemId.first())
+            assertTrue(prefs.themeSettings.first().dynamicWallpaperColors)
+        } finally { firstJob.cancelAndJoin() }
+
+        val secondJob = SupervisorJob()
+        val secondScope = CoroutineScope(secondJob + Dispatchers.Default)
+        try {
+            val reopened = LumaPrefs(dataStore(secondScope, file))
+            assertEquals("art:05_emerald_northern_lights", reopened.activeWallpaperId.first())
+            assertEquals(77, reopened.activeWallpaperSystemId.first())
+            assertTrue(reopened.themeSettings.first().dynamicWallpaperColors)
+            reopened.setDynamicWallpaperColors(false)
+            assertFalse(reopened.themeSettings.first().dynamicWallpaperColors)
+            reopened.clearActiveWallpaperIfMatches("art:wrong_id")
+            assertEquals("art:05_emerald_northern_lights", reopened.activeWallpaperId.first())
+            reopened.clearActiveWallpaperIfMatches("art:05_emerald_northern_lights")
+            assertEquals(null, reopened.activeWallpaperId.first())
+            assertEquals(null, reopened.activeWallpaperSystemId.first())
+        } finally { secondJob.cancelAndJoin() }
+    }
+
+    @Test
     fun `concurrent favorite edits are atomic and legacy manual restore preserves them`() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
