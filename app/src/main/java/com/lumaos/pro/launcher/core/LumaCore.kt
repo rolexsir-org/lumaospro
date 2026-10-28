@@ -21,7 +21,9 @@ import com.lumaos.pro.launcher.core.apps.ShortcutRepository
 import com.lumaos.pro.launcher.core.usage.LaunchHistoryStore
 import com.lumaos.pro.launcher.effects.EffectsController
 import com.lumaos.pro.launcher.icons.IconPackManager
+import com.lumaos.pro.launcher.launcher.home.WallpaperBitmaps
 import com.lumaos.pro.launcher.ui.theme.ThemeRepository
+import com.lumaos.pro.launcher.wallpaper.WallpaperImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -146,22 +148,28 @@ class LumaCore(private val application: Application) {
         when (level) {
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
-                LumaLog.w("Severe memory pressure (level $level): clearing icon cache")
+                LumaLog.w("Severe memory pressure (level $level): clearing icon & wallpaper caches")
                 iconCache.clear()
+                WallpaperImageStore.clearCache()
+                WallpaperBitmaps.clear()
             }
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
             ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
             ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
             ComponentCallbacks2.TRIM_MEMORY_MODERATE -> {
-                LumaLog.i("Memory pressure (level $level): trimming icon cache")
+                LumaLog.i("Memory pressure (level $level): trimming icon & wallpaper caches")
                 iconCache.trim(fraction = 0.5f, keep = Optimizer.ICON_CACHE_KEEP)
+                WallpaperImageStore.trimCache(0.5f)
+                WallpaperBitmaps.trim(0.5f)
             }
         }
     }
 
     fun onLowMemory() {
-        LumaLog.w("onLowMemory: clearing icon cache")
+        LumaLog.w("onLowMemory: clearing icon & wallpaper caches")
         iconCache.clear()
+        WallpaperImageStore.clearCache()
+        WallpaperBitmaps.clear()
     }
 
     fun shutdown() {

@@ -48,6 +48,27 @@ class BackupCodecTest {
         assertFalse(text.contains("totally_unknown"))
     }
 
+    @Test fun `dynamic wallpaper colors and bundled art id round trip while local photo ids stay excluded`() {
+        val bundledSnapshot = sample + mapOf(
+            "dynamic_wallpaper_colors" to true,
+            "active_wallpaper_id" to "art:17_snow_peaks_at_sunrise",
+            "active_wallpaper_system_id" to 42,
+            "cached_wallpaper_seeds" to "art:17_snow_peaks_at_sunrise|1|2|3|0|4|0.5|0.1"
+        )
+        val encodedBundled = BackupCodec.encode(bundledSnapshot, "0.3.0", 99L)
+        val decodedBundled = BackupCodec.decode(encodedBundled)
+        assertEquals(true, decodedBundled.values["dynamic_wallpaper_colors"])
+        assertEquals("art:17_snow_peaks_at_sunrise", decodedBundled.values["active_wallpaper_id"])
+        assertFalse(encodedBundled.contains("active_wallpaper_system_id"))
+        assertFalse(encodedBundled.contains("cached_wallpaper_seeds"))
+
+        val photoSnapshot = sample + mapOf(
+            "active_wallpaper_id" to "photo:01234567-89ab-cdef-0123-456789abcdef"
+        )
+        val decodedPhoto = BackupCodec.decode(BackupCodec.encode(photoSnapshot, "0.3.0", 100L))
+        assertFalse(decodedPhoto.values.containsKey("active_wallpaper_id"))
+    }
+
     @Test fun `widgets are stripped from exported layouts`() {
         val decoded = BackupCodec.decode(BackupCodec.encode(sample, "0.2.0", 1L))
         val layout = decoded.values["home_layout_personal"] as String

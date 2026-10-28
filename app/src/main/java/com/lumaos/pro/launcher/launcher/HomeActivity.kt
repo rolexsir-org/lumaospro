@@ -904,10 +904,20 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
                 launch {
                     core.themes.theme.collect { t ->
-                        val animate = appliedTheme != null && appliedTheme?.id != t.id && motion.enabled && !motion.reduced
+                        val animate = appliedTheme != null &&
+                            (appliedTheme?.id != t.id || appliedTheme?.colors != t.colors) &&
+                            motion.enabled && !motion.reduced
                         theme = t
                         applyTheme(t, animate)
                         com.lumaos.pro.launcher.widgets.battery.BatteryWidgetProvider.refresh(applicationContext)
+                    }
+                }
+
+                launch {
+                    core.themes.activeWallpaper.collect {
+                        if (appliedTheme != null) {
+                            renderWallpaper(theme)
+                        }
                     }
                 }
 
@@ -1027,6 +1037,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawer.bindChips(viewModel.categories.value, viewModel.filter.value,
             viewModel.suggestionsEnabled.value && core.launchHistory.size > 0, viewModel.categoriesEnabled.value)
         if (::edit.isInitialized) edit.applyTheme()
+        if (::folders.isInitialized) folders.applyTheme()
         refreshAll()
     }
 
@@ -1139,7 +1150,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             placeholderFill = s.disabledSurface, placeholderText = sheetColors.muted,
             pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
-        folderCellConfig = drawerCellConfig
+        val folderColors = glass[GlassRole.FOLDER].rest
+        folderCellConfig = drawerCellConfig.copy(
+            labelColor = folderColors.content,
+            placeholderText = folderColors.muted
+        )
+        undoBar?.let { styleUndoBar(it, t) }
         if (::homeAdapter.isInitialized && !themeAnimating) {
             homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
             homeAdapter.refreshWidgetFrames()
@@ -1149,29 +1165,43 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     /**
-     * Shows the bundled wallpaper for the active theme, or hides the layer and
-     * lets the system wallpaper / atmosphere show through.
+     * Shows the selected Wallpaper Studio artwork (or bundled theme wallpaper)
+     * when `Backdrop.LUMA` is active, or hides the layer and lets the system
+     * wallpaper / atmosphere show through.
      *
      * If an artwork asset cannot be decoded, the home screen restores the theme's
      * own backdrop instead of leaving an empty black surface.
      */
     private fun renderWallpaper(t: ResolvedTheme) {
-        val art = WallpaperArt.forTheme(t.id)
-        val wanted = t.backdrop == Backdrop.LUMA && art != null
-        if (wanted && art != null) {
-            wallpaperArt.visibility = View.VISIBLE
-            backdrop.setFallbackSolid(false)
-            wallpaperArt.show(
-                artwork = art,
-                fallback = t.colors.background,
-                crossfadeMs = if (motion.enabled && !motion.reduced) t.motionProfile.themeChangeMs.toLong() else 0L
-            )
-        } else {
-            wallpaperArt.clear()
-            wallpaperArt.visibility = View.GONE
-            // THEME paints its own solid; WALLPAPER must stay transparent so the
-            // system wallpaper is visible behind the scrims.
-            backdrop.setFallbackSolid(false)
+        val selectedEntry = core.themes.activeWallpaper.value
+        val themeArt = WallpaperArt.forTheme(t.id)
+        val crossfadeMs = if (motion.enabled && !motion.reduced) t.motionProfile.themeChangeMs.toLong() else 0L
+        when {
+            t.backdrop == Backdrop.LUMA && selectedEntry != null -> {
+                wallpaperArt.visibility = View.VISIBLE
+                backdrop.setFallbackSolid(false)
+                wallpaperArt.showEntry(
+                    entry = selectedEntry,
+                    fallback = t.colors.background,
+                    crossfadeMs = crossfadeMs
+                )
+            }
+            t.backdrop == Backdrop.LUMA && themeArt != null -> {
+                wallpaperArt.visibility = View.VISIBLE
+                backdrop.setFallbackSolid(false)
+                wallpaperArt.show(
+                    artwork = themeArt,
+                    fallback = t.colors.background,
+                    crossfadeMs = crossfadeMs
+                )
+            }
+            else -> {
+                wallpaperArt.clear()
+                wallpaperArt.visibility = View.GONE
+                // THEME paints its own solid; WALLPAPER must stay transparent so the
+                // system wallpaper is visible behind the scrims.
+                backdrop.setFallbackSolid(false)
+            }
         }
     }
 
@@ -1210,7 +1240,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerCellConfig = drawerCellConfig.copy(
             typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
         )
-        folderCellConfig = drawerCellConfig
+        val folderColors = glassPalette[GlassRole.FOLDER].rest
+        folderCellConfig = drawerCellConfig.copy(
+            labelColor = folderColors.content,
+            placeholderText = folderColors.muted
+        )
         applyPreset(appearance.preset)
     }
 
@@ -1534,6 +1568,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     // --------------------------------------------------- EditModeController.Host
 
+    override fun glassPalette(): GlassPalette = glassPalette
     override fun depthAllowed(): Boolean = effects.depthTransforms
 
     override fun onEditProgress(progress: Float) {
@@ -2045,6 +2080,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun showUndoBar() {
         val bar = undoBar ?: buildUndoBar().also { undoBar = it }
+        styleUndoBar(bar, theme)
         if (bar.parent == null) {
             homeRoot.addView(
                 bar,
@@ -2084,33 +2120,40 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     private fun buildUndoBar(): LinearLayout {
-        val spec = glassPalette[GlassRole.MENU]
-        val colors = spec.rest
-        val density = resources.displayMetrics.density
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(10), dp(8), dp(10))
             isClickable = true
-            GlassViews.apply(this, spec, density, ripple = false)
             addView(TextView(this@HomeActivity).apply {
                 text = getString(R.string.widget_removed_message)
-                setTextColor(colors.content)
-                typeface = Typefaces.body(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
             })
             addView(TextView(this@HomeActivity).apply {
                 text = getString(R.string.widget_undo)
-                setTextColor(colors.focusRing)
-                typeface = Typefaces.label(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
                 setPadding(dp(14), dp(6), dp(10), dp(6))
                 isClickable = true
                 isFocusable = true
                 contentDescription = getString(R.string.widget_undo_description)
-                background = GlassViews.drawable(glassPalette[GlassRole.SETTINGS_CONTROL], density, ripple = true)
                 setOnClickListener { undoWidgetRemoval() }
             })
+        }.also { styleUndoBar(it, theme) }
+    }
+
+    private fun styleUndoBar(bar: LinearLayout, t: ResolvedTheme) {
+        val spec = glassPalette[GlassRole.MENU]
+        val colors = spec.rest
+        val density = resources.displayMetrics.density
+        GlassViews.apply(bar, spec, density, ripple = false)
+        (bar.getChildAt(0) as? TextView)?.apply {
+            setTextColor(colors.content)
+            typeface = Typefaces.body(t.typography)
+        }
+        (bar.getChildAt(1) as? TextView)?.apply {
+            setTextColor(colors.focusRing)
+            typeface = Typefaces.label(t.typography)
+            background = GlassViews.drawable(glassPalette[GlassRole.SETTINGS_CONTROL], density, ripple = true)
         }
     }
 

@@ -8,8 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
 import com.lumaos.pro.launcher.launcher.HomeActivity
+import com.lumaos.pro.launcher.ui.theme.ColorMath
 import kotlinx.coroutines.flow.first
 
 /** Notifications and DND are opt-in and only affect LumaOS Pro's own context alerts / system filter. */
@@ -37,14 +39,20 @@ object ContextAutomation {
                 context, NOTIFICATION_ID, homeIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val notification = Notification.Builder(context, CHANNEL_ID)
+            val accentColor = (context.applicationContext as? LumaApp)
+                ?.core?.themes?.theme?.value?.colors?.accent
+                ?.let(ColorMath::opaque)
+            val builder = Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(context.getString(R.string.context_notification_title, profile.title))
                 .setContentText(context.getString(R.string.context_notification_body))
                 .setContentIntent(pending)
                 .setAutoCancel(true)
                 .setCategory(Notification.CATEGORY_STATUS)
-                .build()
+            if (accentColor != null) {
+                builder.setColor(accentColor)
+            }
+            val notification = builder.build()
             manager.notify(NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {
             // Notification permission may be denied or revoked between checks.

@@ -9,17 +9,23 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
+import android.util.LruCache
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.launcher.home.WallpaperBitmaps
+import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.WallpaperArtResources
+import com.lumaos.pro.launcher.ui.theme.WallpaperPaletteExtractor
+import com.lumaos.pro.launcher.ui.theme.WallpaperSeeds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -36,10 +42,37 @@ class WallpaperImageStore(private val context: Context) {
             .sortedByDescending { it.lastModified() }
             .mapIndexedNotNull { index, file ->
                 val id = WallpaperCatalog.customId(file.name.removeSuffix(".img")) ?: return@mapIndexedNotNull null
-                WallpaperEntry(id, context.getString(R.string.wallpaper_photo_number, index + 1), context.getString(R.string.wallpaper_private_photo))
+                WallpaperEntry(
+                    id = id,
+                    title = context.getString(R.string.wallpaper_photo_number, index + 1),
+                    description = context.getString(R.string.wallpaper_private_photo),
+                    mood = context.getString(R.string.wallpaper_private_photo),
+                    precomputedSeeds = customSeedsCache[id]
+                )
             }
         WallpaperCatalog.bundled() + photos
     }
+
+    /** Resolves an active `art:...` or `photo:...` ID without scanning the full gallery when possible. */
+    suspend fun findEntry(id: String?): WallpaperEntry? {
+        if (id.isNullOrBlank()) return null
+        WallpaperCatalog.findBundled(id)?.let { return it }
+        if (!id.startsWith("photo:")) return null
+        return withContext(Dispatchers.IO) {
+            val name = WallpaperCatalog.customName(id) ?: return@withContext null
+            val file = File(dir, "$name.img")
+            if (!file.isFile) return@withContext null
+            WallpaperEntry(
+                id = id,
+                title = context.getString(R.string.wallpaper_my_photo),
+                description = context.getString(R.string.wallpaper_private_photo),
+                mood = context.getString(R.string.wallpaper_private_photo),
+                precomputedSeeds = customSeedsCache[id]
+            )
+        }
+    }
+
+    fun customFile(entry: WallpaperEntry): File? = fileFor(entry)?.takeIf { it.isFile }
 
     suspend fun import(uri: Uri): WallpaperEntry = importLock.withLock {
         withContext(Dispatchers.IO) {
@@ -77,17 +110,31 @@ class WallpaperImageStore(private val context: Context) {
                 if (!WallpaperLimits.validSource(bounds.outWidth, bounds.outHeight)) {
                     throw WallpaperException(R.string.wallpaper_bad_image)
                 }
-                // Also verify the encoded file can actually be decoded, not just its header.
+                // Verify the encoded file can actually be decoded and seed its palette in one pass.
                 val options = BitmapFactory.Options().apply {
-                    inSampleSize = WallpaperLimits.sampleSize(bounds.outWidth, bounds.outHeight, 128, 128L * 128)
+                    inSampleSize = WallpaperLimits.sampleSize(bounds.outWidth, bounds.outHeight, 160, 160L * 160)
                 }
                 val probe = temp.inputStream().use { BitmapFactory.decodeStream(it, null, options) }
                     ?: throw WallpaperException(R.string.wallpaper_bad_image)
-                probe.recycle()
+                val extractedSeeds = try {
+                    WallpaperPaletteExtractor.extractFromBitmap(probe)
+                } finally {
+                    probe.recycle()
+                }
                 val name = UUID.randomUUID().toString()
                 val destination = File(dir, "$name.img")
                 if (!temp.renameTo(destination)) throw WallpaperException(R.string.wallpaper_import_failed)
-                WallpaperEntry("photo:$name", context.getString(R.string.wallpaper_my_photo), context.getString(R.string.wallpaper_private_photo))
+                val id = "photo:$name"
+                if (extractedSeeds != null) {
+                    customSeedsCache[id] = extractedSeeds
+                }
+                WallpaperEntry(
+                    id = id,
+                    title = context.getString(R.string.wallpaper_my_photo),
+                    description = context.getString(R.string.wallpaper_private_photo),
+                    mood = context.getString(R.string.wallpaper_private_photo),
+                    precomputedSeeds = extractedSeeds
+                )
             } finally {
                 temp.delete()
             }
@@ -95,40 +142,121 @@ class WallpaperImageStore(private val context: Context) {
     }
 
     suspend fun delete(entry: WallpaperEntry): Boolean = withContext(Dispatchers.IO) {
+        evictCachedFor(entry.id)
+        WallpaperBitmaps.evict(entry.id)
+        customSeedsCache.remove(entry.id)
         fileFor(entry)?.let { !it.exists() || it.delete() } ?: false
     }
 
-    /** Decoding and optional rotation happen on IO, with an upper memory bound. */
+    /**
+     * Decoding and optional EXIF rotation happen on IO, with an upper memory bound.
+     * Gallery-sized thumbnails (`maxEdge <= 640`) are cached in a shared LRU cache so
+     * scrolling or rotating Wallpaper Studio never re-decodes the 30 bundled WebPs;
+     * callers must treat returned preview bitmaps as immutable and non-recyclable.
+     */
     suspend fun preview(entry: WallpaperEntry, maxEdge: Int = 720): Bitmap? = withContext(Dispatchers.IO) {
-        decode(entry, maxEdge, maxEdge.toLong() * maxEdge)
+        val safeEdge = maxEdge.coerceIn(64, WallpaperLimits.MAX_APPLY_EDGE)
+        val cacheable = safeEdge <= 640
+        val cacheKey = "${entry.id}:$safeEdge"
+        if (cacheable) {
+            synchronized(previewCache) {
+                previewCache.get(cacheKey)?.takeIf { !it.isRecycled }
+            }?.let { return@withContext it }
+        }
+        val decoded = decode(entry, safeEdge, safeEdge.toLong() * safeEdge)
+        if (decoded != null && cacheable) {
+            synchronized(previewCache) {
+                previewCache.put(cacheKey, decoded)
+            }
+        }
+        decoded
+    }
+
+    /**
+     * Returns optical [WallpaperSeeds] for [entry], using pre-computed studio seeds
+     * for bundled wallpapers and off-main-thread OKLCH quantization (merged with
+     * `WallpaperColors` on API 27+) for user-imported photos.
+     */
+    suspend fun extractSeeds(entry: WallpaperEntry, bitmap: Bitmap? = null): WallpaperSeeds? {
+        entry.precomputedSeeds?.let { return it }
+        customSeedsCache[entry.id]?.let { return it }
+        return withContext(Dispatchers.Default) {
+            val ownedBitmap = if (bitmap == null || bitmap.isRecycled) {
+                withContext(Dispatchers.IO) { decode(entry, 256, 256L * 256) }
+            } else null
+            val source = ownedBitmap ?: bitmap ?: return@withContext null
+            try {
+                val optical = WallpaperPaletteExtractor.extractFromBitmap(source)
+                val platform = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    runCatching {
+                        WallpaperPaletteExtractor.fromPlatformColors(WallpaperColors.fromBitmap(source)).first
+                    }.getOrNull()
+                } else null
+                val merged = WallpaperPaletteExtractor.merge(platform, optical)
+                if (merged != null && entry.isCustom) {
+                    customSeedsCache[entry.id] = merged
+                }
+                merged
+            } finally {
+                ownedBitmap?.recycle()
+            }
+        }
     }
 
     suspend fun colors(bitmap: Bitmap): List<Int> = withContext(Dispatchers.Default) {
-        if (Build.VERSION.SDK_INT >= 27) {
+        val optical = WallpaperPaletteExtractor.extractFromBitmap(bitmap)
+        val platform = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             runCatching {
-                val colors = WallpaperColors.fromBitmap(bitmap)
-                listOfNotNull(colors.primaryColor.toArgb(), colors.secondaryColor?.toArgb(), colors.tertiaryColor?.toArgb())
-            }.getOrNull()?.takeIf { it.isNotEmpty() } ?: listOf(averageColor(bitmap))
-        } else listOf(averageColor(bitmap))
+                WallpaperPaletteExtractor.fromPlatformColors(WallpaperColors.fromBitmap(bitmap)).first
+            }.getOrNull()
+        } else null
+        val seeds = WallpaperPaletteExtractor.merge(platform, optical)
+        if (seeds != null) {
+            distinctSwatches(listOfNotNull(seeds.accent, seeds.primary, seeds.secondary))
+        } else {
+            listOf(averageColor(bitmap))
+        }
     }
 
-    suspend fun apply(entry: WallpaperEntry, target: WallpaperTarget): Unit = withContext(Dispatchers.IO) {
+    suspend fun colors(entry: WallpaperEntry, bitmap: Bitmap? = null): List<Int> {
+        val seeds = extractSeeds(entry, bitmap) ?: return bitmap?.let { colors(it) } ?: emptyList()
+        return distinctSwatches(listOfNotNull(seeds.accent, seeds.primary, seeds.secondary))
+    }
+
+    /**
+     * Applies [entry] to the requested [target] and returns the platform system
+     * wallpaper ID when the system home wallpaper was updated, or `null` for
+     * lock-only / Luma-Home-only targets.
+     */
+    suspend fun apply(entry: WallpaperEntry, target: WallpaperTarget): Int? = withContext(Dispatchers.IO) {
+        if (target == WallpaperTarget.LUMA_HOME) {
+            // Verify the asset exists and is decodable before marking it active.
+            val check = decodeBoundsOnly(entry)
+            if (!check) throw WallpaperException(R.string.wallpaper_image_unavailable)
+            return@withContext null
+        }
         val manager = WallpaperManager.getInstance(context)
         if (!manager.isWallpaperSupported || !manager.isSetWallpaperAllowed) {
             throw WallpaperException(R.string.wallpaper_not_allowed)
         }
-        val bitmap = try { decode(entry, WallpaperLimits.MAX_APPLY_EDGE, WallpaperLimits.MAX_APPLY_PIXELS) }
-            catch (_: OutOfMemoryError) { null }
+        val bitmap = decode(entry, WallpaperLimits.MAX_APPLY_EDGE, WallpaperLimits.MAX_APPLY_PIXELS)
             ?: throw WallpaperException(R.string.wallpaper_image_unavailable)
         try {
             val flags = when (target) {
                 WallpaperTarget.HOME -> WallpaperManager.FLAG_SYSTEM
                 WallpaperTarget.LOCK -> WallpaperManager.FLAG_LOCK
                 WallpaperTarget.BOTH -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
+                WallpaperTarget.LUMA_HOME -> WallpaperManager.FLAG_SYSTEM
             }
             // Custom photo copies and system-set custom wallpapers are not requested for backup.
-            val id = manager.setBitmap(bitmap, null, !entry.isCustom, flags)
-            if (id <= 0) throw WallpaperException(R.string.wallpaper_apply_failed)
+            val setId = manager.setBitmap(bitmap, null, !entry.isCustom, flags)
+            if (setId <= 0) throw WallpaperException(R.string.wallpaper_apply_failed)
+            if (target == WallpaperTarget.HOME || target == WallpaperTarget.BOTH) {
+                runCatching { manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM) }
+                    .getOrDefault(setId)
+            } else {
+                null
+            }
         } finally {
             bitmap.recycle()
         }
@@ -136,14 +264,65 @@ class WallpaperImageStore(private val context: Context) {
 
     companion object {
         private val importLock = Mutex()
+        private val customSeedsCache = ConcurrentHashMap<String, WallpaperSeeds>()
+
+        // 10 MB thumbnail cache (~25-40 gallery cards) bounded by actual byte count.
+        private val previewCache = object : LruCache<String, Bitmap>(10 * 1024) {
+            override fun sizeOf(key: String, value: Bitmap): Int =
+                (value.allocationByteCount / 1024).coerceAtLeast(1)
+        }
+
+        private fun evictCachedFor(id: String) {
+            synchronized(previewCache) {
+                val keys = previewCache.snapshot().keys.filter { it.startsWith("$id:") }
+                for (key in keys) previewCache.remove(key)
+            }
+        }
+
+        fun trimCache(fraction: Float = 0.5f) {
+            synchronized(previewCache) {
+                val target = (previewCache.size() * fraction.coerceIn(0f, 1f)).toInt()
+                previewCache.trimToSize(target)
+            }
+        }
+
+        fun clearCache() {
+            synchronized(previewCache) { previewCache.evictAll() }
+        }
+
+        private fun distinctSwatches(candidates: List<Int>): List<Int> {
+            val out = ArrayList<Int>(3)
+            for (color in candidates) {
+                val opaque = ColorMath.opaque(color)
+                if (out.none { ColorMath.contrast(it, opaque) < 1.12 }) {
+                    out += opaque
+                } else if (out.none { it == opaque } && out.size < 2) {
+                    out += opaque
+                }
+                if (out.size == 3) break
+            }
+            return out.ifEmpty { candidates.take(1).map(ColorMath::opaque) }
+        }
     }
 
     private fun fileFor(entry: WallpaperEntry): File? =
         WallpaperCatalog.customName(entry.id)?.let { File(dir, "$it.img") }
 
-    private fun open(entry: WallpaperEntry): InputStream? =
-        if (entry.art != null) context.resources.openRawResource(WallpaperArtResources.res(entry.art))
-        else fileFor(entry)?.takeIf { it.isFile }?.inputStream()
+    private fun open(entry: WallpaperEntry): InputStream? = when {
+        !entry.isCustom -> WallpaperArtResources.resForEntry(entry)?.let { resId ->
+            runCatching { context.resources.openRawResource(resId) }.getOrNull()
+        }
+        else -> fileFor(entry)?.takeIf { it.isFile }?.let { file ->
+            runCatching { file.inputStream() }.getOrNull()
+        }
+    }
+
+    private fun decodeBoundsOnly(entry: WallpaperEntry): Boolean {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        val header = open(entry) ?: return false
+        header.use { BitmapFactory.decodeStream(it, null, bounds) }
+        return WallpaperLimits.validSource(bounds.outWidth, bounds.outHeight)
+    }
 
     private fun decode(entry: WallpaperEntry, maxEdge: Int, maxPixels: Long): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -152,14 +331,13 @@ class WallpaperImageStore(private val context: Context) {
         val header = open(entry) ?: return null
         header.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (!WallpaperLimits.validSource(bounds.outWidth, bounds.outHeight)) return null
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = WallpaperLimits.sampleSize(bounds.outWidth, bounds.outHeight, maxEdge, maxPixels)
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-        val bitmap = open(entry)?.use { BitmapFactory.decodeStream(it, null, options) } ?: return null
+        val baseSample = WallpaperLimits.sampleSize(bounds.outWidth, bounds.outHeight, maxEdge, maxPixels)
+        val bitmap = decodeWithFallback(entry, baseSample) ?: return null
         val orientation = fileFor(entry)?.let { file ->
-            runCatching { ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
-                .getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+            runCatching {
+                ExifInterface(file.absolutePath)
+                    .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
         } ?: ExifInterface.ORIENTATION_NORMAL
         val matrix = Matrix()
         when (orientation) {
@@ -176,9 +354,32 @@ class WallpaperImageStore(private val context: Context) {
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
                 if (it !== bitmap) bitmap.recycle()
             }
+        } catch (_: OutOfMemoryError) {
+            bitmap
         } catch (t: Throwable) {
             bitmap.recycle()
             throw t
+        }
+    }
+
+    private fun decodeWithFallback(entry: WallpaperEntry, sampleSize: Int): Bitmap? {
+        val primaryOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        try {
+            return open(entry)?.use { BitmapFactory.decodeStream(it, null, primaryOptions) }
+        } catch (_: OutOfMemoryError) {
+            // Fall through to memory-conservative RGB_565 decode at 2x downsample.
+        }
+        val fallbackOptions = BitmapFactory.Options().apply {
+            inSampleSize = (sampleSize * 2).coerceAtLeast(2)
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        return try {
+            open(entry)?.use { BitmapFactory.decodeStream(it, null, fallbackOptions) }
+        } catch (_: OutOfMemoryError) {
+            null
         }
     }
 
@@ -191,9 +392,17 @@ class WallpaperImageStore(private val context: Context) {
             val c = bitmap.getPixel(x, y)
             r += (c ushr 16) and 255; g += (c ushr 8) and 255; b += c and 255; count++
         }
+        if (count == 0L) return ColorMath.BLACK
         return (0xff000000L or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)).toInt()
     }
 }
 
-enum class WallpaperTarget { HOME, LOCK, BOTH }
+enum class WallpaperTarget {
+    HOME,
+    LOCK,
+    BOTH,
+    /** Applies inside LumaOS Pro's Home surface (`Backdrop.LUMA`) without altering the system wallpaper. */
+    LUMA_HOME
+}
+
 class WallpaperException(val messageRes: Int) : IOException()

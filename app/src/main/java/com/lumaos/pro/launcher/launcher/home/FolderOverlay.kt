@@ -1,6 +1,7 @@
 package com.lumaos.pro.launcher.launcher.home
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -44,6 +45,7 @@ class FolderOverlay(
 ) {
     interface Host {
         fun theme(): ResolvedTheme
+        fun glassPalette(): com.lumaos.pro.launcher.ui.theme.GlassPalette
         fun motion(): com.lumaos.pro.launcher.motion.MotionPolicy
         fun translucency(): Boolean
         fun folderCellConfig(): CellConfig
@@ -57,7 +59,11 @@ class FolderOverlay(
     private fun dp(v: Float) = (v * dpScale).toInt()
 
     private var overlay: FrameLayout? = null
+    private var scrimView: View? = null
     private var panel: LinearLayout? = null
+    private var smartTitleView: TextView? = null
+    private var smartHintView: TextView? = null
+    private var emptyView: TextView? = null
     private var adapter: AppEntryAdapter? = null
     private var folderId: String? = null
     private var titleField: EditText? = null
@@ -70,14 +76,7 @@ class FolderOverlay(
         closeImmediately()
         val theme = host.theme()
         val c = theme.colors
-        val palette = GlassMaterials.palette(
-            theme,
-            GlassCapabilities(
-                translucency = host.translucency(),
-                blur = host.translucency(),
-                depth = true
-            )
-        )
+        val palette = host.glassPalette()
         val folderSpec = palette[GlassRole.FOLDER]
         val colors = folderSpec.rest
         folderId = id
@@ -89,6 +88,7 @@ class FolderOverlay(
             setOnClickListener { close() }
             contentDescription = context.getString(R.string.folder_close_description)
         }
+        scrimView = scrim
         ov.addView(scrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val p = LinearLayout(context).apply {
@@ -99,25 +99,31 @@ class FolderOverlay(
         GlassViews.apply(p, folderSpec, dpScale, ripple = false)
 
         if (smart) {
-            p.addView(TextView(context).apply {
+            val st = TextView(context).apply {
                 text = name
                 setTextColor(colors.content)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
                 letterSpacing = theme.typography.titleTracking
                 setPadding(dp(6f), 0, dp(6f), 0)
-            })
-            p.addView(TextView(context).apply {
+            }
+            val sh = TextView(context).apply {
                 text = context.getString(R.string.smart_folder_hint)
                 setTextColor(colors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
                 typeface = Typefaces.body(theme.typography)
                 setPadding(dp(6f), dp(2f), dp(6f), dp(8f))
-            })
+            }
+            smartTitleView = st
+            smartHintView = sh
+            p.addView(st)
+            p.addView(sh)
         } else {
             titleField = EditText(context).apply {
                 setText(name)
                 setTextColor(colors.content)
+                setHintTextColor(colors.muted)
+                highlightColor = ColorMath.withAlpha(colors.focusRing, 0.28f)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
                 typeface = Typefaces.title(theme.typography)
                 letterSpacing = theme.typography.titleTracking
@@ -157,16 +163,19 @@ class FolderOverlay(
         p.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         if (members.isEmpty()) {
-            p.addView(TextView(context).apply {
+            val empty = TextView(context).apply {
                 text = context.getString(R.string.smart_folder_empty)
                 setTextColor(colors.muted)
                 typeface = Typefaces.body(theme.typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
                 gravity = Gravity.CENTER
                 setCompoundDrawablesRelativeWithIntrinsicBounds(0, R.drawable.ic_rx_folder, 0, 0)
+                compoundDrawableTintList = ColorStateList.valueOf(colors.muted)
                 compoundDrawablePadding = dp(10f)
                 setPadding(dp(12f), dp(24f), dp(12f), dp(24f))
-            })
+            }
+            emptyView = empty
+            p.addView(empty)
         }
 
         val width = minOf(root.width - dp(40f), dp(420f)).coerceAtLeast(dp(260f))
@@ -226,11 +235,46 @@ class FolderOverlay(
         }
     }
 
+    fun applyTheme() {
+        val p = panel ?: return
+        val theme = host.theme()
+        val palette = host.glassPalette()
+        val folderSpec = palette[GlassRole.FOLDER]
+        val colors = folderSpec.rest
+        scrimView?.setBackgroundColor(ColorMath.withAlpha(theme.colors.scrim, 0.85f))
+        GlassViews.apply(p, folderSpec, dpScale, ripple = false)
+        smartTitleView?.apply {
+            setTextColor(colors.content)
+            typeface = Typefaces.title(theme.typography)
+        }
+        smartHintView?.apply {
+            setTextColor(colors.muted)
+            typeface = Typefaces.body(theme.typography)
+        }
+        titleField?.apply {
+            setTextColor(colors.content)
+            setHintTextColor(colors.muted)
+            highlightColor = ColorMath.withAlpha(colors.focusRing, 0.28f)
+            typeface = Typefaces.title(theme.typography)
+            background = GlassViews.drawable(palette[GlassRole.SEARCH], dpScale, ripple = false)
+        }
+        emptyView?.apply {
+            setTextColor(colors.muted)
+            compoundDrawableTintList = ColorStateList.valueOf(colors.muted)
+            typeface = Typefaces.body(theme.typography)
+        }
+        adapter?.let { a -> a.notifyItemRangeChanged(0, a.itemCount) }
+    }
+
     fun closeImmediately() {
         overlay?.let { root.removeView(it) }
         if (overlay != null) host.onFolderDepth(0f)
         overlay = null
+        scrimView = null
         panel = null
+        smartTitleView = null
+        smartHintView = null
+        emptyView = null
         adapter = null
         titleField = null
         folderId = null

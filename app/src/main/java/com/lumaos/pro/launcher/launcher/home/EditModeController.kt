@@ -50,6 +50,7 @@ class EditModeController(
 ) {
     interface Host {
         fun theme(): ResolvedTheme
+        fun glassPalette(): GlassPalette
         fun motion(): com.lumaos.pro.launcher.motion.MotionPolicy
         fun depthAllowed(): Boolean
         fun onEditProgress(progress: Float)
@@ -73,10 +74,7 @@ class EditModeController(
     private val density = context.resources.displayMetrics.density
     private fun dp(v: Float) = (v * density).toInt()
 
-    private fun glassPalette(): GlassPalette = GlassMaterials.palette(
-        host.theme(),
-        GlassCapabilities(translucency = true, blur = false, depth = host.depthAllowed())
-    )
+    private fun glassPalette(): GlassPalette = host.glassPalette()
 
     var isActive = false
         private set

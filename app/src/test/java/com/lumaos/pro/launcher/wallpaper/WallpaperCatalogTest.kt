@@ -1,27 +1,66 @@
 package com.lumaos.pro.launcher.wallpaper
 
+import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import org.junit.Assert.*
 import org.junit.Test
+import java.io.File
+import java.security.MessageDigest
 
 class WallpaperCatalogTest {
     private val name = "01234567-89ab-cdef-0123-456789abcdef"
     private val photo = WallpaperEntry("photo:$name", "A photo", "Private")
     private val entries = WallpaperCatalog.bundled() + photo
 
-    @Test fun `catalog reuses the three bundled originals with stable unique ids`() {
+    @Test fun `catalog ships all 30 unique curated wallpapers across 6 collections with distinct assets`() {
         val bundled = WallpaperCatalog.bundled()
-        assertEquals(3, bundled.size)
-        assertEquals(3, bundled.map { it.id }.toSet().size)
-        assertTrue(bundled.all { !it.isCustom && it.id.startsWith("art:") })
+        assertEquals(30, bundled.size)
+        assertEquals(30, bundled.map { it.id }.toSet().size)
+        assertEquals(30, bundled.map { it.title }.toSet().size)
+        assertEquals(30, bundled.map { it.description }.toSet().size)
+        assertEquals(30, bundled.mapNotNull { it.resourceKey }.toSet().size)
+        assertEquals(WallpaperCollection.entries.toSet(), bundled.mapNotNull { it.collection }.toSet())
+        assertTrue(bundled.all { !it.isCustom && it.id.startsWith("art:") && it.mood.isNotBlank() })
+        assertTrue(bundled.all { it.focalX in 0f..1f && it.focalY in 0f..1f && it.precomputedSeeds != null })
+
+        val resDirCandidates = listOf(
+            File("src/main/res/drawable-nodpi"),
+            File("app/src/main/res/drawable-nodpi")
+        )
+        val resDir = resDirCandidates.firstOrNull { it.isDirectory }
+        assertNotNull("Expected drawable-nodpi directory", resDir)
+
+        val digests = HashSet<String>()
+        for (entry in bundled) {
+            val file = File(resDir!!, "luma_wall_${entry.resourceKey}.webp")
+            assertTrue("Missing asset for ${entry.id}: ${file.path}", file.isFile && file.length() > 1_000L)
+            val sha = MessageDigest.getInstance("SHA-256")
+                .digest(file.readBytes())
+                .joinToString("") { "%02x".format(it) }
+            assertTrue("Duplicate binary wallpaper asset for ${entry.id}", digests.add(sha))
+            assertEquals(entry, WallpaperCatalog.findBundled(entry.id))
+        }
+
+        // Legacy v3.2 bundled IDs remain resolvable for existing favourites and backups.
+        for (art in WallpaperArt.entries) {
+            val legacy = WallpaperCatalog.findBundled("art:${art.storageKey}")
+            assertNotNull(legacy)
+            assertFalse(legacy!!.isCustom)
+        }
     }
 
-    @Test fun `categories and favorites filter actual entries only`() {
+    @Test fun `categories collections and favorites filter actual entries only`() {
         val favorites = setOf(entries.first().id, photo.id, "photo:missing")
         assertEquals(entries, WallpaperCatalog.filter(entries, WallpaperCategory.ALL, favorites))
         assertEquals(entries.dropLast(1), WallpaperCatalog.filter(entries, WallpaperCategory.LUMA, favorites))
         assertEquals(listOf(photo), WallpaperCatalog.filter(entries, WallpaperCategory.PHOTOS, favorites))
         assertEquals(listOf(entries.first(), photo), WallpaperCatalog.filter(entries, WallpaperCategory.FAVORITES, favorites))
         assertTrue(WallpaperCatalog.filter(entries, WallpaperCategory.FAVORITES, emptySet()).isEmpty())
+
+        for (col in WallpaperCollection.entries) {
+            val byCol = WallpaperCatalog.filter(entries, WallpaperCategory.LUMA, favorites, col)
+            assertTrue("Collection $col must not be empty", byCol.isNotEmpty())
+            assertTrue(byCol.all { it.collection == col })
+        }
     }
 
     @Test fun `custom file ids reject traversal and invalid names`() {

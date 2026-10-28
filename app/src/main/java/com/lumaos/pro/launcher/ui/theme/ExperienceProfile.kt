@@ -88,7 +88,8 @@ enum class ExperienceProfile(
         typography = null,
         iconShape = null,
         iconStyle = null,
-        backdrop = backdrop
+        backdrop = backdrop,
+        dynamicWallpaperColors = false
     )
 
     companion object {

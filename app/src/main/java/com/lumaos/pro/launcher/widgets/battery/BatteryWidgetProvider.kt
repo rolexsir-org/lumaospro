@@ -11,7 +11,8 @@ import android.widget.RemoteViews
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
-import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.widgets.WidgetGlassPalette
+import com.lumaos.pro.launcher.widgets.WidgetGlassRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,16 +61,20 @@ class BatteryWidgetProvider : AppWidgetProvider() {
                 battery?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1)
             val status = BatteryLogic.status(battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1)
             val theme = (app as LumaApp).core.themes.theme.value
-            val background = if (theme.isDark) 0xff202b39.toInt() else 0xffeef3f8.toInt()
-            val primary = if (theme.isDark) 0xfff8faff.toInt() else 0xff142332.toInt()
-            val muted = if (theme.isDark) 0xffc1cfdb.toInt() else 0xff40536a.toInt()
-            val accent = ColorMath.ensureContrast(ColorMath.opaque(theme.colors.accent), background, 3.0)
+            val palette = WidgetGlassPalette.fromTheme(theme)
             val views = RemoteViews(app.packageName, R.layout.widget_luma_battery)
-            views.setInt(R.id.battery_root, "setBackgroundResource", if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light)
-            views.setInt(R.id.battery_icon, "setColorFilter", accent)
-            views.setTextColor(R.id.battery_level, primary)
-            views.setTextColor(R.id.battery_status, muted)
-            views.setTextColor(R.id.battery_updated, muted)
+            runCatching { WidgetGlassRenderer.plateBitmap(app, theme) }
+                .onSuccess { views.setImageViewBitmap(R.id.battery_glass_plate, it) }
+                .onFailure {
+                    views.setImageViewResource(
+                        R.id.battery_glass_plate,
+                        if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light
+                    )
+                }
+            views.setInt(R.id.battery_icon, "setColorFilter", palette.accent)
+            views.setTextColor(R.id.battery_level, palette.primaryText)
+            views.setTextColor(R.id.battery_status, palette.mutedText)
+            views.setTextColor(R.id.battery_updated, palette.mutedText)
             views.setTextViewText(R.id.battery_level, level?.let { app.getString(R.string.battery_percent, it) } ?: app.getString(R.string.battery_unknown))
             val statusText = when (status) {
                 BatteryStatus.CHARGING -> R.string.battery_status_charging

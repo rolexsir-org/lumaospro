@@ -94,6 +94,10 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val ICON_PACK = stringPreferencesKey("icon_pack")
         val BACKDROP = stringPreferencesKey("backdrop")
+        val DYNAMIC_WALLPAPER_COLORS = booleanPreferencesKey("dynamic_wallpaper_colors")
+        val ACTIVE_WALLPAPER_ID = stringPreferencesKey("active_wallpaper_id")
+        val ACTIVE_WALLPAPER_SYSTEM_ID = intPreferencesKey("active_wallpaper_system_id")
+        val CACHED_WALLPAPER_SEEDS = stringPreferencesKey("cached_wallpaper_seeds")
         val WALLPAPER_FAVORITES = stringSetPreferencesKey("wallpaper_favorites")
         val EFFECTS_PREF = stringPreferencesKey("effects_pref")
         val MOTION_PREF = stringPreferencesKey("motion_pref")
@@ -208,7 +212,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 BACKDROP_THEME_DEFAULT -> null
                 else -> Backdrop.fromStorageKey(raw) ?: Backdrop.WALLPAPER
             },
-            profileThemes = profileThemes
+            profileThemes = profileThemes,
+            dynamicWallpaperColors = p[Keys.DYNAMIC_WALLPAPER_COLORS] ?: false
         )
     }
 
@@ -224,6 +229,58 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun showSystemWallpaperOnHome() = write(Keys.BACKDROP, Backdrop.WALLPAPER.storageKey)
 
     suspend fun setWallpaperAccent(color: Int) = write(Keys.ACCENT_OVERRIDE, color)
+
+    suspend fun setDynamicWallpaperColors(enabled: Boolean) {
+        dataStore.edit { p -> putOrRemove(p, Keys.DYNAMIC_WALLPAPER_COLORS, true.takeIf { enabled }) }
+    }
+
+    /** Active Wallpaper Studio entry ID (`art:...` or `photo:...`), or null when following system/theme default. */
+    val activeWallpaperId: Flow<String?> = readNullable(Keys.ACTIVE_WALLPAPER_ID)
+
+    /** Platform `WallpaperManager.getWallpaperId(FLAG_SYSTEM)` recorded when Luma applied [activeWallpaperId]. */
+    val activeWallpaperSystemId: Flow<Int?> = readNullable(Keys.ACTIVE_WALLPAPER_SYSTEM_ID)
+
+    /** Cached optical [com.lumaos.pro.launcher.ui.theme.WallpaperSeeds] string for instant cold-start palette resolution. */
+    val cachedWallpaperSeedsRaw: Flow<String?> = readNullable(Keys.CACHED_WALLPAPER_SEEDS)
+
+    suspend fun setCachedWallpaperSeedsRaw(encoded: String?) {
+        dataStore.edit { p -> putOrRemove(p, Keys.CACHED_WALLPAPER_SEEDS, encoded?.takeIf { it.isNotBlank() }) }
+    }
+
+    /**
+     * Records an applied Wallpaper Studio selection and optionally switches the
+     * Home backdrop and dynamic wallpaper theming in one atomic transaction.
+     */
+    suspend fun recordAppliedWallpaper(
+        wallpaperId: String?,
+        systemWallpaperId: Int? = null,
+        backdrop: Backdrop? = null,
+        enableDynamicColors: Boolean? = null
+    ) {
+        dataStore.edit { p ->
+            putOrRemove(p, Keys.ACTIVE_WALLPAPER_ID, wallpaperId?.takeIf { it.isNotBlank() })
+            putOrRemove(p, Keys.ACTIVE_WALLPAPER_SYSTEM_ID, systemWallpaperId)
+            if (backdrop != null) {
+                p[Keys.BACKDROP] = backdrop.storageKey
+            }
+            if (enableDynamicColors != null) {
+                putOrRemove(p, Keys.DYNAMIC_WALLPAPER_COLORS, true.takeIf { enableDynamicColors })
+                if (enableDynamicColors) {
+                    p.remove(Keys.ACCENT_OVERRIDE)
+                    p.remove(Keys.BACKGROUND_OVERRIDE)
+                }
+            }
+        }
+    }
+
+    suspend fun clearActiveWallpaperIfMatches(wallpaperId: String) {
+        dataStore.edit { p ->
+            if (p[Keys.ACTIVE_WALLPAPER_ID] == wallpaperId) {
+                p.remove(Keys.ACTIVE_WALLPAPER_ID)
+                p.remove(Keys.ACTIVE_WALLPAPER_SYSTEM_ID)
+            }
+        }
+    }
 
     val wallpaperFavorites: Flow<Set<String>> = read(Keys.WALLPAPER_FAVORITES) { emptySet() }
         .map { it.toSet() }
@@ -250,6 +307,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         putOrRemove(p, Keys.ICON_SHAPE, settings.iconShape?.storageKey)
         putOrRemove(p, Keys.ICON_STYLE, settings.iconStyle?.storageKey)
         p[Keys.BACKDROP] = settings.backdrop?.storageKey ?: BACKDROP_THEME_DEFAULT
+        putOrRemove(p, Keys.DYNAMIC_WALLPAPER_COLORS, true.takeIf { settings.dynamicWallpaperColors })
         for (profile in ContextProfile.entries) {
             putOrRemove(p, profileThemeKey(profile), settings.profileThemes[profile]?.storageKey)
         }
@@ -304,6 +362,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 Keys.THEME_LIGHT_ID, Keys.THEME_DARK_ID, Keys.THEME_DARK_WINDOW,
                 Keys.ACCENT_OVERRIDE, Keys.BACKGROUND_OVERRIDE, Keys.TYPOGRAPHY,
                 Keys.ICON_SHAPE, Keys.ICON_STYLE, Keys.ICON_PACK, Keys.BACKDROP,
+                Keys.DYNAMIC_WALLPAPER_COLORS, Keys.ACTIVE_WALLPAPER_ID,
                 Keys.HOME_PRESET, Keys.DOCK_STYLE, Keys.EFFECTS_PREF, Keys.MOTION_PREF,
                 Keys.GRID_COLUMNS, Keys.GRID_ROWS, Keys.DRAWER_COLUMNS, Keys.ICON_SIZE_DP,
                 Keys.SHOW_LABELS, Keys.TEXT_SCALE
@@ -405,7 +464,13 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun restoreFromBackup(values: Map<String, Any>, isRestorable: (String) -> Boolean) {
         dataStore.edit { p ->
             for (key in p.asMap().keys.toList()) {
-                if (isRestorable(key.name) && key.name !in values) p.remove(key)
+                if (!isRestorable(key.name) || key.name in values) continue
+                // A private photo selection is device-local and intentionally excluded
+                // from backups; keep it unless the backup explicitly restores a bundled art ID.
+                if (key == Keys.ACTIVE_WALLPAPER_ID && (p[Keys.ACTIVE_WALLPAPER_ID]?.startsWith("photo:") == true)) {
+                    continue
+                }
+                p.remove(key)
             }
             for ((name, value) in values) {
                 when (value) {

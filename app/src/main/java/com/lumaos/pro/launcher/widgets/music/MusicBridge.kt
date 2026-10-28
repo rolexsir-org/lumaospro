@@ -25,9 +25,10 @@ import android.widget.RemoteViews
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
-import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.wallpaper.WallpaperLimits
+import com.lumaos.pro.launcher.widgets.WidgetGlassPalette
+import com.lumaos.pro.launcher.widgets.WidgetGlassRenderer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +81,12 @@ object MusicBridge {
             val enabled = runCatching { Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") }.getOrNull()
             enabled.orEmpty().split(':').mapNotNull(ComponentName::unflattenFromString).contains(component)
         }
+    }
+
+    fun refreshIfActive(context: Context) {
+        val app = context.applicationContext
+        if (widgetIds(app).isEmpty()) return
+        refresh(app)
     }
 
     fun refresh(context: Context) {
@@ -232,7 +239,7 @@ object MusicBridge {
         val widgetManager = AppWidgetManager.getInstance(app)
         ids.forEach { id ->
             val views = RemoteViews(app.packageName, R.layout.widget_luma_music)
-            applyTheme(views, theme)
+            applyTheme(app, views, theme)
             if (message != null || controller == null) {
                 views.setViewVisibility(R.id.music_empty, View.VISIBLE)
                 views.setViewVisibility(R.id.music_active, View.GONE)
@@ -264,12 +271,13 @@ object MusicBridge {
         views.setTextViewText(R.id.music_player_label, player)
         views.setTextViewText(R.id.music_title, title)
         views.setTextViewText(R.id.music_artist, artist)
-        if (artwork != null) views.setImageViewBitmap(R.id.music_art, artwork)
-        else {
+        if (artwork != null) {
+            views.setInt(R.id.music_art, "setColorFilter", 0)
+            views.setImageViewBitmap(R.id.music_art, artwork)
+        } else {
             views.setImageViewResource(R.id.music_art, R.drawable.ic_music_note)
             views.setContentDescription(R.id.music_art, app.getString(R.string.music_artwork_unavailable))
-            val background = if (theme.isDark) 0xff202b39.toInt() else 0xffeef3f8.toInt()
-            views.setInt(R.id.music_art, "setColorFilter", ColorMath.ensureContrast(ColorMath.opaque(theme.colors.accent), background, 3.0))
+            views.setInt(R.id.music_art, "setColorFilter", WidgetGlassPalette.fromTheme(theme).accent)
         }
         runCatching { controller.sessionActivity }.getOrNull()?.let {
             views.setOnClickPendingIntent(R.id.music_art, it)
@@ -320,16 +328,27 @@ object MusicBridge {
         } else views.setViewVisibility(R.id.music_progress_row, View.GONE)
     }
 
-    private fun applyTheme(views: RemoteViews, theme: ResolvedTheme) {
-        val bg = if (theme.isDark) 0xff202b39.toInt() else 0xffeef3f8.toInt()
-        val primary = if (theme.isDark) 0xfff8faff.toInt() else 0xff142332.toInt()
-        val muted = if (theme.isDark) 0xffc1cfdb.toInt() else 0xff40536a.toInt()
-        val accent = ColorMath.ensureContrast(ColorMath.opaque(theme.colors.accent), bg, 3.0)
-        views.setInt(R.id.music_root, "setBackgroundResource", if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light)
-        listOf(R.id.music_title, R.id.music_empty).forEach { views.setTextColor(it, primary) }
-        listOf(R.id.music_artist, R.id.music_player_label, R.id.music_elapsed_clock, R.id.music_elapsed_static, R.id.music_duration)
-            .forEach { views.setTextColor(it, muted) }
-        listOf(R.id.music_previous, R.id.music_toggle, R.id.music_next).forEach { views.setInt(it, "setColorFilter", accent) }
+    private fun applyTheme(app: Context, views: RemoteViews, theme: ResolvedTheme) {
+        val palette = WidgetGlassPalette.fromTheme(theme)
+        runCatching { WidgetGlassRenderer.plateBitmap(app, theme) }
+            .onSuccess { views.setImageViewBitmap(R.id.music_glass_plate, it) }
+            .onFailure {
+                views.setImageViewResource(
+                    R.id.music_glass_plate,
+                    if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light
+                )
+            }
+        listOf(R.id.music_title, R.id.music_empty).forEach { views.setTextColor(it, palette.primaryText) }
+        listOf(
+            R.id.music_artist,
+            R.id.music_player_label,
+            R.id.music_elapsed_clock,
+            R.id.music_elapsed_static,
+            R.id.music_duration
+        ).forEach { views.setTextColor(it, palette.mutedText) }
+        listOf(R.id.music_previous, R.id.music_toggle, R.id.music_next).forEach {
+            views.setInt(it, "setColorFilter", palette.accent)
+        }
     }
 
     private fun artwork(app: Context, metadata: MediaMetadata): Bitmap? {

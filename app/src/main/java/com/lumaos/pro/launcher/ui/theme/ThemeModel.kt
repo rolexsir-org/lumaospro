@@ -250,7 +250,9 @@ data class ResolvedTheme(
     val backdrop: Backdrop,
     val cornerScale: Float,
     /** Authored v3.2 tokens; null for a retained pre-3.2 palette. */
-    val tokens: ThemeTokens? = null
+    val tokens: ThemeTokens? = null,
+    /** Active wallpaper optical profile when known, used by split-horizon legibility scrims. */
+    val wallpaperSeeds: WallpaperSeeds? = null
 ) {
     val isDark: Boolean get() = colors.isDark
 
@@ -342,14 +344,60 @@ data class ResolvedTheme(
     }
 }
 
-/** Seed colours reported by WallpaperManager (API 27+). */
+/** Seed colours reported by WallpaperManager (API 27+) or optical pixel sampling. */
 data class WallpaperSeeds(
     val primary: Int,
     val secondary: Int? = null,
     val tertiary: Int? = null,
     /** WallpaperColors.HINT_SUPPORTS_DARK_TEXT: the wallpaper is light. */
-    val supportsDarkText: Boolean? = null
-)
+    val supportsDarkText: Boolean? = null,
+    /** Chromatic or specular accent cluster extracted from the wallpaper, when distinct. */
+    val accent: Int? = null,
+    /** Relative luminance [0f..1f] of the upper home-clock band, when measured. */
+    val topLuminance: Float? = null,
+    /** Relative luminance [0f..1f] of the lower dock/search band, when measured. */
+    val bottomLuminance: Float? = null
+) {
+    fun encode(sourceKey: String): String = listOf(
+        sourceKey,
+        primary.toString(),
+        secondary?.toString().orEmpty(),
+        tertiary?.toString().orEmpty(),
+        when (supportsDarkText) { true -> "1"; false -> "0"; null -> "" },
+        accent?.toString().orEmpty(),
+        topLuminance?.toString().orEmpty(),
+        bottomLuminance?.toString().orEmpty()
+    ).joinToString("|")
+
+    companion object {
+        fun decode(raw: String?): Pair<String, WallpaperSeeds>? {
+            if (raw.isNullOrBlank()) return null
+            val parts = raw.split("|")
+            if (parts.size < 5) return null
+            val key = parts[0].takeIf { it.isNotBlank() } ?: return null
+            val primary = parts[1].toIntOrNull() ?: return null
+            val secondary = parts.getOrNull(2)?.toIntOrNull()
+            val tertiary = parts.getOrNull(3)?.toIntOrNull()
+            val darkText = when (parts.getOrNull(4)) {
+                "1" -> true
+                "0" -> false
+                else -> null
+            }
+            val accent = parts.getOrNull(5)?.toIntOrNull()
+            val topLum = parts.getOrNull(6)?.toFloatOrNull()?.takeIf { it in 0f..1f }
+            val botLum = parts.getOrNull(7)?.toFloatOrNull()?.takeIf { it in 0f..1f }
+            return key to WallpaperSeeds(
+                primary = primary,
+                secondary = secondary,
+                tertiary = tertiary,
+                supportsDarkText = darkText,
+                accent = accent,
+                topLuminance = topLum,
+                bottomLuminance = botLum
+            )
+        }
+    }
+}
 
 object ThemePresets {
 
