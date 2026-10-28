@@ -46,11 +46,19 @@
         android:importantForAccessibility="no"
         android:visibility="gone" />
 
-    <View
+    <FrameLayout
         android:id="@+id/widget_resize"
         android:layout_width="56dp"
-        android:layout_height="24dp"
+        android:layout_height="48dp"
         android:layout_gravity="bottom|center_horizontal"
         android:contentDescription="@string/widget_resize_description"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <View
+            android:id="@+id/widget_resize_indicator"
+            android:layout_width="40dp"
+            android:layout_height="8dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no" />
+    </FrameLayout>
 </FrameLayout>

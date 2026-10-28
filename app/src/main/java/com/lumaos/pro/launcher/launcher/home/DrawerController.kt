@@ -88,6 +88,7 @@ class DrawerController(
         private set
     private var buckets: List<Pair<Char, Int>> = emptyList()
     private var currentRows: List<DrawerRow> = emptyList()
+    private var observedQuery = searchField.text?.toString().orEmpty()
     private var retryAvailable = false
     var currentSort: DrawerSort = DrawerSort.ALPHABETICAL
 
@@ -99,6 +100,18 @@ class DrawerController(
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
                 val q = s?.toString().orEmpty()
+                if (q != observedQuery) {
+                    observedQuery = q
+                    // Never launch or tap rows from the previous query while the
+                    // background filter and ListAdapter diff are catching up.
+                    currentRows = emptyList()
+                    buckets = emptyList()
+                    setIndexVisible(false)
+                    grid.visibility = View.INVISIBLE
+                    emptyView.visibility = View.VISIBLE
+                    emptyView.text = context.getString(R.string.drawer_searching_apps)
+                    updateRetryAvailability(false)
+                }
                 clearButton.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
                 host.onQueryChanged(q)
                 chipsScroll.visibility = if (q.isBlank() && chips.childCount > 1) View.VISIBLE else View.GONE
@@ -243,24 +256,40 @@ class DrawerController(
         query: String,
         refreshFailed: Boolean = false
     ) {
-        currentRows = output.rows
-        buckets = output.buckets
-        adapter.submitList(output.rows)
-        alphaIndex.letters = output.buckets.map { it.first }
-        alphaIndex.visibility = if (output.buckets.size > 3 && query.isBlank()) View.VISIBLE else View.GONE
-        val empty = output.rows.isEmpty()
-        emptyView.visibility = if (empty) View.VISIBLE else View.GONE
-        updateRetryAvailability(empty && !loading && refreshFailed)
-        emptyView.text = when {
-            loading -> context.getString(R.string.drawer_loading_apps)
-            refreshFailed -> context.getString(R.string.drawer_retry_apps)
-            query.isNotBlank() -> context.getString(R.string.empty_no_results, query)
-            else -> context.getString(R.string.empty_no_apps)
+        // combine() can briefly pair a new query with the previous model. Wait
+        // for matching results and for the adapter's diff to actually commit.
+        if (output.query != query.trim()) return
+        adapter.submitList(output.rows) {
+            if (searchField.text.toString().trim() != output.query) return@submitList
+            currentRows = output.rows
+            buckets = output.buckets
+            alphaIndex.letters = output.buckets.map { it.first }
+            setIndexVisible(output.buckets.size > 3 && query.isBlank())
+            grid.visibility = View.VISIBLE
+            val empty = output.rows.isEmpty()
+            emptyView.visibility = if (empty) View.VISIBLE else View.GONE
+            updateRetryAvailability(empty && !loading && refreshFailed)
+            emptyView.text = when {
+                loading -> context.getString(R.string.drawer_loading_apps)
+                refreshFailed -> context.getString(R.string.drawer_retry_apps)
+                query.isNotBlank() -> context.getString(R.string.empty_no_results, query)
+                else -> context.getString(R.string.empty_no_apps)
+            }
         }
         subtitle.text = if (query.isBlank()) {
             context.resources.getQuantityString(R.plurals.drawer_app_count, output.appCount, output.appCount)
         } else {
             context.resources.getQuantityString(R.plurals.drawer_result_count, output.appCount, output.appCount)
+        }
+    }
+
+    private fun setIndexVisible(visible: Boolean) {
+        alphaIndex.visibility = if (visible) View.VISIBLE else View.GONE
+        // The full 48 dp rail is reserved only when it is visible, so it does
+        // not cover app names or waste space while searching.
+        val end = dp(if (visible) 56f else 20f)
+        if (grid.paddingEnd != end) {
+            grid.setPaddingRelative(grid.paddingStart, grid.paddingTop, end, grid.paddingBottom)
         }
     }
 

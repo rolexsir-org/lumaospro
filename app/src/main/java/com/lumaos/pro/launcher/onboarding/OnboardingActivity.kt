@@ -1,6 +1,7 @@
 package com.lumaos.pro.launcher.onboarding
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,13 +41,14 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
+import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.settings.ExperienceProfileController
 import com.lumaos.pro.launcher.settings.LumaOSTheme
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -78,6 +80,17 @@ class OnboardingActivity : ComponentActivity() {
         }
     }
 
+    private suspend fun safelyUpdateAppearance(update: suspend () -> Unit) {
+        try {
+            update()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            LumaLog.e("Could not apply experience", e)
+            Toast.makeText(this, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -88,12 +101,10 @@ class OnboardingActivity : ComponentActivity() {
             val textScale by prefs.textScale.collectAsState(1.0f)
             val selectedProfile by prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
             LumaOSTheme(theme = theme, textScale = textScale) {
-                // First run with no explicit choice: wear the coordinated Liquid
-                // defaults so the first home screen already looks finished. The
-                // write is appearance-only and never touches layout or widgets.
+                // A restored or previously customised appearance always wins.
+                // The guard and default write are one DataStore transaction.
                 LaunchedEffect(Unit) {
-                    val profile = prefs.experienceProfile.first()
-                    ExperienceProfileController.apply(prefs, profile)
+                    safelyUpdateAppearance { prefs.initializeDefaultExperienceIfUnconfigured() }
                 }
                 DisposableEffect(theme.isDark) {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -151,7 +162,7 @@ class OnboardingActivity : ComponentActivity() {
                                 selected = profile == selectedProfile,
                                 onSelected = {
                                     lifecycleScope.launch {
-                                        ExperienceProfileController.apply(prefs, profile)
+                                        safelyUpdateAppearance { ExperienceProfileController.apply(prefs, profile) }
                                     }
                                 }
                             )

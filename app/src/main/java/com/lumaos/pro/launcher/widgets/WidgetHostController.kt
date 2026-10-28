@@ -49,6 +49,7 @@ class WidgetHostController(context: Context) {
 
     fun stopListening() {
         runCatching { host.stopListening() }
+            .onFailure { LumaLog.e("Widget host could not stop listening", it) }
     }
 
     /** Queries the providers the current user can bind, distinguishing "none" from a failed query. */
@@ -66,7 +67,9 @@ class WidgetHostController(context: Context) {
         (providersState() as? ProviderLoad.Loaded)?.providers ?: emptyList()
 
     fun infoFor(appWidgetId: Int): AppWidgetProviderInfo? =
-        runCatching { manager.getAppWidgetInfo(appWidgetId) }.getOrNull()
+        runCatching { manager.getAppWidgetInfo(appWidgetId) }
+            .onFailure { LumaLog.e("Widget information could not be read", it) }
+            .getOrNull()
 
     /**
      * True when Android still holds a binding for [appWidgetId] and its provider
@@ -113,7 +116,7 @@ class WidgetHostController(context: Context) {
         host.startAppWidgetConfigureActivityForResult(activity, pending.appWidgetId, 0, requestCode, null)
         true
     }.getOrElse {
-        LumaLog.w("Widget configuration could not start")
+        LumaLog.e("Widget configuration could not start", it)
         false
     }
 
@@ -129,7 +132,7 @@ class WidgetHostController(context: Context) {
             host.startAppWidgetConfigureActivityForResult(activity, appWidgetId, 0, requestCode, null)
             true
         }.getOrElse {
-            LumaLog.w("Widget reconfiguration could not start")
+            LumaLog.e("Widget reconfiguration could not start", it)
             false
         }
     }
@@ -137,12 +140,22 @@ class WidgetHostController(context: Context) {
     fun delete(appWidgetId: Int) {
         views.remove(appWidgetId)
         runCatching { host.deleteAppWidgetId(appWidgetId) }
+            .onFailure { LumaLog.e("Widget id could not be released", it) }
     }
 
-    /** Releases ids the host holds that no layout references (aborted adds, old installs). */
-    fun releaseOrphans(referenced: Set<Int>) {
-        val ids = runCatching { host.appWidgetIds }.getOrNull() ?: return
+    /**
+     * Releases only host ids that no saved layout or in-flight add references.
+     * An unavailable host is not an empty host; let the activity retry later.
+     */
+    fun releaseOrphans(referenced: Set<Int>): Boolean {
+        val ids = try {
+            host.appWidgetIds
+        } catch (e: RuntimeException) {
+            LumaLog.e("Widget host ids could not be read", e)
+            return false
+        }
         for (id in ids) if (id !in referenced) delete(id)
+        return true
     }
 
     /** Translates platform provider metadata into the pure, row-based capability model. */

@@ -10,11 +10,15 @@
     <string name="experience_midnight_desc">Cinematic dark, wallpaper-led depth and quiet highlights.</string>
     <string name="onboarding_profiles_title">Choose your experience</string>
     <string name="onboarding_profiles_subtitle">A coordinated look you can change any time in Settings. Apps, widgets and layouts are never moved.</string>
+    <string name="appearance_apply_failed">Couldn’t save the appearance. Please try again.</string>
     <string name="settings_group_make_yours">Make it yours</string>
     <string name="settings_group_fine_tune">Fine-tune</string>
     <string name="settings_group_advanced">Advanced</string>
+    <string name="settings_advanced_show">Show advanced settings</string>
+    <string name="settings_advanced_hide">Hide advanced settings</string>
+    <string name="settings_advanced_summary">Profiles, notifications, gestures, privacy and backup</string>
     <string name="section_widgets">Widgets</string>
-    <string name="pref_widgets_manage_open">Open the widget picker on the home screen</string>
+    <string name="pref_widgets_manage_open">On the home screen, touch and hold an empty area, then tap Widgets. Choose a widget and follow any setup prompts.</string>
 
     <!-- Home -->
     <string name="search_pill_hint">Search apps and shortcuts</string>
@@ -29,6 +33,7 @@
     <string name="drawer_chip_all">All</string>
     <string name="drawer_chip_frequent">Frequent</string>
     <string name="drawer_chip_selected">%1$s, selected</string>
+    <string name="drawer_alphabet_selected">%1$s apps</string>
     <plurals name="drawer_app_count">
         <item quantity="one">%d app</item>
         <item quantity="other">%d apps</item>
@@ -99,11 +104,12 @@
     <string name="widget_capability_fixed">Fixed height</string>
     <string name="widget_capability_configurable">Configurable</string>
     <string name="widget_unavailable">Widget unavailable. Its app may have been removed — long-press to remove.</string>
-    <string name="widget_resize_description">Resize widget</string>
+    <string name="widget_resize_description">Resize widget. Tap to choose a height, or drag.</string>
     <string name="widget_description">Widget, %1$d rows tall</string>
     <string name="widget_generic">Widget</string>
     <string name="toast_widget_failed">The widget could not be added</string>
     <string name="toast_widget_added">Widget added</string>
+    <string name="toast_widget_already_added">This widget is already on the home screen</string>
     <string name="toast_widget_no_space">No room for another widget on this page</string>
     <string name="action_configure_widget">Configure widget</string>
     <string name="widget_removed_message">Widget removed</string>
@@ -136,7 +142,9 @@
     <string name="studio_revert">Revert</string>
     <string name="studio_reset">Reset Studio defaults</string>
     <string name="studio_applied">Applied</string>
-    <string name="studio_unsaved">Unsaved changes</string>
+    <string name="studio_unsaved">Preview · unsaved changes</string>
+    <string name="studio_applying">Applying…</string>
+    <string name="studio_apply_failed">Changes couldn’t be saved. Your preview is still here; try Apply again.</string>
     <string name="studio_switching">Light and dark</string>
     <string name="studio_switch_fixed">Always this theme</string>
     <string name="studio_switch_system">Follow system dark theme</string>
@@ -163,7 +171,11 @@
     <string name="studio_dock_style">Dock</string>
     <string name="studio_effects">Effects</string>
     <string name="studio_motion">Motion</string>
-    <string name="studio_contrast">Contrast %1$s:1</string>
+    <string name="studio_contrast">Theme surface text contrast: %1$s:1. Other surfaces may vary.</string>
+    <string name="studio_loading">Loading appearance…</string>
+    <string name="studio_advanced_show">Show advanced appearance</string>
+    <string name="studio_advanced_hide">Hide advanced appearance</string>
+    <string name="studio_advanced_summary">Background, typography, effects and context themes</string>
     <string name="studio_profile_themes">Context themes</string>
     <string name="studio_profile_theme_none">Use current theme</string>
     <string name="studio_profile_theme_precedence">%1$s currently uses %2$s; this profile theme takes precedence over the global selection.</string>

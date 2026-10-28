@@ -27,22 +27,30 @@ source "$TOOLS/env.sh"
 : "${GRADLE_USER_HOME:=$HOME/.gradle}"
 export GRADLE_USER_HOME
 
-# ---------------------------------------------------------------------------
-# Robolectric's Android framework image.
-#
-# The unit tests use Robolectric to run real Android framework classes on the
-# JVM, because this environment has no emulator (no /dev/kvm, no nested
-# virtualisation). The image is ~150 MB, so it is kept in .cache/ - excluded
-# from workspace snapshots - and re-fetched here whenever the sandbox resets.
-# ---------------------------------------------------------------------------
+# Robolectric's framework image is only needed by unit-test/check tasks, not
+# by assembling, linting, or bundling. Keep it in the same user cache that the
+# Gradle test configuration uses; never leave a partial download as a cache hit.
+needs_robolectric=false
+for arg in "$@"; do
+  task="${arg##*:}"
+  case "$task" in
+    test*|check) needs_robolectric=true ;;
+  esac
+done
 ROBOLECTRIC_IMAGE="android-all-instrumented-14-robolectric-10818077-i7.jar"
-ROBOLECTRIC_DIR="$HOME/.cache/robolectric"
-if [ ! -f "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE" ]; then
+ROBOLECTRIC_DIR="${ROBOLECTRIC_DEPENDENCY_DIR:-$HOME/.cache/robolectric}"
+if $needs_robolectric && [ ! -s "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE" ]; then
   echo "==> fetching Robolectric Android 14 image"
   mkdir -p "$ROBOLECTRIC_DIR"
-  curl -fsSL -o "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE" \
-    "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/14-robolectric-10818077-i7/$ROBOLECTRIC_IMAGE"
+  download="$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE.tmp.$$"
+  if ! curl -fsSL -o "$download" \
+    "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/14-robolectric-10818077-i7/$ROBOLECTRIC_IMAGE"; then
+    rm -f "$download"
+    exit 1
+  fi
+  mv "$download" "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE"
 fi
+export ROBOLECTRIC_DEPENDENCY_DIR="$ROBOLECTRIC_DIR"
 
 # AGP reads the SDK location from local.properties or ANDROID_HOME; write it
 # explicitly so builds work from any shell.
@@ -52,8 +60,11 @@ echo "==> JAVA_HOME=$JAVA_HOME"
 echo "==> ANDROID_HOME=$ANDROID_HOME"
 echo "==> gradle $*"
 
-# Use gradle wrapper if available, otherwise fall back to toolchain gradle
-if [ -x "./gradlew" ]; then
+# Prefer the exact provisioned Gradle so the wrapper does not download a
+# second copy. Otherwise use a complete wrapper, then a Gradle on PATH.
+if [ -x "$TOOLS/gradle-8.13/bin/gradle" ]; then
+    exec "$TOOLS/gradle-8.13/bin/gradle" --no-daemon "$@"
+elif [ -x "./gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
     exec ./gradlew --no-daemon "$@"
 else
     exec gradle --no-daemon "$@"

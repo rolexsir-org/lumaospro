@@ -55,6 +55,11 @@ sealed interface DrawerRow {
     data class Action(val action: DrawerAction, val query: String) : DrawerRow {
         override val stableKey: String get() = "x:${action.name}"
     }
+
+    /** Explanation shown before external-search actions when no local result exists. */
+    data class Empty(val query: String) : DrawerRow {
+        override val stableKey: String get() = "empty:results"
+    }
 }
 
 /**
@@ -89,7 +94,9 @@ object DrawerModel {
         /** A-Z index: bucket -> adapter position; empty when the index does not apply. */
         val buckets: List<Pair<Char, Int>>,
         /** Apps the current view contains (for the header count). */
-        val appCount: Int
+        val appCount: Int,
+        /** The trimmed query that produced these rows, to avoid acting on stale results. */
+        val query: String = ""
     )
 
     const val SECTION_PINNED = "pinned"
@@ -141,11 +148,12 @@ object DrawerModel {
                 }
             }
             if (input.webSearchAvailable || input.storeAvailable) {
+                if (matches.isEmpty() && shortcutMatches.isEmpty()) rows += DrawerRow.Empty(query)
                 rows += DrawerRow.Header("elsewhere", "Search elsewhere")
                 if (input.webSearchAvailable) rows += DrawerRow.Action(DrawerAction.WEB_SEARCH, query)
                 if (input.storeAvailable) rows += DrawerRow.Action(DrawerAction.PLAY_STORE, query)
             }
-            return Output(rows, emptyList(), matches.size)
+            return Output(rows, emptyList(), matches.size, query)
         }
 
         val eligible: (ComponentKey) -> Boolean = { it in visibleKeys && it in installed }

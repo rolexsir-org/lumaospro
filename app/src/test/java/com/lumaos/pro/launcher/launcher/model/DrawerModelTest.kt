@@ -104,4 +104,43 @@ class DrawerModelTest {
         assertEquals(DrawerPresentation.GRID, DrawerPresentation.fromStorageKey("grid"))
         assertEquals(null, DrawerPresentation.fromStorageKey("unexpected"))
     }
+
+    @Test
+    fun `no local results are explained even when external search is available`() {
+        val output = DrawerModel.build(
+            DrawerModel.Input(apps = apps, query = "  missing  ", webSearchAvailable = true, storeAvailable = true)
+        )
+        assertEquals("missing", output.query)
+        assertEquals(DrawerRow.Empty("missing"), output.rows.first())
+        assertEquals(2, output.rows.filterIsInstance<DrawerRow.Action>().size)
+        assertEquals(0, output.appCount)
+        assertTrue(output.buckets.isEmpty())
+    }
+
+    @Test
+    fun `a matching shortcut does not show the empty explanation`() {
+        val output = DrawerModel.build(
+            DrawerModel.Input(
+                apps = apps, query = "timer", webSearchAvailable = true,
+                shortcuts = listOf(ShortcutRef(clock.key.packageName, "timer", "Timer"))
+            )
+        )
+        assertTrue(output.rows.any { it is DrawerRow.Shortcut })
+        assertTrue(output.rows.none { it is DrawerRow.Empty })
+    }
+
+    @Test
+    fun `clearing search restores the selected category and alphabetical buckets`() {
+        val categorised = apps.map { it.copy(category = if (it.key == clock.key) 7 else 0) }
+        val filter = DrawerFilter.Category(DrawerCategory.GAMES)
+        val searched = DrawerModel.build(DrawerModel.Input(apps = categorised, query = "clock", filter = filter))
+        val cleared = DrawerModel.build(DrawerModel.Input(apps = categorised, query = " ", filter = filter))
+        assertEquals("clock", searched.query)
+        assertEquals(listOf("Clock"), searched.rows.filterIsInstance<DrawerRow.App>().map { it.entry.label })
+        assertEquals("", cleared.query)
+        assertEquals(listOf("Camera", "Chrome"), cleared.rows.filterIsInstance<DrawerRow.App>().map { it.entry.label })
+        assertEquals(2, cleared.appCount)
+        assertTrue(cleared.buckets.isNotEmpty())
+    }
+
 }

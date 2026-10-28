@@ -4,6 +4,7 @@ import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * Pure-Kotlin widget planning: provider capability interpretation, row
@@ -80,6 +81,7 @@ data class WidgetCapabilities(
 
 sealed interface InsertionPlan {
     data class AtIndex(val index: Int) : InsertionPlan
+    data object AlreadyPresent : InsertionPlan
     data object NoSpace : InsertionPlan
 }
 
@@ -165,7 +167,7 @@ object WidgetPlan {
      */
     fun planInsertion(page: List<HomeItem>, widget: HomeItem.Widget): InsertionPlan {
         if (page.any { it is HomeItem.Widget && it.appWidgetId == widget.appWidgetId }) {
-            return InsertionPlan.NoSpace
+            return InsertionPlan.AlreadyPresent
         }
         if (widgetCount(page) >= MAX_WIDGETS_PER_PAGE) return InsertionPlan.NoSpace
         if (widgetRows(page) + widget.rows > MAX_WIDGET_ROWS_PER_PAGE) return InsertionPlan.NoSpace
@@ -175,4 +177,48 @@ object WidgetPlan {
     /** True when [widget] fits the remaining page budget without reordering anything. */
     fun canFit(page: List<HomeItem>, widget: HomeItem.Widget): Boolean =
         planInsertion(page, widget) is InsertionPlan.AtIndex
+}
+
+/** Outcome of an edit-mode widget resize gesture. */
+sealed interface WidgetResizeResult {
+    data object OpenMenu : WidgetResizeResult
+    data class Commit(val rows: Int) : WidgetResizeResult
+    data class Cancel(val originalHeight: Int) : WidgetResizeResult
+}
+
+/** Tracks previews separately from committed rows, including cancellation. */
+class WidgetResizeGesture(
+    private val startY: Float,
+    private val originalHeight: Int,
+    private val rowHeight: Int,
+    private val minRows: Int,
+    private val maxRows: Int,
+    private val touchSlop: Int
+) {
+    init {
+        require(rowHeight > 0 && minRows > 0 && maxRows >= minRows)
+    }
+
+    var previewHeight: Int = originalHeight
+        private set
+    var dragged: Boolean = false
+        private set
+
+    fun move(y: Float): Int {
+        val delta = y - startY
+        if (kotlin.math.abs(delta) > touchSlop) dragged = true
+        if (dragged) {
+            previewHeight = (originalHeight + delta).toInt()
+                .coerceIn(rowHeight * minRows, rowHeight * maxRows)
+        }
+        return previewHeight
+    }
+
+    fun finish(cancelled: Boolean): WidgetResizeResult = when {
+        cancelled -> WidgetResizeResult.Cancel(originalHeight)
+        !dragged -> WidgetResizeResult.OpenMenu
+        else -> WidgetResizeResult.Commit(
+            (previewHeight / rowHeight.toFloat()).roundToInt().coerceIn(minRows, maxRows)
+        )
+    }
 }

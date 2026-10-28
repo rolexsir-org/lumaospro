@@ -327,13 +327,13 @@ object HomeLayoutOps {
         return setPage(layout, pageIndex, layout.page(pageIndex) + folder)
     }
 
+    /** An empty system scan is not sufficient evidence to discard every placement. */
+    fun pruneAfterScan(layout: HomeLayout, installed: Set<ComponentKey>): HomeLayout =
+        if (installed.isEmpty()) layout else prune(layout, installed)
+
     /**
-     * Drops folder entries whose apps are no longer installed, and folders that
-     * ended up with a single child (a one-item folder is just an icon).
-     * Widgets and smart folders are not tied to one app and are kept; widgets
-     * whose provider vanished are removed by the widget host instead.
-     *
-     * Called after package changes so a layout never shows dead entries.
+     * Drops entries absent from [installed], collapsing one-item folders.
+     * Widgets and smart folders remain in place even if a provider is unavailable.
      */
     fun prune(layout: HomeLayout, installed: Set<ComponentKey>): HomeLayout {
         fun pruneList(items: List<HomeItem>): List<HomeItem> = items.mapNotNull { item ->

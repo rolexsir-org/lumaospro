@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- User-initiated static wallpaper changes only. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <!--
         Package visibility (Android 11+). These are declarations, not
@@ -81,16 +83,15 @@
             Play Store a normal launch intent. On a first ordinary launch,
             HomeActivity offers onboarding before the user chooses a role.
 
-            singleTask + stateNotNeeded + excludeFromRecents keep one launcher
-            instance and rebuild it from persisted state rather than a saved view
-            hierarchy.
+            singleTask + excludeFromRecents keep one launcher instance.
+            Saved instance state also preserves an in-flight widget bind or
+            configuration while Android recreates the activity.
         -->
         <activity
             android:name=".launcher.HomeActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:clearTaskOnLaunch="true"
-            android:stateNotNeeded="true"
             android:excludeFromRecents="true"
             android:resumeWhilePausing="true"
             android:windowSoftInputMode="adjustResize"
@@ -129,6 +130,40 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- Optional notification access supplies MediaSessionManager; Android protects this binding. -->
+        <service
+            android:name=".widgets.music.MusicNotificationListener"
+            android:label="@string/music_widget_name"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <receiver android:name=".widgets.music.MusicWidgetProvider"
+            android:label="@string/music_widget_name" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_music_widget" />
+        </receiver>
+        <receiver android:name=".widgets.music.MusicWidgetControlReceiver" android:exported="false" />
+        <receiver android:name=".widgets.battery.BatteryWidgetProvider"
+            android:label="@string/battery_widget_name" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_battery_widget" />
+        </receiver>
+        <activity android:name=".widgets.music.MusicAccessActivity"
+            android:exported="false" android:label="@string/music_access_title"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".wallpaper.WallpaperActivity"
+            android:exported="false"
+            android:label="@string/wallpaper_studio_title"
+            android:theme="@style/Theme.LumaOS.Settings" />
 
         <activity
             android:name=".settings.SettingsActivity"

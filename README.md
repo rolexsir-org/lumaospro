@@ -9,9 +9,9 @@ optimizer to function.
 
 Its current visual identity is **Luma Glass**: a restrained Liquid Glass /
 Glassmorphism system driven by shared semantic tokens and used by both the
-Views home screen and the Compose settings surfaces. The system wallpaper shows
-through a legibility scrim; effects fall back to opaque, readable surfaces on
-devices without blur support. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+Views home screen and the Compose settings surfaces. When the system wallpaper
+backdrop is selected, it shows through a legibility scrim; effects fall back to
+opaque, readable surfaces on devices without blur support. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ---
 
@@ -229,10 +229,9 @@ palettes, with their historical storage keys (`porcelain` and `vector` included)
 no saved preference is rewritten or used to reset the home layout. Theme selection persists through DataStore and does not change
 app placement, folders, widget IDs/configuration, icon-pack choice, or unrelated
 preferences. The Studio keeps custom color/type/icon/backdrop overrides when a
-preset changes. New installs follow Android's system appearance, choosing
-Signature for dark mode and Zen for light. Scheduled and context-profile switching
-remain available. A custom accent or background deliberately switches the palette
-to the seed-derived path, which can guarantee contrast for an arbitrary colour —
+preset changes. New installations start with the Liquid experience. System,
+scheduled, and context-profile switching remain available. A custom accent or
+background deliberately switches the palette to the seed-derived path, which can guarantee contrast for an arbitrary colour —
 the authored v3.2 roles are used only while the theme's own colours are in force.
 
 The Studio previews the user's installed app icons and Android wallpaper color
@@ -243,6 +242,27 @@ through Android's real `AppWidgetHost` and their provider apps. There is no
 weather/calendar aggregation source in this build, and LumaOS Pro cannot
 redesign Android-controlled surfaces such as the notification shade, Quick
 Settings, lock screen, or navigation UI.
+
+### Wallpaper and widgets
+
+Open **Wallpaper Studio** from Settings or Home edit mode to preview the existing
+Luma art, favorite images, import a private photo copy, and set Android's home,
+lock, or both wallpapers. Pure and Liquid may use their own backdrop; choose
+**Show system wallpaper on Luma Home** to change only that setting. Chroma can
+follow Android wallpaper colors on API 27+, and the system picker remains available
+for live/OEM wallpapers. Android controls cropping and the secure lock screen.
+
+The widget picker includes **Luma Glass Music** and **Luma Glass Battery**, hosted
+through the existing Android widget system. Music requires the optional Android
+notification-access grant described before the system permission screen. It
+follows compatible active sessions and exposes only advertised controls. Battery
+uses Android's real reading: it updates while Luma Home receives battery events,
+and otherwise uses Android's 30-minute-or-longer widget refresh; the check time
+is displayed. The system may delay updates and notification-listener access may
+be restricted by the device. Existing clock/date UI and third-party providers
+remain available. Weather, calendar, and photo widgets are not supplied by Luma.
+See [docs/WALLPAPER_WIDGET_REPORT.md](docs/WALLPAPER_WIDGET_REPORT.md) for the
+verification boundary and backup limitations.
 
 ### Context profiles
 
@@ -362,6 +382,13 @@ option is absent — see the note in `GestureAction.kt`.
   locally.
 - Android cloud backup may transfer preferences and layout. Device-to-device
   transfer also includes diagnostics history; cloud backup excludes it.
+- Wallpaper Studio copies only user-selected photos into private storage. The
+  copies may contain embedded metadata and are excluded from Android backup and
+  device transfer. The manual Luma backup excludes photos and wallpaper favorites.
+- The optional Luma Glass Music widget asks for Android notification access. The
+  grant can expose all notifications; Luma queries media sessions without reading
+  or storing notification contents, and the Android widget host may cache the
+  displayed media details. The grant can be revoked in Android Settings.
 - Voice commands are optional and user-triggered. LumaOS Pro delegates recognition
   to the installed Android speech-recognition app; that provider may process
   audio locally or remotely under its own privacy policy. LumaOS Pro receives the
@@ -401,5 +428,7 @@ is checked into this repository.
 LumaOS Pro Shield, a Brave integration, and location/calendar/physical-activity
 context triggers are not part of this release. Home-screen widgets are
 implemented, but their provider consent, configuration and interaction still
-need real-device validation. See [BUILD_REPORT.md](BUILD_REPORT.md) for the
+need real-device validation. Android widget host IDs are not remapped after
+system backup/restore, so restored placements may need to be added again. Imported
+wallpaper photos are device-local and are not backed up. See [BUILD_REPORT.md](BUILD_REPORT.md) for the
 release verification boundary.

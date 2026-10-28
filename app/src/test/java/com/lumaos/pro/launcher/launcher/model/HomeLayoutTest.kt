@@ -2,6 +2,7 @@ package com.lumaos.pro.launcher.launcher.model
 
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,6 +114,13 @@ class HomeLayoutTest {
     }
 
     @Test
+    fun `an empty app scan does not prune saved placements`() {
+        val original = layoutWith(camera, clock)
+        assertEquals(original, HomeLayoutOps.pruneAfterScan(original, emptySet()))
+        assertEquals(layoutWith(camera), HomeLayoutOps.pruneAfterScan(original, setOf(camera)))
+    }
+
+    @Test
     fun `pruning also cleans the dock`() {
         val layout = HomeLayoutOps.addToDock(HomeLayout.EMPTY, phone)
         assertTrue(HomeLayoutOps.prune(layout, emptySet()).dock.isEmpty())
@@ -148,6 +156,35 @@ class HomeLayoutCodecTest {
     fun `null or blank input decodes to an empty layout`() {
         assertTrue(HomeLayoutCodec.decode(null).dock.isEmpty())
         assertTrue(HomeLayoutCodec.decode("   ").dock.isEmpty())
+    }
+
+    @Test
+    fun `automatic maintenance refuses unknown and truncated layouts`() {
+        val canonical = HomeLayoutCodec.encode(HomeLayoutOps.addToHome(HomeLayout.EMPTY, camera))
+        assertTrue(HomeLayoutCodec.canSafelyRewrite(null))
+        assertTrue(HomeLayoutCodec.canSafelyRewrite(canonical))
+        assertFalse(HomeLayoutCodec.canSafelyRewrite(""))
+        assertFalse(HomeLayoutCodec.canSafelyRewrite("v99\nD|\nP|\n"))
+        assertFalse(HomeLayoutCodec.canSafelyRewrite(canonical.removeSuffix("\n")))
+        assertFalse(HomeLayoutCodec.canSafelyRewrite("v1\nD|\nP|A|broken\n"))
+    }
+
+    @Test
+    fun `widget release check retains ids for unknown or malformed layouts`() {
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v99\nP|new-format", 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v2", 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("", 42))
+        assertFalse(HomeLayoutCodec.mayReferenceWidget(null, 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v2\nP|W|42|broken", 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v2\nD|\nP|W|not-a-number|provider|2\n", 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v2\nD|\nP|W|43||2\n", 42))
+        val otherWidget = HomeLayoutCodec.encode(HomeLayout(pages = listOf(listOf(HomeItem.Widget(43, "provider", 2)))))
+        val referenced = HomeLayoutCodec.encode(HomeLayout(pages = listOf(listOf(HomeItem.Widget(42, "provider", 2)))))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget(referenced, 42))
+        assertFalse(HomeLayoutCodec.mayReferenceWidget(otherWidget, 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget(otherWidget.removeSuffix("\n"), 42))
+        assertTrue(HomeLayoutCodec.mayReferenceWidget("v1\nD|\nP|", 42))
+        assertFalse(HomeLayoutCodec.mayReferenceWidget(HomeLayoutCodec.encode(HomeLayout.EMPTY), 42))
     }
 
     @Test

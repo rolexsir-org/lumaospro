@@ -1,5 +1,12 @@
 # LumaOS Pro build and release-readiness report
 
+> **2026-10-28 update:** The current branch's production-polish work and actual
+> validation outcomes are recorded in [docs/POLISH_REPORT.md](docs/POLISH_REPORT.md).
+> The subsequent wallpaper and widget work is reported separately in
+> [docs/WALLPAPER_WIDGET_REPORT.md](docs/WALLPAPER_WIDGET_REPORT.md).
+> The sections below describe earlier passes; their references to the "current"
+> workspace are historical and are not evidence for this branch.
+
 ## Verification boundary
 
 This report distinguishes prior historical verification from the current

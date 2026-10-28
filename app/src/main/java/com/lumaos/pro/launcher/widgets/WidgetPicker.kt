@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.text.Editable
 import android.text.TextWatcher
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -52,7 +53,8 @@ class WidgetPicker(
     private var listContainer: LinearLayout? = null
     private var emptyView: TextView? = null
     private var retryButton: TextView? = null
-    private var allProviders: List<AppWidgetProviderInfo> = emptyList()
+    private var allProviders: List<WidgetPickerEntry<AppWidgetProviderInfo>> = emptyList()
+    @Volatile private var renderGeneration = 0
     private var onPick: ((AppWidgetProviderInfo) -> Unit)? = null
     private var onRetry: (() -> Unit)? = null
 
@@ -71,11 +73,19 @@ class WidgetPicker(
         this.onPick = onPick
         this.onRetry = onRetry
         val providers = (state as? ProviderLoad.Loaded)?.providers.orEmpty()
-        allProviders = providers
+        val pm = context.packageManager
+        val appLabels = HashMap<String, String>()
+        allProviders = providers.map { info ->
+            val pkg = info.provider.packageName
+            val appLabel = appLabels.getOrPut(pkg) {
+                runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+            }
+            val widgetLabel = runCatching { info.loadLabel(pm) }.getOrNull() ?: info.provider.className
+            WidgetPickerEntry(info, pkg, appLabel, widgetLabel)
+        }
         val c = theme.colors
         val sheetSpec = glassPalette[GlassRole.SHEET]
         val sheetColors = sheetSpec.rest
-        val pm = context.packageManager
         val ov = FrameLayout(context)
         val scrim = View(context).apply {
             setBackgroundColor(c.scrim)
@@ -145,8 +155,11 @@ class WidgetPicker(
             }
         }
 
-        val sheetParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-            (root.height * 0.78f).toInt().coerceAtLeast(dp(360f)), Gravity.BOTTOM)
+        val availableHeight = root.height.takeIf { it > 0 } ?: context.resources.displayMetrics.heightPixels
+        val sheetHeight = (availableHeight * 0.78f).toInt()
+            .coerceAtLeast(minOf(dp(360f), availableHeight))
+            .coerceAtMost(availableHeight)
+        val sheetParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sheetHeight, Gravity.BOTTOM)
         ov.addView(sheet, sheetParams)
         root.addView(ov, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         overlay = ov
@@ -211,18 +224,10 @@ class WidgetPicker(
 
     private fun renderRows(query: String) {
         val container = listContainer ?: return
-        val pm = context.packageManager
-        val needle = query.trim().lowercase()
-        val filtered = allProviders.filter { info ->
-            if (needle.isEmpty()) return@filter true
-            val widgetLabel = runCatching { info.loadLabel(pm) }.getOrNull()?.lowercase().orEmpty()
-            val appLabel = runCatching {
-                pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
-            }.getOrNull()?.lowercase().orEmpty()
-            widgetLabel.contains(needle) || appLabel.contains(needle)
-        }
+        val generation = ++renderGeneration
+        val groups = WidgetPickerModel.groups(allProviders, query)
         container.removeAllViews()
-        if (filtered.isEmpty()) {
+        if (groups.isEmpty()) {
             showNoResultsState(query)
             return
         }
@@ -230,20 +235,16 @@ class WidgetPicker(
         retryButton?.visibility = View.GONE
         container.visibility = View.VISIBLE
 
-        val grouped = filtered.groupBy { it.provider.packageName }.toSortedMap(compareBy { pkg ->
-            runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString().lowercase() }.getOrDefault(pkg)
-        })
-        for ((pkg, infos) in grouped) {
-            val appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-            container.addView(buildAppHeader(pkg, appLabel))
-            for (info in infos) container.addView(row(info) {
+        for (group in groups) {
+            container.addView(buildAppHeader(group.packageName, group.appLabel, generation))
+            for (entry in group.entries) container.addView(row(entry.provider, entry.widgetLabel, generation) {
                 dismiss()
-                onPick?.invoke(info)
+                onPick?.invoke(entry.provider)
             })
         }
     }
 
-    private fun buildAppHeader(pkg: String, appLabel: String): View {
+    private fun buildAppHeader(pkg: String, appLabel: String, generation: Int): View {
         val spec = glassPalette[GlassRole.SHEET]
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -256,8 +257,9 @@ class WidgetPicker(
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         loader.execute {
+            if (generation != renderGeneration) return@execute
             val d = runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull()
-            icon.post { icon.setImageDrawable(d) }
+            icon.post { if (generation == renderGeneration) icon.setImageDrawable(d) }
         }
         row.addView(icon)
         row.addView(TextView(context).apply {
@@ -270,11 +272,10 @@ class WidgetPicker(
         return row
     }
 
-    private fun row(info: AppWidgetProviderInfo, onClick: () -> Unit): View {
+    private fun row(info: AppWidgetProviderInfo, label: String, generation: Int, onClick: () -> Unit): View {
         val rowSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
         val rowColors = rowSpec.rest
         val widgetSpec = glassPalette[GlassRole.WIDGET]
-        val label = runCatching { info.loadLabel(context.packageManager) }.getOrNull() ?: info.provider.className
         val cellsW = cellsForWidth(info)
         val cellsH = cellsForHeight(info)
         val caps = capabilities(info)
@@ -287,9 +288,10 @@ class WidgetPicker(
         }
         val densityDpi = context.resources.displayMetrics.densityDpi
         loader.execute {
+            if (generation != renderGeneration) return@execute
             val d: Drawable? = runCatching { info.loadPreviewImage(context, densityDpi) }.getOrNull()
                 ?: runCatching { info.loadIcon(context, densityDpi) }.getOrNull()
-            preview.post { preview.setImageDrawable(d) }
+            preview.post { if (generation == renderGeneration) preview.setImageDrawable(d) }
         }
         val capability = when {
             caps == null -> null
@@ -320,6 +322,7 @@ class WidgetPicker(
                     typeface = Typefaces.body(theme.typography)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleSmallSp)
                     maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
                 })
                 addView(TextView(context).apply {
                     text = meta
@@ -327,8 +330,9 @@ class WidgetPicker(
                     typeface = Typefaces.body(theme.typography)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodySmallSp)
                     maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
                 })
-            })
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
     }
 
@@ -344,6 +348,7 @@ class WidgetPicker(
     }
 
     fun dismiss() {
+        renderGeneration++
         overlay?.let { root.removeView(it) }
         overlay = null
         listContainer = null

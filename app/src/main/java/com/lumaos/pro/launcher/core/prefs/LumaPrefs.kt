@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.core.prefs
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -10,6 +11,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.context.ContextProfile
@@ -92,6 +94,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val ICON_PACK = stringPreferencesKey("icon_pack")
         val BACKDROP = stringPreferencesKey("backdrop")
+        val WALLPAPER_FAVORITES = stringSetPreferencesKey("wallpaper_favorites")
         val EFFECTS_PREF = stringPreferencesKey("effects_pref")
         val MOTION_PREF = stringPreferencesKey("motion_pref")
         val HOME_PRESET = stringPreferencesKey("home_preset")
@@ -199,7 +202,12 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
             typography = TypeStyle.fromStorageKey(p[Keys.TYPOGRAPHY]),
             iconShape = IconShape.fromStorageKey(p[Keys.ICON_SHAPE]),
             iconStyle = IconStyle.fromStorageKey(p[Keys.ICON_STYLE]),
-            backdrop = Backdrop.fromStorageKey(p[Keys.BACKDROP]) ?: Backdrop.WALLPAPER,
+            // Missing legacy values keep the existing wallpaper default. An explicit
+            // "theme default" needs its own stored value so it survives a reload.
+            backdrop = when (val raw = p[Keys.BACKDROP]) {
+                BACKDROP_THEME_DEFAULT -> null
+                else -> Backdrop.fromStorageKey(raw) ?: Backdrop.WALLPAPER
+            },
             profileThemes = profileThemes
         )
     }
@@ -209,27 +217,112 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
      * light/dark key is kept in step so 0.1-era readers stay coherent.
      */
     suspend fun applyThemeSettings(settings: ThemeSettings) {
+        dataStore.edit { p -> putThemeSettings(p, settings) }
+    }
+
+    /** Wallpaper Studio changes only the explicitly selected appearance field. */
+    suspend fun showSystemWallpaperOnHome() = write(Keys.BACKDROP, Backdrop.WALLPAPER.storageKey)
+
+    suspend fun setWallpaperAccent(color: Int) = write(Keys.ACCENT_OVERRIDE, color)
+
+    val wallpaperFavorites: Flow<Set<String>> = read(Keys.WALLPAPER_FAVORITES) { emptySet() }
+        .map { it.toSet() }
+
+    /** Atomic set edit; concurrent favorite changes cannot overwrite each other. */
+    suspend fun setWallpaperFavorite(id: String, favorite: Boolean) {
+        require(id.length in 1..160)
         dataStore.edit { p ->
-            p[Keys.THEME_ID] = settings.themeId.storageKey
-            p[Keys.THEME_SWITCHING] = settings.switching.storageKey
-            p[Keys.THEME_LIGHT_ID] = settings.lightThemeId.storageKey
-            p[Keys.THEME_DARK_ID] = settings.darkThemeId.storageKey
-            p[Keys.THEME_DARK_WINDOW] = settings.darkWindow.encode()
-            putOrRemove(p, Keys.ACCENT_OVERRIDE, settings.accentOverride)
-            putOrRemove(p, Keys.BACKGROUND_OVERRIDE, settings.backgroundOverride)
-            putOrRemove(p, Keys.TYPOGRAPHY, settings.typography?.storageKey)
-            putOrRemove(p, Keys.ICON_SHAPE, settings.iconShape?.storageKey)
-            putOrRemove(p, Keys.ICON_STYLE, settings.iconStyle?.storageKey)
-            putOrRemove(p, Keys.BACKDROP, settings.backdrop?.storageKey)
-            for (profile in ContextProfile.entries) {
-                putOrRemove(p, profileThemeKey(profile), settings.profileThemes[profile]?.storageKey)
-            }
-            p[Keys.THEME_MODE] = when (settings.switching) {
-                ThemeSwitching.SYSTEM, ThemeSwitching.SCHEDULE -> ThemeMode.SYSTEM.storageKey
-                ThemeSwitching.FIXED -> if (settings.themeId == ThemeId.PORCELAIN) ThemeMode.LIGHT.storageKey
-                else ThemeMode.DARK.storageKey
-            }
+            val next = p[Keys.WALLPAPER_FAVORITES].orEmpty().toMutableSet()
+            if (favorite) next.add(id) else next.remove(id)
+            p[Keys.WALLPAPER_FAVORITES] = next
         }
+    }
+
+    private fun putThemeSettings(p: MutablePreferences, settings: ThemeSettings) {
+        p[Keys.THEME_ID] = settings.themeId.storageKey
+        p[Keys.THEME_SWITCHING] = settings.switching.storageKey
+        p[Keys.THEME_LIGHT_ID] = settings.lightThemeId.storageKey
+        p[Keys.THEME_DARK_ID] = settings.darkThemeId.storageKey
+        p[Keys.THEME_DARK_WINDOW] = settings.darkWindow.encode()
+        putOrRemove(p, Keys.ACCENT_OVERRIDE, settings.accentOverride)
+        putOrRemove(p, Keys.BACKGROUND_OVERRIDE, settings.backgroundOverride)
+        putOrRemove(p, Keys.TYPOGRAPHY, settings.typography?.storageKey)
+        putOrRemove(p, Keys.ICON_SHAPE, settings.iconShape?.storageKey)
+        putOrRemove(p, Keys.ICON_STYLE, settings.iconStyle?.storageKey)
+        p[Keys.BACKDROP] = settings.backdrop?.storageKey ?: BACKDROP_THEME_DEFAULT
+        for (profile in ContextProfile.entries) {
+            putOrRemove(p, profileThemeKey(profile), settings.profileThemes[profile]?.storageKey)
+        }
+        p[Keys.THEME_MODE] = when (settings.switching) {
+            ThemeSwitching.SYSTEM, ThemeSwitching.SCHEDULE -> ThemeMode.SYSTEM.storageKey
+            ThemeSwitching.FIXED -> if (settings.themeId == ThemeId.PORCELAIN) ThemeMode.LIGHT.storageKey
+            else ThemeMode.DARK.storageKey
+        }
+    }
+
+    /**
+     * Commits the whole Studio draft as one DataStore transaction. A colour-only
+     * edit must not reset a manually chosen row count. Changing the layout preset
+     * still adopts its documented default rows, just like setHomePreset().
+     */
+    suspend fun applyStudioSettings(
+        theme: ThemeSettings,
+        iconPack: String?,
+        homePreset: HomePreset,
+        dockStyle: DockStyle?,
+        effects: EffectsPreference,
+        motion: MotionPreference
+    ) {
+        dataStore.edit { p ->
+            val previousPreset = HomePreset.fromStorageKey(p[Keys.HOME_PRESET])
+            putThemeSettings(p, theme)
+            putOrRemove(p, Keys.ICON_PACK, iconPack?.takeIf { it.isNotBlank() })
+            if (previousPreset != homePreset) {
+                p[Keys.HOME_PRESET] = homePreset.storageKey
+                p[Keys.GRID_ROWS] = homePreset.defaultRows
+            }
+            putOrRemove(p, Keys.DOCK_STYLE, dockStyle?.storageKey)
+            p[Keys.EFFECTS_PREF] = effects.storageKey
+            p[Keys.MOTION_PREF] = motion.storageKey
+        }
+    }
+
+    /** Apply a coordinated look without replacing saved rows, layouts or widgets. */
+    suspend fun applyExperienceProfile(profile: ExperienceProfile) {
+        dataStore.edit { p -> putExperienceProfile(p, profile) }
+    }
+
+    /**
+     * Seed Liquid only on a genuinely unconfigured installation. Onboarding can
+     * be recreated or shown after a restore, so it must not reapply defaults over
+     * an existing appearance merely because it was opened again.
+     */
+    suspend fun initializeDefaultExperienceIfUnconfigured() {
+        dataStore.edit { p ->
+            val appearanceKeys = listOf(
+                Keys.EXPERIENCE_PROFILE, Keys.THEME_MODE, Keys.THEME_ID, Keys.THEME_SWITCHING,
+                Keys.THEME_LIGHT_ID, Keys.THEME_DARK_ID, Keys.THEME_DARK_WINDOW,
+                Keys.ACCENT_OVERRIDE, Keys.BACKGROUND_OVERRIDE, Keys.TYPOGRAPHY,
+                Keys.ICON_SHAPE, Keys.ICON_STYLE, Keys.ICON_PACK, Keys.BACKDROP,
+                Keys.HOME_PRESET, Keys.DOCK_STYLE, Keys.EFFECTS_PREF, Keys.MOTION_PREF,
+                Keys.GRID_COLUMNS, Keys.GRID_ROWS, Keys.DRAWER_COLUMNS, Keys.ICON_SIZE_DP,
+                Keys.SHOW_LABELS, Keys.TEXT_SCALE
+            )
+            val configured = appearanceKeys.any { it in p.asMap() } ||
+                ContextProfile.entries.any { p[profileThemeKey(it)] != null }
+            if (!configured) putExperienceProfile(p, ExperienceProfile.DEFAULT)
+        }
+    }
+
+    private fun putExperienceProfile(p: MutablePreferences, profile: ExperienceProfile) {
+        putThemeSettings(p, profile.themeSettings(themeSettingsFrom(p)))
+        p[Keys.HOME_PRESET] = profile.preset.storageKey
+        // Only seed a row count when the user has never chosen one.
+        if (p[Keys.GRID_ROWS] == null) p[Keys.GRID_ROWS] = profile.preset.defaultRows
+        p[Keys.DOCK_STYLE] = profile.dock.storageKey
+        p[Keys.EFFECTS_PREF] = profile.effects.storageKey
+        p[Keys.MOTION_PREF] = profile.motion.storageKey
+        p[Keys.EXPERIENCE_PROFILE] = profile.storageKey
     }
 
     suspend fun setProfileTheme(profile: ContextProfile, id: ThemeId?) {
@@ -326,7 +419,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    private fun <T> putOrRemove(p: androidx.datastore.preferences.core.MutablePreferences, key: Preferences.Key<T>, value: T?) {
+    private fun <T> putOrRemove(p: MutablePreferences, key: Preferences.Key<T>, value: T?) {
         if (value == null) p.remove(key) else p[key] = value
     }
 
@@ -360,6 +453,39 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setHomeLayoutRaw(profile: ContextProfile, value: String) =
         write(profileLayoutKey(profile), value)
+
+    /**
+     * Raw, single-snapshot read for layout safety checks; IO errors propagate.
+     * Order is the base layout, known profiles in enum order, then future keys.
+     */
+    suspend fun allHomeLayoutsRaw(): List<String?> {
+        val stored = dataStore.data.first()
+        val known = listOf(Keys.HOME_LAYOUT) + ContextProfile.entries.map(::profileLayoutKey)
+        val names = known.mapTo(HashSet()) { it.name }
+        // A future or damaged profile key must not be overlooked on downgrade.
+        // A non-string value is represented as an uncertain (blank) layout.
+        val extra = stored.asMap().filterKeys { it.name.startsWith("home_layout_") && it.name !in names }
+            .values.map { it as? String ?: "" }
+        return known.map { stored[it] } + extra
+    }
+
+    /**
+     * Compare the effective layout inside the same transaction that writes it.
+     * A null profile addresses the legacy/base layout; a profile compares its
+     * own value or its base fallback. Used only for automatic maintenance.
+     */
+    suspend fun setHomeLayoutRawIfUnchanged(profile: ContextProfile?, expected: String?, value: String): Boolean {
+        var written = false
+        dataStore.edit { p ->
+            val key = profile?.let(::profileLayoutKey) ?: Keys.HOME_LAYOUT
+            val current = if (profile == null) p[key] else p[key] ?: p[Keys.HOME_LAYOUT]
+            if (current == expected) {
+                p[key] = value
+                written = true
+            }
+        }
+        return written
+    }
 
     val activeContextProfile: Flow<ContextProfile> =
         read(Keys.ACTIVE_CONTEXT_PROFILE) { ContextProfile.PERSONAL.name }
@@ -536,6 +662,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun isOnboardingDoneOnce(): Boolean = onboardingDone.first()
 
     companion object {
+        private const val BACKDROP_THEME_DEFAULT = "theme_default"
+
         const val DEFAULT_GRID_COLUMNS = 4
         const val DEFAULT_GRID_ROWS = 5
         const val DEFAULT_DRAWER_COLUMNS = 4
