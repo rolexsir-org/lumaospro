@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -119,7 +120,7 @@ class OnboardingActivity : ComponentActivity() {
                             modifier = Modifier.widthIn(max = 440.dp),
                             style = MaterialTheme.typography.headlineLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.CENTER
+                            textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(

@@ -181,6 +181,14 @@ data class ThemeColors(
     val successSeed: Int? = null,
     val warningSeed: Int? = null
 ) {
+    /**
+     * Shadow tint for elevated glass surfaces. Derived from the themed scrim
+     * rather than stored as another constructor role, so existing persisted
+     * palettes and every [lerp] stay source- and data-compatible while each
+     * identity keeps its own shadow colour.
+     */
+    val shadowColor: Int get() = scrim
+
     companion object {
         /** Animated theme changes interpolate every role at once. */
         fun lerp(a: ThemeColors, b: ThemeColors, t: Float): ThemeColors {

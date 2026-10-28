@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.settings
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
+import kotlinx.coroutines.flow.first
 
 /**
  * Applies an [ExperienceProfile] through the existing preference layer.

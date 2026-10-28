@@ -150,7 +150,11 @@ class WidgetHostController(context: Context) {
         val minResizeHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) info.minResizeHeight else 0
         val maxResizeHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.maxResizeHeight else 0
         val targetCellHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.targetCellHeight else 0
-        val minCellHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) info.minCellHeight else 0
+        // AppWidgetProviderInfo has no public minCellHeight field. The provider's
+        // minimum is already supplied as minResizeHeightPx; WidgetPlan converts
+        // that pixel minimum into grid rows, so no unsupported platform field is
+        // referenced here.
+        val minCellHeight = 0
         val features = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.widgetFeatures else 0
         return WidgetPlan.capabilities(
             ProviderFacts(

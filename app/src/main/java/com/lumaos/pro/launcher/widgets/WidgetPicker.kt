@@ -167,7 +167,7 @@ class WidgetPicker(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
             background = GlassViews.drawable(glassPalette[GlassRole.SEARCH], density, ripple = false)
             setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-            singleLine = true
+            isSingleLine = true
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
         }
