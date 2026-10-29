@@ -67,4 +67,49 @@
     <dimen name="luma_type_section_header">13sp</dimen>
     <dimen name="luma_type_micro">11sp</dimen>
     <dimen name="luma_type_app_label">11sp</dimen>
+
+    <!--
+        ── Edit Home (edit mode) ──
+        Mirrors com.lumaos.pro.launcher.launcher.home.EditModeDesign 1:1.
+        Tweak there for code, here for XML: the two are deliberately equal.
+    -->
+    <!-- Screen geometry: one 16dp margin and one 12dp rhythm for every surface -->
+    <dimen name="luma_edit_screen_margin">16dp</dimen>
+    <dimen name="luma_edit_section_gap">12dp</dimen>
+    <dimen name="luma_edit_header_top_margin">12dp</dimen>
+    <dimen name="luma_edit_header_to_clock_gap">16dp</dimen>
+    <!-- Header card: 24dp corners, 18dp padding, soft shadow -->
+    <dimen name="luma_edit_header_radius">24dp</dimen>
+    <dimen name="luma_edit_header_padding">18dp</dimen>
+    <dimen name="luma_edit_header_elevation">12dp</dimen>
+    <dimen name="luma_edit_header_title">20sp</dimen>
+    <dimen name="luma_edit_header_subtitle">13sp</dimen>
+    <dimen name="luma_edit_header_subtitle_min">10sp</dimen>
+    <!-- Done pill -->
+    <dimen name="luma_edit_done_min_width">76dp</dimen>
+    <dimen name="luma_edit_done_height">40dp</dimen>
+    <dimen name="luma_edit_done_text">14sp</dimen>
+    <!-- Clock/date -->
+    <dimen name="luma_edit_date">14sp</dimen>
+    <!-- Drop zones -->
+    <dimen name="luma_edit_grid_gutter">12dp</dimen>
+    <dimen name="luma_edit_slot_radius">20dp</dimen>
+    <!-- Centre hint pill -->
+    <dimen name="luma_edit_hint_text">14sp</dimen>
+    <dimen name="luma_edit_hint_padding_v">14dp</dimen>
+    <dimen name="luma_edit_hint_padding_h">20dp</dimen>
+    <dimen name="luma_edit_hint_elevation">16dp</dimen>
+    <!-- Dock -->
+    <dimen name="luma_edit_dock_radius">28dp</dimen>
+    <dimen name="luma_edit_dock_padding">14dp</dimen>
+    <dimen name="luma_edit_dock_toolbar_gap">12dp</dimen>
+    <!-- Bottom edit toolbar -->
+    <dimen name="luma_edit_toolbar_radius">24dp</dimen>
+    <dimen name="luma_edit_toolbar_padding">10dp</dimen>
+    <dimen name="luma_edit_toolbar_elevation">16dp</dimen>
+    <dimen name="luma_edit_toolbar_button_height">64dp</dimen>
+    <dimen name="luma_edit_toolbar_button_radius">16dp</dimen>
+    <dimen name="luma_edit_toolbar_icon">22dp</dimen>
+    <dimen name="luma_edit_toolbar_label">12sp</dimen>
+    <dimen name="luma_edit_toolbar_bottom_margin">16dp</dimen>
 </resources>

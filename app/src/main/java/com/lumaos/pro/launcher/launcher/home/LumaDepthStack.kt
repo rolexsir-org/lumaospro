@@ -71,7 +71,6 @@ object LumaDepthStack {
     fun solve(inputs: Inputs): Frame {
         val d = inputs.drawerProgress.coerceIn(0f, 1.05f)
         val f = inputs.folderProgress.coerceIn(0f, 1.05f)
-        val e = inputs.editProgress.coerceIn(0f, 1f)
         val m = inputs.modalProgress.coerceIn(0f, 1.05f)
         val l = inputs.launchProgress.coerceIn(0f, 1f)
         val settle = inputs.settleProgress.coerceIn(0f, 1.1f)
@@ -86,8 +85,12 @@ object LumaDepthStack {
         val wallpaperTx = if (inputs.allowDepthTransforms) -px * 16f * dp else 0f
         val wallpaperTy = if (inputs.allowDepthTransforms) -(d * 18f + m * 10f) * dp else 0f
 
+        // Edit mode deliberately does not recede the desktop: the edit chrome
+        // reserves its own space in the layout (see EditModeController), so a
+        // scale transform here would slide the dock under the toolbar. Sheets,
+        // folders and app launches still pull the desktop back.
         val desktopScale = if (inputs.allowDepthTransforms) {
-            (1f - 0.06f * d - 0.04f * f - 0.08f * e - 0.04f * m - 0.05f * l - 0.04f * (1f - settle))
+            (1f - 0.06f * d - 0.04f * f - 0.04f * m - 0.05f * l - 0.04f * (1f - settle))
                 .coerceIn(0.84f, 1.02f)
         } else 1f
 

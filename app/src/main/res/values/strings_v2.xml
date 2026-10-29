@@ -80,7 +80,15 @@
 
     <!-- Edit mode -->
     <string name="edit_title">Edit home</string>
-    <string name="edit_hint">Drag to arrange · hold over an app to group · drag here to remove</string>
+    <!--
+        Edit-mode header subtitle: three short, parallel verbs, separated by
+        middle dots. Words inside a phrase are joined with non-breaking spaces
+        (\u00A0) so, when the line wraps, it can only break *between* phrases
+        ("Drag to arrange ·" / "Hold to group ·" / "Drag here to remove") and
+        never in the middle of one. The view auto-shrinks 13sp→10sp so this
+        stays within two lines on narrow phones without ever truncating.
+    -->
+    <string name="edit_hint">Drag\u00A0to\u00A0arrange · Hold\u00A0to\u00A0group · Drag\u00A0here\u00A0to\u00A0remove</string>
     <string name="edit_release_to_remove">Release to remove</string>
     <string name="edit_done">Done</string>
     <string name="edit_announce">Edit mode. Long-press and drag items to rearrange.</string>

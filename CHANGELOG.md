@@ -9,6 +9,37 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
 
 ## 1.0.0 — unreleased
 
+### Edit Home redesign (visual only)
+
+- Rebuilt the edit-mode layout as two floating glass cards around one aligned
+  content column: a header card (title, subtitle, Done pill) on top and a
+  five-button toolbar at the bottom. The desktop now *reserves* their height
+  through a single inset authority (`HomeActivity.applyChromeInsets`), so the
+  header can no longer cover the clock and the toolbar can no longer cover the
+  dock.
+- Moved every edit value into one token object
+  (`launcher/home/EditModeDesign.kt`, mirrored as `luma_edit_*` in `dimens.xml`):
+  16dp screen margin, 12dp section rhythm, 24dp cards, 28dp dock, 16dp buttons,
+  20dp drop zones, 64dp toolbar buttons, 22dp icons.
+- Rewrote `PlacementGuideView` so drop zones are derived from the real grid
+  (content width ÷ span count, the adapter's row height and scroll offset):
+  dashed 1dp white-15% outlines with a 3% fill, 20dp corners, 12dp gutters, and
+  drawn only where a slot is actually free. The previous pass guessed cell
+  geometry and drew an extra, clipped row.
+- Toolbar labels never wrap or truncate ("Wallpaper" included): single line,
+  12sp Medium, auto-shrink to 9sp, 8% white state fill on a transparent button.
+- Edit mode veils the *wallpaper* only — 55% black plus a slight API 31+
+  defocus — and a busy pattern lands near 16% effective opacity; the clock,
+  apps and dock stay fully crisp. The desktop no longer recedes (`LumaDepthStack`
+  edit scale removed) because the layout already reserves the chrome's space.
+- Preserved every feature and code path: drag-to-arrange, hold-to-group, the
+  drag-to-remove zone, the toolbar's five actions, the empty-state hint pill
+  (now fully rounded, 14sp at 85%) and all existing view IDs.
+- Verified by compiling all 124 Kotlin sources with Kotlin 2.2.21 against a real
+  android-36 framework jar plus the androidx/Compose classpath (no Gradle,
+  Robolectric, lint, APK or device run in this environment).
+
+
 First public release. Configured but not yet built, tested, signed or verified on
 a device from this source.
 

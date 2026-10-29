@@ -34,3 +34,7 @@ secrets.properties
 
 # --- OS ---
 .DS_Store
+
+# --- Python bytecode from the design preview script ---
+__pycache__/
+*.pyc
