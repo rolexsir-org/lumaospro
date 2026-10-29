@@ -410,12 +410,22 @@ private fun WallpaperStudio(
             }
             visible.isEmpty() -> {
                 LumaGlassSurface(theme, GlassRole.SECONDARY, Modifier.fillMaxWidth()) {
-                    Text(
-                        stringResource(R.string.wallpaper_empty),
-                        color = Color(theme.colors.onSurfaceMuted),
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(20.dp)
-                    )
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            stringResource(R.string.wallpaper_empty),
+                            color = Color(theme.colors.onSurfaceMuted),
+                            fontSize = 13.sp
+                        )
+                        LumaGlassChoice(
+                            theme = theme,
+                            label = stringResource(R.string.wallpaper_collection_all),
+                            selected = false,
+                            onClick = {
+                                categoryName = WallpaperCategory.ALL.name
+                                collectionKey = null
+                            }
+                        )
+                    }
                 }
             }
             else -> {
