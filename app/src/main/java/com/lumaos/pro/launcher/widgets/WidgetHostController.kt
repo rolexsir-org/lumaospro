@@ -144,6 +144,27 @@ class WidgetHostController(context: Context) {
     }
 
     /**
+     * Handles Android's host-restore signal after cloud/transfer restore.
+     * System remaps old hostIds -> new hostIds; we update cached views.
+     */
+    fun remapRestoredIds(intent: android.content.Intent?): Map<Int, Int> {
+        if (intent == null) return emptyMap()
+        val newIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS) ?: return emptyMap()
+        val oldIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_OLD_IDS) ?: return emptyMap()
+        if (newIds.size != oldIds.size) return emptyMap()
+        val map = mutableMapOf<Int, Int>()
+        for (i in newIds.indices) {
+            val oldId = oldIds[i]; val newId = newIds[i]
+            if (oldId != newId) {
+                views.remove(oldId)?.let { views[newId] = it }
+                map[oldId] = newId
+            }
+        }
+        if (map.isNotEmpty()) LumaLog.i("Widget host restored: ${map.size} ids remapped")
+        return map
+    }
+
+    /**
      * Releases only host ids that no saved layout or in-flight add references.
      * An unavailable host is not an empty host; let the activity retry later.
      */

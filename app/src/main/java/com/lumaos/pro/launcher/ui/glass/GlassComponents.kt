@@ -563,32 +563,45 @@ fun LumaGlassTopBar(
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .padding(horizontal = GlassGeometry.GUTTER_DP.dp),
+                .heightIn(min = 64.dp)
+                .padding(horizontal = GlassGeometry.GUTTER_DP.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (navigationIcon != null) {
-                // Choice controls fill their incoming width. Never let navigation
-                // consume the Row's entire width and starve the weighted title.
                 Box(Modifier.widthIn(max = 96.dp)) { navigationIcon() }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
             }
-            Column(Modifier.weight(1f)) {
+            Column(
+                Modifier.weight(1f, fill = true),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
                     title,
                     color = Color(colors.content),
-                    fontSize = 20.sp,
-                    maxLines = 2,
+                    fontSize = 19.sp,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 22.sp
                 )
                 if (!subtitle.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(subtitle, color = Color(colors.muted), fontSize = 12.sp,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        subtitle,
+                        color = Color(colors.muted),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp
+                    )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, content = actions)
+            Spacer(Modifier.width(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                content = actions
+            )
         }
     }
 }

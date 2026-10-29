@@ -621,6 +621,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      * ordering are preserved. Returns the released widget ids so the activity
      * can delete them from the AppWidgetHost exactly once.
      */
+    suspend fun remapRestoredWidgetIds(mapping: Map<Int, Int>) {
+        if (mapping.isEmpty()) return
+        for (profile in ContextProfile.entries) {
+            val current = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
+            val remapped = HomeLayoutOps.remapWidgetIds(current, mapping)
+            if (remapped != current) {
+                prefs.setHomeLayoutRaw(profile, HomeLayoutCodec.encode(remapped))
+                if (profile == activeContextProfile.value) withContext(Dispatchers.Main) { _layout.value = remapped }
+            }
+        }
+    }
+
     suspend fun reconcileWidgets(validIds: Set<Int>): Set<Int> {
         val removed = HashSet<Int>()
         for (profile in ContextProfile.entries) {

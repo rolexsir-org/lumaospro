@@ -96,6 +96,18 @@ class AmbientBackdropView @JvmOverloads constructor(
         invalidate()
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        windowVisible = true
+        phaseOrigin = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        windowVisible = false
+    }
+
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         windowVisible = visibility == VISIBLE

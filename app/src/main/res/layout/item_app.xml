@@ -35,11 +35,8 @@
         android:importantForAccessibility="no"
         android:includeFontPadding="false"
         android:maxLines="1"
-        android:shadowColor="#B3000000"
-        android:shadowDx="0"
-        android:shadowDy="1"
-        android:shadowRadius="3"
-        android:textColor="#D9FFFFFF"
-        android:textSize="@dimen/luma_type_app_label" />
+        android:textColor="#F2F4F9"
+        android:textSize="@dimen/luma_type_app_label"
+        android:letterSpacing="0.01" />
 
 </LinearLayout>

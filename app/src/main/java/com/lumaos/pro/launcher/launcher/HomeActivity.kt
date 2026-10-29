@@ -524,6 +524,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Handle host-restore after cloud restore before normal home handling.
+        if (intent?.action == AppWidgetManager.ACTION_APPWIDGET_HOST_RESTORED) {
+            val mapping = widgets.remapRestoredIds(intent)
+            if (mapping.isNotEmpty()) {
+                lifecycleScope.launch { viewModel.remapRestoredWidgetIds(mapping) }
+                // Don't dismiss UI for system restore signal — just remap and refresh.
+                return
+            }
+        }
         // Pressing Home on the home screen returns to a clean desktop on page 1.
         when {
             livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
@@ -943,16 +952,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /**
      * Single source of truth for the home composition's insets.
-     *
-     * At rest: the design system's 24dp screen margin and a 4dp optical inset.
-     * While editing, the desktop reserves exactly the chrome's height —
-     *   top    = safe area + header top margin + header card + 16dp clear gap
-     *   bottom = safe area + toolbar bottom margin + toolbar
-     * and the grid, drop zones, dock and chrome all share one 16dp margin, so
-     * nothing overlaps and every left/right edge lines up.
-     *
-     * Idempotent and guarded: it is called from the insets listener, on every
-     * edit-mode transition and whenever the chrome's measured height changes.
+     * Clean, intact layout: desktop never overlaps status/gesture bars,
+     * edit chrome reserves exact space, margins align to 24dp/16dp grid.
      */
     private fun applyChromeInsets() {
         if (!::desktop.isInitialized) return
@@ -966,12 +967,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             safe.top + dp(EditModeDesign.headerTopMarginDp.toInt()) + headerHeight +
                 dp(EditModeDesign.headerToClockGapDp.toInt())
         } else {
-            safe.top + dp(4)
+            safe.top + dp(2)
         }
         val bottom = if (editing) {
-            safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt()) + toolbarHeight
+            safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt()) + toolbarHeight + dp(4)
         } else {
-            safe.bottom + dp(4)
+            safe.bottom + dp(2)
         }
         desktop.setPadding(safe.left, top, safe.right, bottom)
 

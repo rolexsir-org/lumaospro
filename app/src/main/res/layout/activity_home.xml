@@ -182,11 +182,6 @@
                 android:layout_marginEnd="@dimen/luma_edit_screen_margin"
                 android:visibility="gone" />
 
-            <!--
-                Centre hint pill: "Swipe up to explore your apps". Floats over the
-                grid on its own soft shadow (never inside the grid flow), fully
-                rounded, one line, 14sp at 85% white. Still the drawer shortcut.
-            -->
             <TextView
                 android:id="@+id/home_empty"
                 android:layout_width="wrap_content"
@@ -199,14 +194,14 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:maxWidth="320dp"
-                android:maxLines="1"
+                android:maxLines="2"
+                android:maxWidth="300dp"
                 android:paddingStart="@dimen/luma_edit_hint_padding_h"
                 android:paddingTop="@dimen/luma_edit_hint_padding_v"
                 android:paddingEnd="@dimen/luma_edit_hint_padding_h"
                 android:paddingBottom="@dimen/luma_edit_hint_padding_v"
                 android:text="@string/home_empty_hint"
-                android:textColor="#D9FFFFFF"
+                android:textColor="#E6FFFFFF"
                 android:textSize="@dimen/luma_edit_hint_text"
                 android:visibility="gone" />
         </FrameLayout>
