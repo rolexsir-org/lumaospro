@@ -13,12 +13,14 @@ import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.launcher.HomeActivity
+import com.lumaos.pro.launcher.launcher.home.EditModeController
 import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.widgets.WidgetHostController
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -214,6 +216,75 @@ class HomeActivityRuntimeTest {
         val activity = buildHome()
         activity.onBackPressedDispatcher.onBackPressed()
         assertTrue("home must survive a back press", !activity.isFinishing)
+    }
+
+    // ------------------------------------------------------------ home editing
+
+    /**
+     * The legacy model is gone from the resource table, not merely hidden: a
+     * banner and a permanent toolbar cannot come back by flipping a visibility.
+     */
+    @Test
+    fun `the inflated home screen carries no instructional editing chrome`() {
+        val activity = buildHome()
+        val res = activity.resources
+        listOf("edit_top_bar", "edit_toolbar", "edit_hint", "edit_title", "edit_done").forEach { id ->
+            assertEquals(
+                "$id must not exist in the home layout any more",
+                0,
+                res.getIdentifier(id, "id", activity.packageName)
+            )
+        }
+    }
+
+    @Test
+    fun `the contextual editing surfaces are absent at rest`() {
+        val activity = buildHome()
+        assertEquals(android.view.View.GONE, activity.findViewById<android.view.View>(R.id.edit_action_bar).visibility)
+        assertEquals(android.view.View.GONE, activity.findViewById<android.view.View>(R.id.edit_remove_target).visibility)
+        assertEquals(android.view.View.GONE, activity.findViewById<android.view.View>(R.id.placement_guide).visibility)
+        assertEquals(android.view.View.VISIBLE, activity.findViewById<android.view.View>(R.id.home_search_pill).visibility)
+    }
+
+    /**
+     * Editing must not re-flow the workspace: the capsule shares the search row
+     * and the drop zones float, so the grid keeps the exact padding it had.
+     */
+    @Test
+    fun `entering and leaving editing reserves no space in the workspace`() {
+        val activity = buildHome()
+        val controller = HomeActivity::class.java.getDeclaredField("edit")
+            .apply { isAccessible = true }
+            .get(activity) as EditModeController
+        val grid = activity.findViewById<RecyclerView>(R.id.home_grid)
+        val desktop = activity.findViewById<android.view.View>(R.id.desktop)
+        val gridPadding = intArrayOf(grid.paddingLeft, grid.paddingTop, grid.paddingRight, grid.paddingBottom)
+        val desktopPadding = intArrayOf(
+            desktop.paddingLeft, desktop.paddingTop, desktop.paddingRight, desktop.paddingBottom
+        )
+
+        controller.enter(haptic = false)
+        assertTrue("editing should be active", controller.isActive)
+        assertEquals(android.view.View.VISIBLE, activity.findViewById<android.view.View>(R.id.edit_action_bar).visibility)
+        assertEquals(android.view.View.VISIBLE, activity.findViewById<android.view.View>(R.id.placement_guide).visibility)
+        assertEquals(
+            "desktop padding must be identical while editing",
+            desktopPadding.toList(),
+            listOf(desktop.paddingLeft, desktop.paddingTop, desktop.paddingRight, desktop.paddingBottom)
+        )
+        assertEquals(
+            "grid padding must be identical while editing",
+            gridPadding.toList(),
+            listOf(grid.paddingLeft, grid.paddingTop, grid.paddingRight, grid.paddingBottom)
+        )
+
+        controller.exit()
+        assertFalse("editing should have ended", controller.isActive)
+        assertEquals(
+            "the search pill owns the row again",
+            android.view.View.VISIBLE,
+            activity.findViewById<android.view.View>(R.id.home_search_pill).visibility
+        )
     }
 
     @Test

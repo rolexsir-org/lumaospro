@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Edit-mode action capsule: the pre-theme fallback shape.
+    EditModeController replaces this with the palette's MENU glass material at
+    runtime; the geometry here matches EditModeDesign.actionBarRadiusDp so the
+    first frame after an editing session starts is already the right silhouette.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="@dimen/luma_edit_action_radius" />
+    <solid android:color="#380E121B" />
+    <stroke android:width="@dimen/luma_glass_border_width" android:color="#1FFFFFFF" />
+</shape>

@@ -426,7 +426,7 @@ Two shape systems coexist, intentionally:
 | `controlDp` / `chipDp` | 12 | Icon buttons, chips, menu rows |
 | `cellDp` | 16 | App cells, drawer rows, empty state |
 | `searchDp` | 18 | Home search field, drawer search |
-| `menuDp` | 16 | Context menus, edit toolbar |
+| `menuDp` | 16 | Context menus, editing capsule targets |
 | `dialogDp` | 24 | Dialogs |
 | `dockDp` | 24 | Dock plate |
 | `folderDp` | 24 | Folder sheet |
@@ -493,39 +493,58 @@ Desktop, top to bottom:
 Every element in this composition is driven by the tokens above; the layout file
 contains no padding or radius that is not mirrored in a token.
 
-### 7.1 Edit Home (edit mode)
+### 7.1 Home editing (contextual edit mode)
 
-Edit mode is a *framed* composition, not an overlay: the desktop reserves exactly
-the height of the chrome, so nothing can sit on top of anything else. Every value
-is authored in `launcher/home/EditModeDesign.kt` and mirrored 1:1 in
+Editing is a *state* of the home screen, not a screen of its own. There is no
+banner, no instructional copy, no tutorial card and no permanent toolbar — and
+nothing reserves space for editing either. The workspace keeps the exact geometry
+it has at rest; the only chrome is one floating capsule that borrows the search
+row, plus affordances that exist only while an item is in the air.
+
+Every value is authored in `launcher/home/EditModeDesign.kt` and mirrored 1:1 in
 `res/values/dimens.xml` as `luma_edit_*`.
 
-| Section | Geometry | Type |
+**How a session starts and ends**
+
+| Trigger | Result |
+| --- | --- |
+| Long-press an app or widget cell | The item lifts immediately and follows the finger — no menu, no intermediate sheet. Editing begins in the same gesture. |
+| Long-press a dock cell | The same lift, scoped to dock reorder (the move stays inside the dock). |
+| Long-press empty workspace | Editing begins with the capsule only; nothing is dimmed beyond the wallpaper. |
+| Tap an app cell while editing | The contextual menu for that item (open, edit, pin, hide, uninstall, shortcuts). |
+| Tap outside any control | The session ends. |
+| Back / Home | The session ends; order and placement are already committed. |
+
+**Layout while editing**
+
+| Surface | Geometry | Notes |
 | --- | --- | --- |
-| Screen margin | 16 dp for the header, grid, drop zones, dock and toolbar | — |
-| Vertical rhythm | 12 dp between sections; 16 dp clear below the header card | — |
-| Header card | 24 dp radius, 18 dp padding, 1 px white-8% border, 12 dp shadow | title 20 sp SemiBold, subtitle 13 sp at 65% (max 2 lines) |
-| Done | 76×40 dp pill, dark glass, 1 px hairline | 14 sp Medium |
-| Clock/date | own block, never under the header | date 14 sp at 80% |
-| Drop zones | 20 dp radius, 1 dp dashed white-15% outline, 3% fill, 12 dp gutters | — |
-| Hint pill | fully rounded, 14/20 dp padding, 16 dp shadow | 14 sp at 85% |
-| Dock | 28 dp radius, 14 dp padding, one row, equal spacing | icons at the user's size |
-| Toolbar | 24 dp radius, 10 dp padding, 16 dp above the gesture bar, five equal buttons 64 dp tall, 16 dp radius | icon 22 dp, label 12 sp Medium, single line, auto-shrink to 9 sp |
+| Action capsule | 48 dp tall (one search row), 24 dp radius, 2 dp inset, 44 dp targets, 22 dp glyphs, 1 × 20 dp divider before Done | Five features + Done. Icon-only; the labels live in `contentDescription`. Cross-fades with `home_search_pill` inside the shared `home_action_slot`; nothing above or below it moves. |
+| Remove target | 52 dp circle, 22 dp glyph, 14 dp below the safe top, 45% at rest → 1.06 scale when armed | Exists only during a drag. |
+| Drop zones | 20 dp radius, 1 dp dashed outline at 12% white, 2% fill, 12 dp gutters, aligned to the 16 dp screen margin | Visible only while an item is being dragged. |
+| Backdrop | 55% black veil + wallpaper at 35% (12 dp defocus on API 31+) | The only thing that dims. Text, icons and widgets stay crisp. |
+| Dock | Unchanged (28 dp radius, 14 dp padding) | Reorder in place; the plate never re-measures. |
+| Page dots | Same row, same 34 dp, same visibility rule as at rest (more than one page) | Add / remove page moved to the Layout menu, so the row never grows during a session. |
 
 Rules this section enforces:
 
-* the desktop's insets are computed once, in `HomeActivity.applyChromeInsets()`,
-  from the measured chrome — no hard-coded card height anywhere;
-* the wallpaper is the only thing dimmed while editing (55% black + a slight
-  API 31+ defocus), so a bright or patterned wallpaper lands near 16% effective
-  opacity while text and icons stay crisp;
-* the desktop does not scale in edit mode (`LumaDepthStack`), because the layout
-  already reserves the space a scale would otherwise steal from the dock;
-* drop zones are derived from the real grid — content width ÷ span count, the
-  adapter's row height, the grid's scroll offset and the live child bounds — so
-  they cannot drift out of alignment or outline an occupied slot;
-* selected/pressed toolbar buttons use one 8% white fill; the accent colour
-  appears only as the drag target in the grid.
+* **nothing reserves space** — `HomeActivity.applyChromeInsets()` no longer
+  depends on editing at all; the desktop's padding, the grid's padding, the
+  dock's margins and the clock's position are identical at rest and while
+  editing, so the workspace cannot jump when a session starts or ends;
+* **one silhouette** — the capsule is exactly one search row tall and fully
+  rounded, so the transition reads as a morph of the row you already have;
+* **no prose** — no title, subtitle, hint line, paragraph or label anywhere in
+  the editing surface; the five features are recognised by their glyphs;
+* **the wallpaper is the only thing dimmed**, landing a busy pattern near 16%
+  effective opacity while text and icons stay crisp;
+* **the desktop does not scale** in edit mode (`LumaDepthStack`), because a
+  scale would steal height from the dock for no reason;
+* **drop zones are derived from the real grid** — content width ÷ span count,
+  the adapter's row height, the grid's scroll offset and the live child bounds —
+  so they cannot drift out of alignment or outline an occupied slot;
+* **one state fill** — 10% white for a pressed action; the theme accent appears
+  only on the drop zones and as the remove target's armed tint.
 
 ---
 
@@ -581,7 +600,10 @@ icons once at the end — type morphing mid-fade would look like a font glitch.
 | Interaction | Feedback | Source |
 | --- | --- | --- |
 | Tap an app cell | Ripple in `ripple` + scale to `pressScale` over `pressMs` | `AppCells.attachPressFeedback` |
-| Long-press a cell | Haptic + edit mode spring; the drag starts from the pressed scale | `EditModeController` |
+| Long-press a cell | Haptic, then the item lifts immediately and follows the finger (`isLongPressDragEnabled = false`; the long-click owns the lift, so no second gesture handler competes) | `EditModeController.beginItemDrag` |
+| Long-press empty workspace | Haptic + edit session starts; the capsule cross-fades into the search row | `HomeActivity` grid long-click |
+| Releasing an undragged lift | The item settles back and its contextual menu opens | `EditModeController.endDragSession` |
+| Drag over the remove target | Target swells to 1.06 and saturates; the dragged item drops to 55% | `EditModeController.updateDragFeedback` |
 | Open the drawer | Sheet follows the finger; spring settle; desktop recedes and blurs | `DrawerController` |
 | Drawer swipe up | Tracked drag with a velocity-aware release | `HomeActivity.dispatchTouchEvent` |
 | Theme switch | Colour cross-fade + artwork cross-fade on the same clock | `HomeActivity.applyTheme` |

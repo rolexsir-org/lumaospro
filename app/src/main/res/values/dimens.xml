@@ -69,32 +69,27 @@
     <dimen name="luma_type_app_label">11sp</dimen>
 
     <!--
-        ── Edit Home (edit mode) ──
+        ── Home editing ──
         Mirrors com.lumaos.pro.launcher.launcher.home.EditModeDesign 1:1.
         Tweak there for code, here for XML: the two are deliberately equal.
+        None of this is reserved by the desktop: the action capsule lives inside
+        the search row and the remove target floats over the clock band.
     -->
-    <!-- Screen geometry: one 16dp margin and one 12dp rhythm for every surface -->
-    <dimen name="luma_edit_screen_margin">16dp</dimen>
-    <dimen name="luma_edit_section_gap">12dp</dimen>
-    <dimen name="luma_edit_header_top_margin">12dp</dimen>
-    <dimen name="luma_edit_header_to_clock_gap">16dp</dimen>
-    <!-- Header card: 24dp corners, 18dp padding, soft shadow -->
-    <dimen name="luma_edit_header_radius">24dp</dimen>
-    <dimen name="luma_edit_header_padding">18dp</dimen>
-    <dimen name="luma_edit_header_elevation">12dp</dimen>
-    <dimen name="luma_edit_header_title">20sp</dimen>
-    <dimen name="luma_edit_header_subtitle">13sp</dimen>
-    <dimen name="luma_edit_header_subtitle_min">10sp</dimen>
-    <!-- Done pill -->
-    <dimen name="luma_edit_done_min_width">76dp</dimen>
-    <dimen name="luma_edit_done_height">40dp</dimen>
-    <dimen name="luma_edit_done_text">14sp</dimen>
-    <!-- Clock/date -->
-    <dimen name="luma_edit_date">14sp</dimen>
-    <!-- Drop zones -->
+    <!-- Drop zones, aligned to the grid, visible only while an item is in the air -->
+    <dimen name="luma_edit_screen_margin">24dp</dimen>
     <dimen name="luma_edit_grid_gutter">12dp</dimen>
     <dimen name="luma_edit_slot_radius">20dp</dimen>
-    <!-- Centre hint pill -->
+    <!-- Contextual action capsule: exactly one 48dp search row, fully rounded -->
+    <dimen name="luma_edit_action_radius">24dp</dimen>
+    <dimen name="luma_edit_action_inset">2dp</dimen>
+    <dimen name="luma_edit_action_elevation">12dp</dimen>
+    <!-- Floating remove target, shown only during a drag -->
+    <dimen name="luma_edit_remove_size">52dp</dimen>
+    <dimen name="luma_edit_remove_padding">14dp</dimen>
+    <dimen name="luma_edit_remove_top_margin">14dp</dimen>
+    <!-- Clock/date -->
+    <dimen name="luma_edit_date">14sp</dimen>
+    <!-- Empty-page hint pill -->
     <dimen name="luma_edit_hint_text">14sp</dimen>
     <dimen name="luma_edit_hint_padding_v">14dp</dimen>
     <dimen name="luma_edit_hint_padding_h">20dp</dimen>
@@ -102,14 +97,4 @@
     <!-- Dock -->
     <dimen name="luma_edit_dock_radius">28dp</dimen>
     <dimen name="luma_edit_dock_padding">14dp</dimen>
-    <dimen name="luma_edit_dock_toolbar_gap">12dp</dimen>
-    <!-- Bottom edit toolbar -->
-    <dimen name="luma_edit_toolbar_radius">24dp</dimen>
-    <dimen name="luma_edit_toolbar_padding">10dp</dimen>
-    <dimen name="luma_edit_toolbar_elevation">16dp</dimen>
-    <dimen name="luma_edit_toolbar_button_height">64dp</dimen>
-    <dimen name="luma_edit_toolbar_button_radius">16dp</dimen>
-    <dimen name="luma_edit_toolbar_icon">22dp</dimen>
-    <dimen name="luma_edit_toolbar_label">12sp</dimen>
-    <dimen name="luma_edit_toolbar_bottom_margin">16dp</dimen>
 </resources>

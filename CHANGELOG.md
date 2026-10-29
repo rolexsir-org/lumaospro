@@ -9,39 +9,52 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
 
 ## 1.0.0 — unreleased
 
-### Edit Home redesign (visual only)
+### Home editing, gesture-first
 
-- Rebuilt the edit-mode layout as two floating glass cards around one aligned
-  content column: a header card (title, subtitle, Done pill) on top and a
-  five-button toolbar at the bottom. The desktop now *reserves* their height
-  through a single inset authority (`HomeActivity.applyChromeInsets`), so the
-  header can no longer cover the clock and the toolbar can no longer cover the
-  dock.
-- Moved every edit value into one token object
-  (`launcher/home/EditModeDesign.kt`, mirrored as `luma_edit_*` in `dimens.xml`):
-  16dp screen margin, 12dp section rhythm, 24dp cards, 28dp dock, 16dp buttons,
-  20dp drop zones, 64dp toolbar buttons, 22dp icons.
-- Rewrote `PlacementGuideView` so drop zones are derived from the real grid
-  (content width ÷ span count, the adapter's row height and scroll offset):
-  dashed 1dp white-15% outlines with a 3% fill, 20dp corners, 12dp gutters, and
-  drawn only where a slot is actually free. The previous pass guessed cell
-  geometry and drew an extra, clipped row.
-- Toolbar labels never wrap or truncate ("Wallpaper" included): single line,
-  12sp Medium, auto-shrink to 9sp, 8% white state fill on a transparent button.
-- Edit mode veils the *wallpaper* only — 55% black plus a slight API 31+
-  defocus — and a busy pattern lands near 16% effective opacity; the clock,
-  apps and dock stay fully crisp. The desktop no longer recedes (`LumaDepthStack`
-  edit scale removed) because the layout already reserves the chrome's space.
-- Preserved every feature and code path: drag-to-arrange, hold-to-group, the
-  drag-to-remove zone, the toolbar's five actions, the empty-state hint pill
-  (now fully rounded, 14sp at 85%) and all existing view IDs.
-- Verified by compiling all 124 Kotlin sources with Kotlin 2.2.21 against a real
-  android-36 framework jar plus the androidx/Compose classpath (no Gradle,
-  Robolectric, lint, APK or device run in this environment).
-
-
-First public release. Configured but not yet built, tested, signed or verified on
-a device from this source.
+- **Removed the legacy editing chrome entirely.** The "Edit home" banner
+  (title, hint line, container, the height it reserved) and the persistent
+  five-button toolbar are gone from the layout, the activity, the resources and
+  the inset calculation. Nothing replaced them: no banner, no floating
+  instruction card, no tutorial, and no space reserved in the resting home
+  screen.
+- **Long-press an icon and it lifts immediately** — drag-and-drop starts on the
+  press, not a menu. `EditModeController` now owns the lift
+  (`ItemTouchHelper.isLongPressDragEnabled = false`, `startDrag()` from the
+  cell's long-click), so ItemTouchHelper's own long-press detection can no
+  longer compete with it for the same gesture. Releasing without moving opens
+  that item's contextual menu; a tap while editing opens it too.
+- **Editing is one contextual capsule inside the search row** (Widgets, Layout,
+  Studio, Wallpaper, Settings, Done): 48dp tall — exactly the row the search
+  pill already occupies — fully rounded, icon-only, six equal 48dp targets with
+  an accessible description and no visible labels. It cross-fades with the pill
+  over 140ms, so the workspace never re-measures.
+- **The workspace keeps its resting geometry.** `applyChromeInsets()` no longer
+  depends on editing at all: desktop padding, grid padding, dock margins and the
+  clock's position are identical at rest and while editing. Page dots keep their
+  reset height and visibility rule; add/remove page moved into the Layout menu
+  instead of two buttons that grew the dot row mid-session.
+- **Affordances exist only while they are actionable**: dashed drop zones appear
+  during a drag (derived from the real grid, so they land on the cells), the
+  52dp remove target floats under the status bar and only during a drag, and the
+  wallpaper is the only thing that dims (55% veil, 35% artwork, API 31+
+  defocus).
+- **All five features keep their exact behaviour**: Widgets → widget picker,
+  Layout → preset/smart-folder/page menu, Studio, Wallpaper, Settings; Done and
+  tap-outside end the session, Back and Home end it without leaving the app.
+- Added `LauncherViewModel.moveDockItem()` so dock reorder during a session is
+  persisted through `HomeLayoutOps.moveInDock` on display-space indices.
+- `HomeGridAdapter` defers its edit-mode rebind while an item is lifted, so the
+  row under the finger is never re-bound mid-gesture.
+- `EditModeDesign` is now a small contextual token set (capsule 48dp/24dp
+  radius/2dp inset/48dp targets/22dp glyphs, 52dp remove target, 20dp zones at
+  12%/2%, 24dp screen margin, 55% scrim) mirrored as `luma_edit_*` in
+  `dimens.xml`; `PlacementGuideView` takes its guide and fill colours from the
+  theme's `SETTINGS_CONTROL` role, so no editing colour is hard-coded.
+- Verified in this environment: every Kotlin source parsed with tree-sitter's
+  Kotlin grammar (no new syntax errors), both XML files parsed, unit tests
+  rewritten (`EditModeDesignTest`, plus three new Robolectric assertions in
+  `HomeActivityRuntimeTest`). **Not compiled and not run**: this sandbox has no
+  JDK, no Gradle and no network to fetch them — see `BUILD_REPORT.md`.
 
 ### Luma Glass v4.0 (unreleased)
 
