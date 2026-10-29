@@ -444,6 +444,18 @@ object HomeLayoutOps {
     fun invalidWidgetIds(layout: HomeLayout, validIds: Set<Int>): Set<Int> =
         layout.widgetIds().filterNot { it in validIds }.toSet()
 
+    /**
+     * Remaps widget ids after Android's host-restore (new device / cloud restore).
+     * Old hostIds become unreachable; system supplies old->new mapping.
+     */
+    fun remapWidgetIds(layout: HomeLayout, mapping: Map<Int, Int>): HomeLayout {
+        if (mapping.isEmpty()) return layout
+        fun remap(items: List<HomeItem>): List<HomeItem> = items.map { item ->
+            if (item is HomeItem.Widget) mapping[item.appWidgetId]?.let { item.copy(appWidgetId = it) } ?: item else item
+        }
+        return layout.copy(dock = remap(layout.dock), pages = layout.pages.map(::remap))
+    }
+
     /** Removes every widget (used when restoring a backup on another device). */
     fun stripWidgets(layout: HomeLayout): HomeLayout = layout.copy(
         dock = layout.dock.filterNot { it is HomeItem.Widget },
