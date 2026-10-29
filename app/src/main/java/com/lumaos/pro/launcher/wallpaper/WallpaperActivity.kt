@@ -16,8 +16,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,8 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -68,6 +67,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
@@ -175,6 +176,8 @@ private fun WallpaperStudio(
     val scope = rememberCoroutineScope()
 
     var entries by remember { mutableStateOf<List<WallpaperEntry>?>(null) }
+    var libraryFailed by remember { mutableStateOf(false) }
+    var fullscreenPreview by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var categoryName by rememberSaveable { mutableStateOf(WallpaperCategory.ALL.name) }
     var collectionKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -209,7 +212,14 @@ private fun WallpaperStudio(
     }
 
     LaunchedEffect(store) {
-        refreshEntries()
+        try {
+            refreshEntries()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            libraryFailed = true
+            failure(e, R.string.wallpaper_image_unavailable)
+        }
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -356,8 +366,27 @@ private fun WallpaperStudio(
             }
         }
 
-        // Gallery strip
+        // Vertically scrolling gallery
         when {
+            libraryFailed -> {
+                LumaGlassChoice(
+                    theme = theme,
+                    label = stringResource(R.string.wallpaper_library_retry),
+                    selected = false,
+                    onClick = {
+                        scope.launch {
+                            try {
+                                refreshEntries()
+                                libraryFailed = false
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                failure(e, R.string.wallpaper_image_unavailable)
+                            }
+                        }
+                    }
+                )
+            }
             entries == null -> {
                 LumaGlassSurface(theme, GlassRole.SECONDARY, Modifier.fillMaxWidth().height(168.dp)) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -390,20 +419,32 @@ private fun WallpaperStudio(
                 }
             }
             else -> {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(visible, key = { it.id }) { entry ->
-                        WallpaperThumbnailCard(
-                            theme = theme,
-                            store = store,
-                            entry = entry,
-                            selected = entry.id == chosen?.id,
-                            active = entry.id == activeWallpaperId,
-                            favorite = entry.id in favorites,
-                            onClick = { selectedId = entry.id }
-                        )
+                // Share the screen's vertical scroll; no nested unbounded lazy grid.
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val columns = (maxWidth.value / 140f).toInt().coerceIn(2, 5)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        visible.chunked(columns).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                row.forEach { entry ->
+                                    key(entry.id) {
+                                        WallpaperThumbnailCard(
+                                            theme = theme,
+                                            store = store,
+                                            entry = entry,
+                                            selected = entry.id == chosen?.id,
+                                            active = entry.id == activeWallpaperId,
+                                            favorite = entry.id in favorites,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                selectedId = entry.id
+                                                fullscreenPreview = true
+                                            }
+                                        )
+                                    }
+                                }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
                     }
                 }
             }
@@ -691,6 +732,54 @@ private fun WallpaperStudio(
             )
         }
         Spacer(Modifier.height(12.dp))
+    }
+
+    if (fullscreenPreview && chosen != null) {
+        Dialog(
+            onDismissRequest = { fullscreenPreview = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Column(
+                Modifier.fillMaxSize().background(Color(theme.colors.background))
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LumaGlassTopBar(
+                    theme = theme,
+                    title = chosen.title,
+                    navigationIcon = {
+                        LumaGlassChoice(theme, stringResource(R.string.wallpaper_back), false,
+                            onClick = { fullscreenPreview = false })
+                    }
+                )
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    when {
+                        previewLoading -> CircularProgressIndicator(color = Color(theme.colors.accent))
+                        preview != null -> Image(
+                            bitmap = preview.asImageBitmap(),
+                            contentDescription = chosen.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        else -> Text(stringResource(R.string.wallpaper_image_unavailable),
+                            color = Color(theme.colors.onSurface))
+                    }
+                }
+                LumaGlassChoice(
+                    theme = theme,
+                    label = stringResource(R.string.wallpaper_set),
+                    selected = true,
+                    enabled = !busy && preview != null,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        fullscreenPreview = false
+                        showTargets = true
+                    }
+                )
+            }
+        }
     }
 
     if (showTargets && chosen != null) {
@@ -1048,8 +1137,10 @@ private fun WallpaperThumbnailCard(
     selected: Boolean,
     active: Boolean,
     favorite: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    var loaded by remember(entry.id) { mutableStateOf(false) }
     val image by produceState<Bitmap?>(null, entry.id) {
         value = try {
             store.preview(entry, 320)
@@ -1060,6 +1151,7 @@ private fun WallpaperThumbnailCard(
         } catch (_: OutOfMemoryError) {
             null
         }
+        loaded = true
     }
     val alignment = remember(entry.focalX, entry.focalY) {
         BiasAlignment(
@@ -1074,8 +1166,8 @@ private fun WallpaperThumbnailCard(
         role = GlassRole.SETTINGS_CONTROL,
         selected = selected,
         onClick = onClick,
-        modifier = Modifier
-            .size(width = 122.dp, height = 178.dp)
+        modifier = modifier
+            .height(178.dp)
             .semantics {
                 role = Role.RadioButton
                 this.selected = selected
@@ -1099,6 +1191,17 @@ private fun WallpaperThumbnailCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+                if (image == null) {
+                    if (!loaded) {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center).size(22.dp),
+                            color = Color(theme.colors.accent))
+                    } else {
+                        Text(stringResource(R.string.wallpaper_image_unavailable),
+                            color = Color(theme.colors.onSurface), fontSize = 12.sp,
+                            modifier = Modifier.align(Alignment.Center)
+                                .background(Color(theme.colors.surface2)).padding(6.dp))
+                    }
                 }
                 if (active) {
                     Box(

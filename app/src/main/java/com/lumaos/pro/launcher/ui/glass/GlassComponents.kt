@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -567,7 +568,9 @@ fun LumaGlassTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (navigationIcon != null) {
-                navigationIcon()
+                // Choice controls fill their incoming width. Never let navigation
+                // consume the Row's entire width and starve the weighted title.
+                Box(Modifier.widthIn(max = 96.dp)) { navigationIcon() }
                 Spacer(Modifier.width(16.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -575,11 +578,14 @@ fun LumaGlassTopBar(
                     title,
                     color = Color(colors.content),
                     fontSize = 20.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold
                 )
                 if (!subtitle.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(subtitle, color = Color(colors.muted), fontSize = 12.sp)
+                    Text(subtitle, color = Color(colors.muted), fontSize = 12.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
