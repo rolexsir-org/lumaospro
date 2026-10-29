@@ -1,7 +1,9 @@
 package com.lumaos.pro.launcher.widgets
 
+import com.lumaos.pro.launcher.launcher.model.HomeGridSpec
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
+import com.lumaos.pro.launcher.launcher.model.HomeLayoutOps
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -87,12 +89,6 @@ sealed interface InsertionPlan {
 
 object WidgetPlan {
 
-    /** Widgets per home page beyond which the feed becomes unmanageable. */
-    const val MAX_WIDGETS_PER_PAGE = 6
-
-    /** Combined widget row budget on one page, so app icons keep room above the fold. */
-    const val MAX_WIDGET_ROWS_PER_PAGE = 12
-
     private fun rowsForHeightPx(heightPx: Int, rowHeightPx: Int): Int {
         if (heightPx <= 0) return HomeLayout.MIN_WIDGET_ROWS
         if (rowHeightPx <= 0) return HomeLayout.MIN_WIDGET_ROWS
@@ -150,33 +146,43 @@ object WidgetPlan {
     fun clampRows(rows: Int, capabilities: WidgetCapabilities): Int =
         rows.coerceIn(capabilities.minRows, capabilities.maxRows)
 
-    /** Total rows currently occupied by widgets on [page]. */
+    /** Total rows currently occupied by widgets on [page] (diagnostic helper). */
     fun widgetRows(page: List<HomeItem>): Int =
         page.filterIsInstance<HomeItem.Widget>().sumOf { it.rows }
 
-    private fun widgetCount(page: List<HomeItem>): Int =
-        page.count { it is HomeItem.Widget }
-
-    /**
-     * Decides where a new widget may be inserted.
-     *
-     * The linear feed cannot overlap existing items, so the only failure
-     * modes are the duplicate-id guard and the page budgets. New widgets lead
-     * the page (index 0) where the result is visible immediately and app icons
-     * keep their relative order underneath.
-     */
-    fun planInsertion(page: List<HomeItem>, widget: HomeItem.Widget): InsertionPlan {
-        if (page.any { it is HomeItem.Widget && it.appWidgetId == widget.appWidgetId }) {
-            return InsertionPlan.AlreadyPresent
-        }
-        if (widgetCount(page) >= MAX_WIDGETS_PER_PAGE) return InsertionPlan.NoSpace
-        if (widgetRows(page) + widget.rows > MAX_WIDGET_ROWS_PER_PAGE) return InsertionPlan.NoSpace
+    /** Page-only plan for callers that do not have the full layout snapshot. */
+    fun planInsertion(
+        page: List<HomeItem>,
+        widget: HomeItem.Widget,
+        grid: HomeGridSpec = HomeGridSpec()
+    ): InsertionPlan {
+        if (page.any { it is HomeItem.Widget && it.appWidgetId == widget.appWidgetId }) return InsertionPlan.AlreadyPresent
+        if (widget.appWidgetId <= 0 || widget.provider.isBlank() ||
+            widget.rows !in HomeLayout.MIN_WIDGET_ROWS..HomeLayout.MAX_WIDGET_ROWS ||
+            page.count { it is HomeItem.Widget } >= grid.maxWidgetsPerPage ||
+            !HomeLayoutOps.canFitItem(page, widget, grid, position = 0)
+        ) return InsertionPlan.NoSpace
         return InsertionPlan.AtIndex(0)
     }
 
-    /** True when [widget] fits the remaining page budget without reordering anything. */
-    fun canFit(page: List<HomeItem>, widget: HomeItem.Widget): Boolean =
-        planInsertion(page, widget) is InsertionPlan.AtIndex
+    /** Authoritative check: includes duplicates and the global host-resource limit. */
+    fun planInsertion(
+        layout: HomeLayout,
+        pageIndex: Int,
+        widget: HomeItem.Widget,
+        grid: HomeGridSpec
+    ): InsertionPlan {
+        if (layout.widgetIds().contains(widget.appWidgetId)) return InsertionPlan.AlreadyPresent
+        val candidate = if (pageIndex == layout.pageCount && layout.pageCount < HomeLayout.MAX_PAGES) {
+            HomeLayoutOps.addPage(layout)
+        } else layout
+        return if (HomeLayoutOps.canPlaceWidget(candidate, pageIndex, widget, grid, position = 0)) {
+            InsertionPlan.AtIndex(0)
+        } else InsertionPlan.NoSpace
+    }
+
+    fun canFit(page: List<HomeItem>, widget: HomeItem.Widget, grid: HomeGridSpec = HomeGridSpec()): Boolean =
+        planInsertion(page, widget, grid) is InsertionPlan.AtIndex
 }
 
 /** Outcome of an edit-mode widget resize gesture. */

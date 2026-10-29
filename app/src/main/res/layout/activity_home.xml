@@ -167,9 +167,6 @@
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
-                android:paddingStart="@dimen/luma_screen_margin_horizontal"
-                android:paddingEnd="@dimen/luma_screen_margin_horizontal"
-                android:paddingBottom="@dimen/luma_space_xs"
                 android:scrollbars="none" />
 
             <!--
@@ -213,6 +210,15 @@
                 android:textSize="@dimen/luma_edit_hint_text"
                 android:visibility="gone" />
         </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/home_page_indicator"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:importantForAccessibility="yes"
+            android:visibility="gone" />
 
         <!-- Primary search pill: 44dp visual capsule (minTouchTarget 48dp), 24dp universal margins -->
         <LinearLayout

@@ -116,9 +116,12 @@
     <string name="widget_description">Widget, %1$d rows tall</string>
     <string name="widget_generic">Widget</string>
     <string name="toast_widget_failed">The widget could not be added</string>
+    <string name="toast_widget_add_in_progress">A widget is already being added.</string>
     <string name="toast_widget_added">Widget added</string>
     <string name="toast_widget_already_added">This widget is already on the home screen</string>
     <string name="toast_widget_no_space">No room for another widget on this page</string>
+    <string name="widget_choose_placement">Choose a home page for this widget</string>
+    <string name="widget_new_page">Create a new home page</string>
     <string name="action_configure_widget">Configure widget</string>
     <string name="widget_removed_message">Widget removed</string>
     <string name="widget_undo">Undo</string>

@@ -57,6 +57,7 @@ class WidgetPicker(
     private var overlay: FrameLayout? = null
     private var sheetSpring: SpringAnimator? = null
     private var openState: Boolean = false
+    private var selectionInFlight = false
     private var listContainer: LinearLayout? = null
     private var emptyView: TextView? = null
     private var retryButton: TextView? = null
@@ -79,6 +80,7 @@ class WidgetPicker(
         dismissImmediately()
         this.onPick = onPick
         this.onRetry = onRetry
+        selectionInFlight = false
         openState = true
         val providers = (state as? ProviderLoad.Loaded)?.providers.orEmpty()
         val pm = context.packageManager
@@ -260,8 +262,11 @@ class WidgetPicker(
         for (group in groups) {
             container.addView(buildAppHeader(group.packageName, group.appLabel, generation))
             for (entry in group.entries) container.addView(row(entry.provider, entry.widgetLabel, generation) {
-                dismiss()
-                onPick?.invoke(entry.provider)
+                if (!selectionInFlight) {
+                    selectionInFlight = true
+                    dismiss()
+                    onPick?.invoke(entry.provider)
+                }
             })
         }
     }

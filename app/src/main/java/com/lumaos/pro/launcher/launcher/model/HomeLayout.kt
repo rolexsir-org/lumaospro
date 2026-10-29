@@ -59,13 +59,43 @@ enum class SmartKind(val storageKey: String) {
     }
 }
 
+data class HomeGridSpec(
+    val columns: Int = 4,
+    val rows: Int = 5,
+    val maxWidgetsPerPage: Int = rows.coerceIn(1, HomeLayout.MAX_WIDGET_ROWS * 2),
+    val maxWidgetsTotal: Int = rows.coerceIn(1, HomeLayout.MAX_WIDGET_ROWS * 2) * HomeLayout.MAX_PAGES
+) {
+    val safeColumns: Int get() = columns.coerceIn(1, 12)
+    val safeRows: Int get() = rows.coerceIn(1, HomeLayout.MAX_WIDGET_ROWS * 2)
+    val pageCellCapacity: Int get() = safeColumns * safeRows
+
+    /** Exact sequential occupancy for GridLayoutManager: full-width widgets start at row boundaries. */
+    fun cellsUsed(page: List<HomeItem>): Int {
+        var fullRows = 0
+        var cellsInRow = 0
+        page.forEach { item ->
+            if (item is HomeItem.Widget) {
+                if (cellsInRow > 0) {
+                    fullRows++
+                    cellsInRow = 0
+                }
+                fullRows += item.rows.coerceIn(HomeLayout.MIN_WIDGET_ROWS, HomeLayout.MAX_WIDGET_ROWS)
+            } else {
+                cellsInRow++
+                if (cellsInRow == safeColumns) {
+                    fullRows++
+                    cellsInRow = 0
+                }
+            }
+        }
+        return fullRows * safeColumns + cellsInRow
+    }
+}
+
 data class HomeLayout(
     /** Bottom dock, always visible. Kept separate from the page grid. */
     val dock: List<HomeItem> = emptyList(),
-    /**
-     * Home pages. Page 0 is rendered; the model is a list so that multi-page
-     * support does not require a data migration later.
-     */
+    /** Horizontally paged home screens. Each page's ordered items are persisted. */
     val pages: List<List<HomeItem>> = listOf(emptyList())
 ) {
     val pageCount: Int get() = pages.size
@@ -78,6 +108,7 @@ data class HomeLayout(
 
     companion object {
         val EMPTY = HomeLayout()
+        const val MAX_PAGES = 9
         const val MAX_DOCK = 7
         const val MIN_WIDGET_ROWS = 1
         const val MAX_WIDGET_ROWS = 4
@@ -92,9 +123,73 @@ data class HomeLayout(
 object HomeLayoutOps {
 
     fun setPage(layout: HomeLayout, index: Int, items: List<HomeItem>): HomeLayout {
-        val pages = layout.pages.toMutableList()
+        if (index !in 0 until HomeLayout.MAX_PAGES) return layout
+        val pages = layout.pages.toMutableList().ifEmpty { mutableListOf(emptyList()) }
         while (pages.size <= index) pages.add(emptyList())
         pages[index] = items
+        return layout.copy(pages = pages)
+    }
+
+    /** Adds one intentionally requested page, never more than [HomeLayout.MAX_PAGES]. */
+    fun addPage(layout: HomeLayout, index: Int = layout.pageCount): HomeLayout {
+        if (layout.pageCount >= HomeLayout.MAX_PAGES || index !in 0..layout.pageCount) return layout
+        return layout.copy(pages = layout.pages.toMutableList().apply { add(index, emptyList()) })
+    }
+
+    /** Empty pages only can be removed; populated pages must first be arranged by the user. */
+    fun removeEmptyPage(layout: HomeLayout, index: Int): HomeLayout {
+        if (layout.pageCount <= 1 || index !in layout.pages.indices || layout.page(index).isNotEmpty()) return layout
+        return layout.copy(pages = layout.pages.toMutableList().apply { removeAt(index) })
+    }
+
+    fun canFitItem(page: List<HomeItem>, item: HomeItem, spec: HomeGridSpec, position: Int = -1): Boolean {
+        val candidate = page.toMutableList()
+        val insertion = if (position in 0..candidate.size) position else candidate.size
+        candidate.add(insertion, item)
+        return spec.cellsUsed(candidate) <= spec.pageCellCapacity
+    }
+
+    fun canPlaceWidget(
+        layout: HomeLayout,
+        pageIndex: Int,
+        widget: HomeItem.Widget,
+        spec: HomeGridSpec,
+        position: Int = -1
+    ): Boolean {
+        if (pageIndex !in layout.pages.indices || widget.appWidgetId <= 0 || widget.provider.isBlank() ||
+            widget.rows !in HomeLayout.MIN_WIDGET_ROWS..HomeLayout.MAX_WIDGET_ROWS
+        ) return false
+        if (layout.widgetIds().contains(widget.appWidgetId)) return false
+        if (layout.pages.sumOf { page -> page.count { it is HomeItem.Widget } } >= spec.maxWidgetsTotal) return false
+        val page = layout.page(pageIndex)
+        if (page.count { it is HomeItem.Widget } >= spec.maxWidgetsPerPage) return false
+        return canFitItem(page, widget, spec, position)
+    }
+
+    /** Moves one placed item between pages without losing its saved identity or widget id. */
+    fun moveToPage(
+        layout: HomeLayout,
+        fromPage: Int,
+        fromPosition: Int,
+        toPage: Int,
+        toPosition: Int = -1,
+        spec: HomeGridSpec = HomeGridSpec()
+    ): HomeLayout {
+        if (fromPage !in layout.pages.indices || toPage !in layout.pages.indices) return layout
+        val item = layout.page(fromPage).getOrNull(fromPosition) ?: return layout
+        if (fromPage == toPage) {
+            val target = if (toPosition in layout.page(fromPage).indices) toPosition else layout.page(fromPage).lastIndex
+            return move(layout, fromPage, fromPosition, target)
+        }
+        val pages = layout.pages.map { it.toMutableList() }.toMutableList()
+        pages[fromPage].removeAt(fromPosition)
+        val destination = pages[toPage]
+        if (item is HomeItem.Widget && destination.count { it is HomeItem.Widget } >= spec.maxWidgetsPerPage) return layout
+        val insertion = if (toPosition in 0..destination.size) toPosition else destination.size
+        destination.add(insertion, item)
+        if (spec.cellsUsed(destination) > spec.pageCellCapacity) return layout
+        // The total widget count is unchanged; only page-local constraints apply.
+        if (pages.size > 1 && pages[fromPage].isEmpty()) pages.removeAt(fromPage)
         return layout.copy(pages = pages)
     }
 
@@ -160,6 +255,10 @@ object HomeLayoutOps {
         if (position !in layout.dock.indices) return layout
         return layout.copy(dock = layout.dock.toMutableList().apply { removeAt(position) })
     }
+
+    /** Reorders a page only when its final grid occupancy remains within its viewport. */
+    fun reorderPage(layout: HomeLayout, pageIndex: Int, items: List<HomeItem>, spec: HomeGridSpec): HomeLayout =
+        if (pageIndex in layout.pages.indices && spec.cellsUsed(items) <= spec.pageCellCapacity) setPage(layout, pageIndex, items) else layout
 
     /** Reorders an item within a page (drag and drop). Out-of-range moves are ignored. */
     fun move(layout: HomeLayout, pageIndex: Int, from: Int, to: Int): HomeLayout {
@@ -278,25 +377,41 @@ object HomeLayoutOps {
         return setPage(layout, pageIndex, items)
     }
 
-    /** Inserts a widget at [position] (end of page when out of range). */
-    fun addWidget(layout: HomeLayout, pageIndex: Int, widget: HomeItem.Widget, position: Int = -1): HomeLayout {
-        if (layout.widgetIds().contains(widget.appWidgetId)) return layout
-        val clamped = widget.copy(rows = widget.rows.coerceIn(HomeLayout.MIN_WIDGET_ROWS, HomeLayout.MAX_WIDGET_ROWS))
+    /** Inserts only after grid, per-page, global and duplicate-id checks pass. */
+    fun addWidget(
+        layout: HomeLayout,
+        pageIndex: Int,
+        widget: HomeItem.Widget,
+        position: Int = -1,
+        spec: HomeGridSpec = HomeGridSpec()
+    ): HomeLayout {
+        if (widget.rows !in HomeLayout.MIN_WIDGET_ROWS..HomeLayout.MAX_WIDGET_ROWS) return layout
+        if (!canPlaceWidget(layout, pageIndex, widget, spec, position)) return layout
         val items = layout.page(pageIndex).toMutableList()
-        if (position in 0..items.size) items.add(position, clamped) else items.add(clamped)
+        if (position in 0..items.size) items.add(position, widget) else items.add(widget)
         return setPage(layout, pageIndex, items)
     }
 
-    fun resizeWidget(layout: HomeLayout, appWidgetId: Int, rows: Int): HomeLayout {
-        val target = rows.coerceIn(HomeLayout.MIN_WIDGET_ROWS, HomeLayout.MAX_WIDGET_ROWS)
+    fun resizeWidget(
+        layout: HomeLayout,
+        appWidgetId: Int,
+        rows: Int,
+        spec: HomeGridSpec = HomeGridSpec(),
+        minRows: Int = HomeLayout.MIN_WIDGET_ROWS,
+        maxRows: Int = HomeLayout.MAX_WIDGET_ROWS
+    ): HomeLayout {
+        val legalMin = minRows.coerceIn(HomeLayout.MIN_WIDGET_ROWS, HomeLayout.MAX_WIDGET_ROWS)
+        val legalMax = maxRows.coerceIn(legalMin, HomeLayout.MAX_WIDGET_ROWS)
+        if (rows !in legalMin..legalMax) return layout
         var changed = false
         val pages = layout.pages.map { page ->
-            page.map { item ->
-                if (item is HomeItem.Widget && item.appWidgetId == appWidgetId && item.rows != target) {
-                    changed = true
-                    item.copy(rows = target)
-                } else item
-            }
+            val old = page.filterIsInstance<HomeItem.Widget>().firstOrNull { it.appWidgetId == appWidgetId }
+                ?: return@map page
+            val candidate = old.copy(rows = rows)
+            val resizedPage = page.map { if (it is HomeItem.Widget && it.appWidgetId == appWidgetId) candidate else it }
+            if (spec.cellsUsed(resizedPage) > spec.pageCellCapacity) return@map page
+            changed = old.rows != rows
+            resizedPage
         }
         return if (changed) layout.copy(pages = pages) else layout
     }

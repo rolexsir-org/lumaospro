@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RefreshCoalescer
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
+import com.lumaos.pro.launcher.launcher.model.HomeGridSpec
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.HomeLayoutCodec
@@ -135,9 +136,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Stored layout for the active profile. */
     private val _layout = MutableStateFlow(HomeLayout.EMPTY)
+    private val _activePageIndex = MutableStateFlow(0)
+    val activePageIndex: StateFlow<Int> = _activePageIndex
 
-    /** What is drawn: hidden apps removed, plus the display->stored index maps. */
-    private val _display = MutableStateFlow(DisplayLayout(HomeLayout.EMPTY, emptyList(), emptyList()))
+    /** What is drawn: hidden apps removed, plus the active page's display->stored index map. */
+    private val _display = MutableStateFlow(DisplayLayout(HomeLayout.EMPTY, emptyList(), emptyList(), 0))
     val layout: StateFlow<HomeLayout> = MutableStateFlow(HomeLayout.EMPTY).also { out ->
         viewModelScope.launch { _display.collect { out.value = it.layout } }
     }
@@ -170,8 +173,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
         viewModelScope.launch {
-            combine(_layout, hiddenKeys) { current, hidden -> project(current, hidden) }
-                .collect { _display.value = it }
+            combine(_layout, hiddenKeys, _activePageIndex) { current, hidden, page ->
+                project(current, hidden, page)
+            }.collect { display ->
+                _activePageIndex.value = display.activePageIndex
+                _display.value = display
+            }
         }
         viewModelScope.launch(Dispatchers.IO) {
             val pm = getApplication<Application>().packageManager
@@ -349,10 +356,100 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // --- Layout mutations. All persist immediately and use display positions,
-    //     mapped onto the stored layout so hidden apps are never disturbed. ---
+    // --- Layout mutations. Display positions map onto the stored active page. ---
 
-    fun addToHome(key: ComponentKey) = mutate { HomeLayoutOps.addToHome(it, key) }
+    fun setActivePage(index: Int) {
+        _activePageIndex.value = index.coerceIn(0, (_layout.value.pageCount - 1).coerceAtLeast(0))
+    }
+
+    fun addPage(onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val before = _layout.value
+            val next = HomeLayoutOps.addPage(before)
+            if (next == before) { onResult(false); return@launch }
+            try {
+                persistLayout(next)
+                setActivePage(next.pageCount - 1)
+                onResult(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Home page could not be saved", e)
+                if (_layout.value == next) _layout.value = before
+                onResult(false)
+            }
+        }
+    }
+
+    fun removePage(index: Int = _activePageIndex.value, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val before = _layout.value
+            val next = HomeLayoutOps.removeEmptyPage(before, index)
+            if (next == before) { onResult(false); return@launch }
+            try {
+                persistLayout(next)
+                setActivePage(minOf(index, next.pageCount - 1))
+                onResult(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Home page removal could not be saved", e)
+                if (_layout.value == next) _layout.value = before
+                onResult(false)
+            }
+        }
+    }
+
+    fun addToHome(key: ComponentKey, grid: HomeGridSpec = HomeGridSpec(), onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val before = _layout.value
+            if (HomeLayoutOps.containsKey(before, key)) { onResult(false); return@launch }
+            val item = HomeItem.App(key)
+            val active = _activePageIndex.value
+            val candidates = listOf(active) + before.pages.indices.filter { it != active }
+            val pageIndex = candidates.firstOrNull { HomeLayoutOps.canFitItem(before.page(it), item, grid) }
+                ?: if (before.pageCount < HomeLayout.MAX_PAGES) before.pageCount else { onResult(false); return@launch }
+            val withPage = if (pageIndex == before.pageCount) HomeLayoutOps.addPage(before) else before
+            val next = HomeLayoutOps.setPage(withPage, pageIndex, withPage.page(pageIndex) + item)
+            try {
+                persistLayout(next)
+                setActivePage(pageIndex)
+                onResult(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("App placement could not be saved", e)
+                if (_layout.value == next) _layout.value = before
+                onResult(false)
+            }
+        }
+    }
+
+    fun moveHomeItemToPage(
+        displayPosition: Int,
+        destinationPage: Int,
+        grid: HomeGridSpec,
+        onResult: (Boolean) -> Unit = {}
+    ) = viewModelScope.launch {
+        val layout = _layout.value
+        val display = _display.value
+        val sourceIndex = display.pageMap.getOrNull(displayPosition) ?: run { onResult(false); return@launch }
+        val next = HomeLayoutOps.moveToPage(layout, display.activePageIndex, sourceIndex, destinationPage, spec = grid)
+        if (next == layout) { onResult(false); return@launch }
+        try {
+            persistLayout(next)
+            val sourcePageWasEmptied = layout.page(display.activePageIndex).size == 1 && layout.pageCount > 1
+            val selectedTarget = destinationPage - if (sourcePageWasEmptied && display.activePageIndex < destinationPage) 1 else 0
+            setActivePage(selectedTarget)
+            onResult(true)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            LumaLog.e("Home item could not be moved between pages", e)
+            if (_layout.value == next) _layout.value = layout
+            onResult(false)
+        }
+    }
 
     fun addToDock(key: ComponentKey) = mutate { HomeLayoutOps.addToDock(it, key) }
 
@@ -360,7 +457,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // Widgets are removed through removeWidget(), which the activity calls
         // after releasing the id from its AppWidgetHost.
         val stored = d.pageMap.getOrNull(displayPosition) ?: return@mutateStored layout
-        HomeLayoutOps.removeFromHome(layout, 0, stored)
+        HomeLayoutOps.removeFromHome(layout, d.activePageIndex, stored)
     }
 
     fun removeFromDock(displayPosition: Int) = mutateStored { layout, d ->
@@ -371,30 +468,32 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun createFolder(firstPosition: Int, secondPosition: Int) = mutateStored { layout, d ->
         val a = d.pageMap.getOrNull(firstPosition) ?: return@mutateStored layout
         val b = d.pageMap.getOrNull(secondPosition) ?: return@mutateStored layout
-        HomeLayoutOps.createFolder(layout, 0, a, b, "folder_${System.currentTimeMillis()}", folderName(layout, a, b))
+        HomeLayoutOps.createFolder(layout, d.activePageIndex, a, b, "folder_${System.currentTimeMillis()}", folderName(layout, d.activePageIndex, a, b))
     }
 
     /** Drag-and-drop: [source] dropped onto [target] (an app -> new folder; a folder -> joins it). */
     fun dropOnto(sourcePosition: Int, targetPosition: Int) = mutateStored { layout, d ->
         val s = d.pageMap.getOrNull(sourcePosition) ?: return@mutateStored layout
         val t = d.pageMap.getOrNull(targetPosition) ?: return@mutateStored layout
-        when (layout.page(0).getOrNull(t)) {
-            is HomeItem.Folder -> HomeLayoutOps.dropIntoFolder(layout, 0, s, t)
-            is HomeItem.App -> HomeLayoutOps.createFolder(layout, 0, t, s, "folder_${System.currentTimeMillis()}", folderName(layout, t, s))
+        val pageIndex = d.activePageIndex
+        when (layout.page(pageIndex).getOrNull(t)) {
+            is HomeItem.Folder -> HomeLayoutOps.dropIntoFolder(layout, pageIndex, s, t)
+            is HomeItem.App -> HomeLayoutOps.createFolder(layout, pageIndex, t, s, "folder_${System.currentTimeMillis()}", folderName(layout, pageIndex, t, s))
             else -> layout
         }
     }
 
-    private fun folderName(layout: HomeLayout, a: Int, b: Int): String? {
-        val ka = (layout.page(0).getOrNull(a) as? HomeItem.App)?.key
-        val kb = (layout.page(0).getOrNull(b) as? HomeItem.App)?.key
+    private fun folderName(layout: HomeLayout, pageIndex: Int, a: Int, b: Int): String? {
+        val ka = (layout.page(pageIndex).getOrNull(a) as? HomeItem.App)?.key
+        val kb = (layout.page(pageIndex).getOrNull(b) as? HomeItem.App)?.key
         return AppCategories.sharedTitle(ka?.let(::entryFor), kb?.let(::entryFor))
     }
 
     /** Applies the order arranged by drag-and-drop (display items, new order). */
-    fun reorderHome(arranged: List<HomeItem>) = mutateStored { layout, d ->
-        val stored = layout.page(0)
-        val displayToStored = d.layout.page(0).withIndex().associate { (i, item) ->
+    fun reorderHome(arranged: List<HomeItem>, grid: HomeGridSpec = HomeGridSpec()) = mutateStored { layout, d ->
+        val pageIndex = d.activePageIndex
+        val stored = layout.page(pageIndex)
+        val displayToStored = d.layout.page(pageIndex).withIndex().associate { (i, item) ->
             HomeGridIdentity.of(item) to d.pageMap.getOrNull(i)
         }
         val used = HashSet<Int>()
@@ -402,24 +501,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             displayToStored[HomeGridIdentity.of(item)]?.let { idx -> used += idx; stored.getOrNull(idx) }
         }
         val rest = stored.filterIndexed { i, _ -> i !in used }
-        HomeLayoutOps.setPage(layout, 0, ordered + rest)
+        HomeLayoutOps.reorderPage(layout, pageIndex, ordered + rest, grid)
     }
 
     fun renameFolder(position: Int, name: String) = mutateStored { layout, d ->
         val stored = d.pageMap.getOrNull(position) ?: return@mutateStored layout
-        HomeLayoutOps.renameFolder(layout, 0, stored, name)
+        HomeLayoutOps.renameFolder(layout, d.activePageIndex, stored, name)
     }
 
     fun renameFolderById(folderId: String, name: String) = mutate { layout ->
-        val index = layout.page(0).indexOfFirst {
+        val pageIndex = _activePageIndex.value
+        val index = layout.page(pageIndex).indexOfFirst {
             (it is HomeItem.Folder && it.id == folderId) || (it is HomeItem.SmartFolder && it.id == folderId)
         }
-        if (index < 0) layout else HomeLayoutOps.renameFolder(layout, 0, index, name)
+        if (index < 0) layout else HomeLayoutOps.renameFolder(layout, pageIndex, index, name)
     }
 
     /** Removes an app from a folder; the folder collapses if one child is left. */
     fun removeFromFolder(folderId: String, key: ComponentKey) = mutate { layout ->
-        val page = layout.page(0)
+        val pageIndex = _activePageIndex.value
+        val page = layout.page(pageIndex)
         val index = page.indexOfFirst { it is HomeItem.Folder && it.id == folderId }
         val folder = page.getOrNull(index) as? HomeItem.Folder ?: return@mutate layout
         val remaining = folder.children - key
@@ -433,49 +534,86 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             addAll(index, replacement)
         }
         // The removed app goes back to the page unless it is still elsewhere.
-        val withApp = if (HomeLayoutOps.containsKey(layout.copy(pages = listOf(updated)), key)) updated
-        else updated + HomeItem.App(key)
-        HomeLayoutOps.setPage(layout, 0, withApp)
+        val updatedLayout = layout.copy(pages = layout.pages.toMutableList().apply { this[pageIndex] = updated })
+        val withApp = if (HomeLayoutOps.containsKey(updatedLayout, key)) updated else updated + HomeItem.App(key)
+        HomeLayoutOps.setPage(layout, pageIndex, withApp)
     }
 
     fun moveHomeToDock(position: Int) = mutateStored { layout, d ->
         val stored = d.pageMap.getOrNull(position) ?: return@mutateStored layout
-        HomeLayoutOps.moveHomeToDock(layout, 0, stored)
+        HomeLayoutOps.moveHomeToDock(layout, d.activePageIndex, stored)
     }
 
     fun moveDockToHome(position: Int) = mutateStored { layout, d ->
         val stored = d.dockMap.getOrNull(position) ?: return@mutateStored layout
-        HomeLayoutOps.moveDockToHome(layout, stored)
+        HomeLayoutOps.moveDockToHome(layout, stored, d.activePageIndex)
     }
 
-    /** Report success only after the layout transaction has reached DataStore. */
-    fun addWidget(widget: HomeItem.Widget, position: Int = 0, onResult: (Boolean) -> Unit = {}) {
+    /** Report success only after the validated placement reaches DataStore. */
+    private val widgetAddsInFlight = HashSet<Int>()
+
+    fun addWidget(
+        widget: HomeItem.Widget,
+        position: Int = -1,
+        pageIndex: Int = _activePageIndex.value,
+        grid: HomeGridSpec = HomeGridSpec(),
+        createPageIfMissing: Boolean = false,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        // Activity-result callbacks can repeat; reserve synchronously before
+        // starting a coroutine so one host id can only be committed once.
+        if (!widgetAddsInFlight.add(widget.appWidgetId)) { onResult(false); return }
         viewModelScope.launch {
-            val before = _layout.value
-            val next = HomeLayoutOps.addWidget(before, 0, widget, position)
-            if (next == before) {
-                onResult(false)
-                return@launch
+            try {
+                val before = _layout.value
+                val candidate = if (createPageIfMissing && pageIndex == before.pageCount &&
+                    before.pageCount < HomeLayout.MAX_PAGES
+                ) HomeLayoutOps.addPage(before) else before
+                val next = HomeLayoutOps.addWidget(candidate, pageIndex, widget, position, grid)
+                if (next == candidate) { onResult(false); return@launch }
+                val saved = try {
+                    persistLayout(next)
+                    if (createPageIfMissing) setActivePage(pageIndex)
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    LumaLog.e("Widget placement could not be saved", e)
+                    if (_layout.value == next) _layout.value = before
+                    false
+                }
+                onResult(saved)
+            } finally {
+                widgetAddsInFlight.remove(widget.appWidgetId)
             }
-            val saved = try {
-                persistLayout(next)
-                true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                LumaLog.e("Widget placement could not be saved", e)
-                // Do not overwrite another change that happened while the write
-                // was suspended. The host id is retained on failure.
-                if (_layout.value == next) _layout.value = before
-                false
-            }
-            onResult(saved)
         }
     }
 
-    fun resizeWidget(appWidgetId: Int, rows: Int) = mutate { HomeLayoutOps.resizeWidget(it, appWidgetId, rows) }
+    fun resizeWidget(
+        appWidgetId: Int,
+        rows: Int,
+        grid: HomeGridSpec = HomeGridSpec(),
+        minRows: Int = HomeLayout.MIN_WIDGET_ROWS,
+        maxRows: Int = HomeLayout.MAX_WIDGET_ROWS
+    ) = mutate { HomeLayoutOps.resizeWidget(it, appWidgetId, rows, grid, minRows, maxRows) }
 
-    fun removeWidget(appWidgetId: Int) = mutate { HomeLayoutOps.removeWidget(it, appWidgetId) }
+    fun removeWidget(appWidgetId: Int, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val before = _layout.value
+            val next = HomeLayoutOps.removeWidget(before, appWidgetId)
+            if (next == before) { onResult(false); return@launch }
+            try {
+                persistLayout(next)
+                onResult(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Widget removal could not be saved", e)
+                if (_layout.value == next) _layout.value = before
+                onResult(false)
+            }
+        }
+    }
 
     /**
      * Removes widgets whose Android binding is gone (provider uninstalled or
@@ -500,7 +638,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun addSmartFolder(kind: SmartKind, name: String) = mutate {
-        HomeLayoutOps.addSmartFolder(it, 0, HomeItem.SmartFolder("smart_${kind.storageKey}", kind, name))
+        HomeLayoutOps.addSmartFolder(it, _activePageIndex.value, HomeItem.SmartFolder("smart_${kind.storageKey}", kind, name))
     }
 
     fun isPinned(key: ComponentKey): Boolean = key in pinnedKeys.value
@@ -540,11 +678,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Display layout plus, for page 0 and the dock, the stored index of each displayed item. */
-    data class DisplayLayout(val layout: HomeLayout, val pageMap: List<Int>, val dockMap: List<Int>)
+    /** Display layout plus stored-index maps for the active page and dock. */
+    data class DisplayLayout(
+        val layout: HomeLayout,
+        val pageMap: List<Int>,
+        val dockMap: List<Int>,
+        val activePageIndex: Int
+    )
 
     companion object {
-        fun project(current: HomeLayout, hidden: Set<ComponentKey>): DisplayLayout {
+        fun project(current: HomeLayout, hidden: Set<ComponentKey>, activePageIndex: Int = 0): DisplayLayout {
             fun visible(items: List<HomeItem>): Pair<List<HomeItem>, List<Int>> {
                 val out = ArrayList<HomeItem>()
                 val map = ArrayList<Int>()
@@ -568,11 +711,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 }
                 return out to map
             }
-            val (page0, pageMap) = visible(current.page(0))
+            val sourcePages = current.pages.ifEmpty { listOf(emptyList()) }
+            val active = activePageIndex.coerceIn(0, sourcePages.lastIndex)
+            val projectedPages = sourcePages.map { visible(it).first }
+            val pageMap = visible(sourcePages[active]).second
             val (dock, dockMap) = visible(current.dock)
-            val pages = current.pages.toMutableList().apply { if (isEmpty()) add(emptyList()) }
-            pages[0] = page0
-            return DisplayLayout(current.copy(dock = dock, pages = pages), pageMap, dockMap)
+            return DisplayLayout(current.copy(dock = dock, pages = projectedPages), pageMap, dockMap, active)
         }
     }
 }

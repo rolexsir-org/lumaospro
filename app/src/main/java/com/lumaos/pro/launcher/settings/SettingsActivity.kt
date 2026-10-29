@@ -58,9 +58,14 @@ class SettingsActivity : ComponentActivity() {
      * its own dialog; LumaOS Pro only re-reads the outcome afterwards. A refusal is
      * not an error - LumaOS Pro continues to work as an ordinary app.
      */
+    private var roleRequestInFlight = false
+
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
+        roleRequestInFlight = false
+        // The result code is not authoritative; SettingsViewModel resolves the
+        // current HOME target and checks role ownership again.
         viewModel.refreshRoleStatus()
     }
 
@@ -194,6 +199,9 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Also releases the one-shot guard for OEM Home-settings fallback,
+        // which does not provide an Activity Result callback.
+        roleRequestInFlight = false
         (application as LumaApp).core.themes.refresh()
         // The system emits nothing when the default launcher changes, so the
         // role is re-resolved every time this screen appears.
@@ -218,11 +226,22 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun requestHomeRole() {
+        if (roleRequestInFlight || isFinishing || isDestroyed) return
+        if (RoleHelper.isDefaultLauncher(this)) {
+            viewModel.refreshRoleStatus()
+            return
+        }
+        roleRequestInFlight = true
         val intent = RoleHelper.homeRoleRequestIntent(this)
         if (intent != null) {
             runCatching { roleLauncher.launch(intent) }
-                .onFailure { RoleHelper.openHomeSettings(this) }
+                .onFailure {
+                    roleRequestInFlight = false
+                    RoleHelper.openHomeSettings(this)
+                }
         } else {
+            // Legacy Android/OEM path; onResume rechecks status and releases
+            // the guard, but no request is automatically retried.
             RoleHelper.openHomeSettings(this)
         }
     }

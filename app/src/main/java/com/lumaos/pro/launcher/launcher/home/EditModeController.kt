@@ -51,8 +51,8 @@ import kotlin.math.hypot
  */
 class EditModeController(
     private val context: Context,
-    private val grid: RecyclerView,
-    private val adapter: HomeGridAdapter,
+    private var grid: RecyclerView,
+    private var adapter: HomeGridAdapter,
     private val guide: PlacementGuideView,
     private val topBar: LinearLayout,
     private val toolbar: LinearLayout,
@@ -279,6 +279,18 @@ class EditModeController(
         }
         guide.target = null
         guide.mergeTarget = false
+    }
+
+    /** Rebinds drag handling to the page that is currently snapped into view. */
+    fun attachGrid(grid: RecyclerView, adapter: HomeGridAdapter) {
+        if (this.grid === grid && this.adapter === adapter) return
+        touchHelper.attachToRecyclerView(null)
+        this.adapter.editMode = false
+        this.grid = grid
+        this.adapter = adapter
+        adapter.editMode = isActive
+        touchHelper.attachToRecyclerView(grid)
+        if (isActive) updateGuideMetrics()
     }
 
     fun enter() {
