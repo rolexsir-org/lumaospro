@@ -23,11 +23,11 @@ import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 
 /**
- * Minimal single-prompt optional Notification Access bottom sheet (Phase 6).
+ * Legacy optional Notification Access bottom sheet; it is not wired into startup.
  *
- * Shown AT MOST ONCE after LumaOS Pro becomes the default launcher if
- * Notification Listener access is not yet granted. Never nags, never blocks
- * home screen usage, and animates purely on [LumaTokens] glass + spring tokens.
+ * Home no longer asks for notification access merely because LumaOS Pro is the
+ * default launcher. The music-widget setup in Settings is the feature-specific
+ * entry point. This view remains isolated for any later explicit in-context use.
  */
 class NotificationPromptSheet(
     private val context: Context,

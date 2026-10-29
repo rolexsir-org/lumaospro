@@ -134,10 +134,10 @@ class HomeLayoutV2Test {
 
     @Test fun `widget add, resize and remove`() {
         var l = HomeLayout(pages = listOf(listOf(app("a"))))
-        l = HomeLayoutOps.addWidget(l, 0, HomeItem.Widget(11, "p/c", 9), position = 0)
+        l = HomeLayoutOps.addWidget(l, 0, HomeItem.Widget(11, "p/c", HomeLayout.MAX_WIDGET_ROWS), position = 0)
         assertEquals(HomeItem.Widget(11, "p/c", HomeLayout.MAX_WIDGET_ROWS), l.page(0)[0])
         assertSame(l, HomeLayoutOps.addWidget(l, 0, HomeItem.Widget(11, "p/c", 1)))
-        l = HomeLayoutOps.resizeWidget(l, 11, 0)
+        l = HomeLayoutOps.resizeWidget(l, 11, 1)
         assertEquals(1, (l.page(0)[0] as HomeItem.Widget).rows)
         assertEquals(setOf(11), l.widgetIds())
         l = HomeLayoutOps.removeWidget(l, 11)

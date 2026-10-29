@@ -6,14 +6,18 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.launcher.HomeActivity
+import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.widgets.WidgetHostController
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -96,6 +100,23 @@ class HomeActivityRuntimeTest {
     }
 
     @Test
+    fun `home uses a horizontal snapped page container while drawer remains vertically scrollable`() {
+        val activity = buildHome()
+        val homePager = activity.findViewById<RecyclerView>(R.id.home_grid)
+        val drawer = activity.findViewById<RecyclerView>(R.id.drawer_grid)
+
+        assertTrue(homePager.layoutManager is LinearLayoutManager)
+        assertEquals(LinearLayoutManager.HORIZONTAL, (homePager.layoutManager as LinearLayoutManager).orientation)
+        assertTrue(homePager.adapter is HomePagePagerAdapter)
+        homePager.findViewHolderForAdapterPosition(0)?.itemView?.let { page ->
+            val pageGrid = page as RecyclerView
+            assertTrue(pageGrid.layoutManager is GridLayoutManager)
+            assertTrue("home page grid must not scroll vertically", !pageGrid.canScrollVertically(1))
+        }
+        assertTrue("drawer keeps vertical scrolling", drawer.layoutManager!!.canScrollVertically())
+    }
+
+    @Test
     fun `setting the same search text does not hide existing drawer results`() {
         val activity = buildHome()
         val grid = activity.findViewById<RecyclerView>(R.id.drawer_grid)
@@ -146,6 +167,24 @@ class HomeActivityRuntimeTest {
 
         assertNotNull(recreated.findViewById<RecyclerView>(R.id.home_grid))
         assertNotNull("grids must be re-bound after recreation", recreated.findViewById<RecyclerView>(R.id.home_grid).adapter)
+    }
+
+    @Test
+    fun `in-flight onboarding launch guard survives recreation`() {
+        val app = ApplicationProvider.getApplicationContext<LumaApp>()
+        runBlocking { app.core.prefs.setOnboardingDone(true) }
+        val controller = Robolectric.buildActivity(HomeActivity::class.java).setup()
+        val activity = controller.get()
+        val inFlight = HomeActivity::class.java.getDeclaredField("onboardingLaunchInFlight")
+            .apply { isAccessible = true }
+        inFlight.setBoolean(activity, true)
+
+        val recreated = controller.configurationChange(
+            android.content.res.Configuration().apply {
+                orientation = android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            }
+        ).get()
+        assertTrue("restored activity must keep the onboarding launch guard", inFlight.getBoolean(recreated))
     }
 
     @Test

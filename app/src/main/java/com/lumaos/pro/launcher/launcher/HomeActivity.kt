@@ -1,6 +1,7 @@
 package com.lumaos.pro.launcher.launcher
 
 import android.app.ActivityOptions
+import android.app.AlertDialog
 import android.app.KeyguardManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
@@ -51,6 +52,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextProfile
@@ -83,9 +85,9 @@ import com.lumaos.pro.launcher.launcher.home.EditModeDesign
 import com.lumaos.pro.launcher.launcher.home.FolderOverlay
 import com.lumaos.pro.launcher.launcher.home.FolderStyle
 import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
+import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
 import com.lumaos.pro.launcher.launcher.home.MenuEntry
-import com.lumaos.pro.launcher.launcher.home.NotificationPromptSheet
 import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
 import com.lumaos.pro.launcher.launcher.home.ReadoutSources
 import com.lumaos.pro.launcher.launcher.home.LumaMenu
@@ -101,6 +103,7 @@ import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.launcher.model.DrawerRow
 import com.lumaos.pro.launcher.launcher.model.GestureAction
 import com.lumaos.pro.launcher.launcher.model.GridRules
+import com.lumaos.pro.launcher.launcher.model.HomeGridSpec
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.HomePreset
@@ -133,6 +136,7 @@ import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetHostController
 import com.lumaos.pro.launcher.widgets.WidgetPicker
 import com.lumaos.pro.launcher.widgets.WidgetPlan
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -211,7 +215,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var homeClock: TextClock
     private lateinit var homeDate: TextClock
     private lateinit var homeContext: TextView
+    /** Horizontal snapped pager; its active child is a bounded vertical home grid. */
+    private lateinit var homePager: RecyclerView
     private lateinit var homeGrid: RecyclerView
+    private lateinit var pageIndicator: LinearLayout
+    private lateinit var homePagesAdapter: HomePagePagerAdapter
+    private val homePagerSnap = PagerSnapHelper()
     private lateinit var guide: PlacementGuideView
     private lateinit var homeEmpty: TextView
     private lateinit var searchPill: LinearLayout
@@ -234,7 +243,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var edit: EditModeController
     private lateinit var folders: FolderOverlay
     private var widgetPicker: WidgetPicker? = null
-    private var notificationPromptSheet: NotificationPromptSheet? = null
+    /** Synchronous lifecycle guards; the durable decision remains LumaPrefs.onboardingDone. */
+    private var onboardingCheckInFlight = false
+    private var onboardingLaunchInFlight = false
+
+    private val onboardingLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Do not immediately retry an incomplete/cancelled flow here. The next
+        // genuine Home resume may offer it again; the completion flag is durable.
+        onboardingLaunchInFlight = false
+    }
 
     private lateinit var gestureDetector: GestureDetector
     private lateinit var scaleDetector: ScaleGestureDetector
@@ -321,6 +340,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var startupMeasured = false
     private var appsLoadedOnce = false
     private var pendingWidget: WidgetHostController.Pending? = null
+    private var widgetPlacementCommitInFlight = false
     private var pendingReconfigureWidgetId: Int? = null
     private var pendingWidgetRemoval: PendingWidgetRemoval? = null
     private val undoHandler = Handler(Looper.getMainLooper())
@@ -357,6 +377,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onboardingLaunchInFlight = savedInstanceState?.getBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT) == true
         core.themes.onConfiguration(resources.configuration)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_home)
@@ -379,7 +400,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 // As the home screen, back must not finish the activity: doing
                 // so would leave the device with no home at all.
                 when {
-                    notificationPromptSheet?.isShowing == true -> notificationPromptSheet?.dismiss()
                     widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
                     folders.isOpen -> folders.close()
                     drawer.isOpen -> drawer.close()
@@ -404,6 +424,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT, onboardingLaunchInFlight)
         pendingWidget?.let {
             outState.putInt(STATE_PENDING_WIDGET_ID, it.appWidgetId)
             outState.putParcelable(STATE_PENDING_WIDGET_INFO, it.info)
@@ -455,8 +476,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // The pending layout write may still be in progress. Retaining an id is
         // safer than deleting a widget that a saved layout still references.
         pendingWidgetRemoval = null
-        notificationPromptSheet?.shutdown()
-        notificationPromptSheet = null
         widgetPicker?.shutdown()
         iconLoader.shutdown()
         widgets.clearViews()
@@ -493,7 +512,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         super.onNewIntent(intent)
         // Pressing Home on the home screen returns to a clean desktop.
         when {
-            notificationPromptSheet?.isShowing == true -> notificationPromptSheet?.dismiss()
             widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
             folders.isOpen -> folders.close()
             drawer.isOpen -> drawer.close()
@@ -529,46 +547,41 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     private fun maybeLaunchOnboarding() {
+        // onResume can be re-entered while DataStore is being read (including
+        // while another activity is launching). Reserve synchronously so two
+        // lifecycle callbacks cannot both observe onboarding_done=false.
+        if (onboardingCheckInFlight || onboardingLaunchInFlight || isFinishing || isDestroyed) return
+        onboardingCheckInFlight = true
         lifecycleScope.launch {
-            runCatching { viewModel.prefs.initializeDefaultExperienceIfUnconfigured() }
-            val isDefaultHome = RoleHelper.isDefaultLauncher(this@HomeActivity)
-            if (!isDefaultHome) {
-                if (!viewModel.prefs.isOnboardingDoneOnce()) {
-                    startActivity(Intent(this@HomeActivity, OnboardingActivity::class.java))
+            try {
+                try {
+                    viewModel.prefs.initializeDefaultExperienceIfUnconfigured()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    LumaLog.e("Could not initialize the default experience", e)
                 }
-                return@launch
-            }
-            if (!viewModel.prefs.isOnboardingDoneOnce()) {
-                viewModel.prefs.setOnboardingDone(true)
-            }
-            if (!com.lumaos.pro.launcher.widgets.music.MusicBridge.hasAccess(this@HomeActivity)) {
-                val alreadyPrompted = viewModel.prefs.isNotificationPromptShownOnce()
-                if (!alreadyPrompted) {
-                    viewModel.prefs.setNotificationPromptShown(true)
-                    showOptionalNotificationSheet()
+                val isDefaultHome = RoleHelper.isDefaultLauncher(this@HomeActivity)
+                val onboardingDone = viewModel.prefs.isOnboardingDoneOnce()
+                if (!isDefaultHome && !onboardingDone) {
+                    onboardingLaunchInFlight = true
+                    onboardingLauncher.launch(Intent(this@HomeActivity, OnboardingActivity::class.java))
+                    return@launch
                 }
+                // The role is always checked independently. Being onboarded is
+                // not evidence that Android currently selects LumaOS Pro for Home.
+                if (isDefaultHome && !onboardingDone) {
+                    viewModel.prefs.setOnboardingDone(true)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onboardingLaunchInFlight = false
+                LumaLog.e("Could not check onboarding and Home-role state", e)
+            } finally {
+                onboardingCheckInFlight = false
             }
         }
-    }
-
-    private fun showOptionalNotificationSheet() {
-        if (isFinishing || isDestroyed) return
-        val sheet = notificationPromptSheet ?: NotificationPromptSheet(
-            context = this,
-            root = homeRoot,
-            onDepthProgress = { p ->
-                modalProgress = p
-                applyDepth()
-            }
-        ).also { notificationPromptSheet = it }
-        sheet.show(
-            theme = theme,
-            effects = effects,
-            motion = motion,
-            bottomInset = bottomInset,
-            onSetUp = {},
-            onSkip = {}
-        )
     }
 
     // ------------------------------------------------------------------- setup
@@ -593,7 +606,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeClock = findViewById(R.id.home_clock)
         homeDate = findViewById(R.id.home_date)
         homeContext = findViewById(R.id.home_context)
-        homeGrid = findViewById(R.id.home_grid)
+        homePager = findViewById(R.id.home_grid)
+        homePager.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        homePager.overScrollMode = View.OVER_SCROLL_NEVER
+        pageIndicator = findViewById(R.id.home_page_indicator)
         guide = findViewById(R.id.placement_guide)
         homeEmpty = findViewById(R.id.home_empty)
         searchPill = findViewById(R.id.home_search_pill)
@@ -607,22 +623,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerGrid = findViewById(R.id.drawer_grid)
         searchField = findViewById(R.id.search_field)
 
-        homeGrid.layoutManager = GridLayoutManager(this, gridColumns).apply {
-            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int =
-                    if (::homeAdapter.isInitialized && homeAdapter.isWidget(position)) spanCount else 1
-            }
-        }
-        homeGrid.itemAnimator = LumaSpring.ItemAnimator { motion }
-        homeGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            refreshResponsiveIcons()
-            updateHomeCellSizing()
-            // Cell widths/positions moved: re-anchor the dashed drop zones.
-            if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
-        }
-        homeGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
+        homePagerSnap.attachToRecyclerView(homePager)
+        homePager.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState != RecyclerView.SCROLL_STATE_IDLE) return
+                val manager = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                val snapped = homePagerSnap.findSnapView(manager) ?: return
+                val position = manager.getPosition(snapped)
+                if (position != RecyclerView.NO_POSITION && position != viewModel.activePageIndex.value) onHomePageSelected(position)
             }
         })
         dockRow.layoutManager = GridLayoutManager(this, gridColumns)
@@ -650,8 +658,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             override fun onItemClick(item: HomeItem, position: Int, view: View) = onHomeItemClick(item, position, view, isDock = false)
             override fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean {
                 if (edit.isActive) return false // ItemTouchHelper takes the long press to drag
+                if (item is HomeItem.Widget) {
+                    edit.enter()
+                    return true
+                }
                 showHomeMenu(item, position, view, isDock = false)
                 return true
+            }
+            override fun onWidgetRemove(item: HomeItem.Widget, position: Int, view: View) {
+                removeWidgetWithUndo(item)
             }
             override fun onWidgetResizeOptions(item: HomeItem.Widget, position: Int, view: View) {
                 // The ordinary long-press is reserved for dragging in edit mode.
@@ -659,35 +674,59 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
             override fun onWidgetResize(item: HomeItem.Widget, rows: Int, commit: Boolean) {
                 if (commit) {
-                    viewModel.resizeWidget(item.appWidgetId, rows)
-                    reportWidgetSize(item.appWidgetId, rows)
+                    val caps = widgets.infoFor(item.appWidgetId)?.let { widgets.capabilities(it, cellHeightPx) }
+                    val safeRows = caps?.let { WidgetPlan.clampRows(rows, it) } ?: rows
+                    viewModel.resizeWidget(
+                        item.appWidgetId, safeRows, homeGridSpec(),
+                        minRows = caps?.minRows ?: HomeLayout.MIN_WIDGET_ROWS,
+                        maxRows = caps?.maxRows ?: HomeLayout.MAX_WIDGET_ROWS
+                    )
+                    reportWidgetSize(item.appWidgetId, safeRows)
                 }
             }
         }
-        homeAdapter = HomeGridAdapter(
-            config = { homeCellConfig },
-            iconLoader = iconLoader,
-            density = density,
-            folderStyle = ::folderStyle,
-            labelFor = viewModel::labelFor,
-            smartMembers = { viewModel.smartMembers(it) },
-            widgetHost = object : HomeGridAdapter.WidgetViews {
-                override fun viewFor(item: HomeItem.Widget): View? = widgets.viewFor(this@HomeActivity, item.appWidgetId)
-                    ?.also { reportWidgetSize(item.appWidgetId, item.rows) }
-                override fun rowHeightPx(): Int = cellHeightPx
-                override fun editOutline() = ThemedDrawables.surface(
-                    ColorMath.withAlpha(theme.colors.accent, 0.08f), theme.corner(18f) * resources.displayMetrics.density,
-                    theme.colors.accent, dp(1)
-                )
-                override fun handle() = ThemedDrawables.surface(theme.colors.accent, dp(12).toFloat())
-                override fun frame() = widgetFrameDrawable()
-                override fun frameRadiusPx() = theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density
-                override fun capabilitiesFor(item: HomeItem.Widget): WidgetCapabilities? =
-                    widgets.infoFor(item.appWidgetId)?.let { widgets.capabilities(it, cellHeightPx) }
-            },
-            listener = gridListener
+        val createHomeAdapter: (Int) -> HomeGridAdapter = { pageIndex ->
+            HomeGridAdapter(
+                config = { homeCellConfig },
+                iconLoader = iconLoader,
+                density = density,
+                folderStyle = ::folderStyle,
+                labelFor = viewModel::labelFor,
+                smartMembers = { viewModel.smartMembers(it) },
+                widgetHost = object : HomeGridAdapter.WidgetViews {
+                    override fun viewFor(item: HomeItem.Widget): View? {
+                        // Hosted widget views have one parent; off-screen pages
+                        // bind them only after their page becomes active.
+                        if (pageIndex != viewModel.activePageIndex.value) return null
+                        return widgets.viewFor(this@HomeActivity, item.appWidgetId)
+                            ?.also { reportWidgetSize(item.appWidgetId, item.rows) }
+                    }
+                    override fun rowHeightPx(): Int = cellHeightPx
+                    override fun editOutline() = ThemedDrawables.surface(
+                        ColorMath.withAlpha(theme.colors.accent, 0.08f), theme.corner(18f) * resources.displayMetrics.density,
+                        theme.colors.accent, dp(1)
+                    )
+                    override fun handle() = ThemedDrawables.surface(theme.colors.accent, dp(12).toFloat())
+                    override fun frame() = widgetFrameDrawable()
+                    override fun frameRadiusPx() = theme.corner(LumaComponents.of(theme).shapes.widgetDp) * resources.displayMetrics.density
+                    override fun capabilitiesFor(item: HomeItem.Widget): WidgetCapabilities? =
+                        widgets.infoFor(item.appWidgetId)?.let { widgets.capabilities(it, cellHeightPx) }
+                    override fun showMissingWidgetPlaceholder(): Boolean = pageIndex == viewModel.activePageIndex.value
+                },
+                listener = gridListener
+            )
+        }
+        homeGrid = createHomePageGrid()
+        homeAdapter = createHomeAdapter(0)
+        homePagesAdapter = HomePagePagerAdapter(
+            initialGrid = homeGrid,
+            initialAdapter = homeAdapter,
+            createGrid = ::createHomePageGrid,
+            createAdapter = createHomeAdapter,
+            onGridBound = ::onHomeGridBound
         )
-        homeGrid.adapter = homeAdapter
+        homePager.setItemViewCacheSize(HomeLayout.MAX_PAGES - 1)
+        homePager.adapter = homePagesAdapter
 
         dockAdapter = HomeGridAdapter(
             config = { dockCellConfig },
@@ -718,6 +757,81 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             onLongClick = ::onDrawerRowLongClick
         )
         drawerGrid.adapter = drawerAdapter
+    }
+
+    private fun createHomePageGrid(): RecyclerView {
+        val pageGrid = RecyclerView(this)
+        pageGrid.layoutManager = object : GridLayoutManager(this, gridColumns) {
+            override fun canScrollVertically(): Boolean {
+                val items = (pageGrid.adapter as? HomeGridAdapter)?.items ?: return false
+                val grid = homeGridSpec()
+                val configuredRows = appearance.gridRows.coerceAtLeast(1)
+                val measuredRows = cellHeightPx * configuredRows + dp(8) * configuredRows +
+                    pageGrid.paddingTop + pageGrid.paddingBottom
+                // Keep pre-overhaul oversized layouts and unusually short
+                // viewports reachable; ordinary validated pages fit without scrolling.
+                return grid.cellsUsed(items) > grid.pageCellCapacity ||
+                    (pageGrid.height > 0 && measuredRows > pageGrid.height)
+            }
+        }.apply {
+            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int =
+                    if ((pageGrid.adapter as? HomeGridAdapter)?.isWidget(position) == true) spanCount else 1
+            }
+        }
+        pageGrid.isNestedScrollingEnabled = false
+        pageGrid.isVerticalScrollBarEnabled = false
+        pageGrid.overScrollMode = View.OVER_SCROLL_NEVER
+        pageGrid.clipChildren = false
+        pageGrid.clipToPadding = false
+        val margin = currentScreenMarginPx()
+        pageGrid.setPadding(margin, dp(4), margin, dp(4))
+        pageGrid.itemAnimator = LumaSpring.ItemAnimator { motion }
+        pageGrid.addItemDecoration(object : RecyclerView.ItemDecoration() {
+            private val gutterPx = dp(4)
+            override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+                outRect.set(gutterPx, gutterPx, gutterPx, gutterPx)
+            }
+        })
+        pageGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            refreshResponsiveIcons()
+            if (::homeGrid.isInitialized && pageGrid === homeGrid) updateHomeCellSizing()
+            if (::homeGrid.isInitialized && pageGrid === homeGrid && ::edit.isInitialized && edit.isActive) {
+                edit.updateGuideMetrics()
+            }
+        }
+        pageGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (::homeGrid.isInitialized && pageGrid === homeGrid && ::edit.isInitialized && edit.isActive) {
+                    edit.updateGuideMetrics()
+                }
+            }
+        })
+        return pageGrid
+    }
+
+    private fun onHomeGridBound(pageIndex: Int, grid: RecyclerView, adapter: HomeGridAdapter) {
+        if (pageIndex != viewModel.activePageIndex.value) return
+        homeGrid = grid
+        homeAdapter = adapter
+        if (::edit.isInitialized && edit.isActive) edit.attachGrid(grid, adapter)
+    }
+
+    private fun onHomePageSelected(pageIndex: Int) {
+        if (pageIndex !in 0 until homePagesAdapter.itemCount) return
+        val previous = viewModel.activePageIndex.value
+        val grid = homePagesAdapter.gridAt(pageIndex) ?: return
+        val adapter = homePagesAdapter.adapterAt(pageIndex) ?: return
+        homeGrid = grid
+        homeAdapter = adapter
+        viewModel.setActivePage(pageIndex)
+        if (previous != pageIndex) {
+            homePagesAdapter.adapterAt(previous)?.let { old -> old.notifyItemRangeChanged(0, old.itemCount) }
+            adapter.notifyItemRangeChanged(0, adapter.itemCount)
+        }
+        if (::edit.isInitialized && edit.isActive) edit.attachGrid(grid, adapter)
+        updateHomeCellSizing()
+        updatePageIndicator(homePagesAdapter.itemCount, pageIndex)
     }
 
     private fun setupControllers() {
@@ -853,8 +967,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         // Grid and drop zones share one content box, so a dashed slot sits
         // exactly on its cell.
-        if (homeGrid.paddingLeft != marginPx || homeGrid.paddingRight != marginPx) {
-            homeGrid.setPadding(marginPx, homeGrid.paddingTop, marginPx, homeGrid.paddingBottom)
+        val grids = (if (::homePagesAdapter.isInitialized) homePagesAdapter.visibleGrids() else emptyList()) +
+            if (::homeGrid.isInitialized) listOf(homeGrid) else emptyList()
+        grids.distinct().forEach { grid ->
+            if (grid.paddingLeft != marginPx || grid.paddingRight != marginPx) {
+                grid.setPadding(marginPx, grid.paddingTop, marginPx, grid.paddingBottom)
+            }
         }
         setHorizontalMargins(guide, marginPx)
         setHorizontalMargins(dockSurface, marginPx)
@@ -941,8 +1059,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     return true
                 }
                 if (abs(dx) > threshold && abs(dx) > abs(dy) * 1.5f) {
-                    performGesture(if (dx < 0) GestureKind.SWIPE_LEFT else GestureKind.SWIPE_RIGHT)
-                    return true
+                    val direction = if (dx < 0) -1 else 1
+                    val target = viewModel.activePageIndex.value + direction
+                    if (target !in 0 until homePagesAdapter.itemCount) {
+                        val gesture = if (direction < 0) GestureKind.SWIPE_LEFT else GestureKind.SWIPE_RIGHT
+                        if (gestureActions[gesture] != null && gestureActions[gesture] != GestureAction.None) {
+                            performGesture(gesture)
+                            return true
+                        }
+                    }
+                    // In-range swipes belong to the horizontal snapped pager.
+                    return false
                 }
                 return false
             }
@@ -979,7 +1106,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun swipeDownAction(): GestureAction = gestureActions[GestureKind.SWIPE_DOWN] ?: GestureKind.SWIPE_DOWN.default
 
     private fun overlayBlocksGestures(): Boolean =
-        folders.isOpen || widgetPicker?.isShowing == true || notificationPromptSheet?.isShowing == true || edit.isActive
+        folders.isOpen || widgetPicker?.isShowing == true || edit.isActive
 
     /**
      * Events are seen at the activity level so a swipe anywhere is recognised
@@ -1182,11 +1309,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 launch {
                     viewModel.layout.collect { layout -> bindLayout(layout) }
                 }
+                launch {
+                    viewModel.activePageIndex.collect { bindLayout(viewModel.layout.value) }
+                }
 
                 launch {
                     viewModel.historyVersion.collect {
                         // Smart folders show live members.
-                        homeAdapter.items.forEachIndexed { i, item -> if (item is HomeItem.SmartFolder) homeAdapter.notifyItemChanged(i) }
+                        forEachHomeAdapter { adapter ->
+                            adapter.items.forEachIndexed { i, item ->
+                                if (item is HomeItem.SmartFolder) adapter.notifyItemChanged(i)
+                            }
+                        }
                     }
                 }
 
@@ -1282,12 +1416,95 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val enabled: Boolean
     )
 
+    private fun updatePageIndicator(pageCount: Int, pageIndex: Int) {
+        if (!::pageIndicator.isInitialized) return
+        val editing = ::edit.isInitialized && edit.isActive
+        pageIndicator.removeAllViews()
+        pageIndicator.visibility = if (pageCount > 1 || editing) View.VISIBLE else View.GONE
+        if (pageIndicator.visibility != View.VISIBLE) return
+        for (index in 0 until pageCount) {
+            val selected = index == pageIndex
+            val dot = View(this).apply {
+                contentDescription = getString(R.string.home_page_indicator_desc, index + 1, pageCount)
+                isFocusable = true
+                isClickable = true
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
+                    setColor(if (selected) theme.colors.accent else theme.colors.onSurface and 0x55FFFFFF)
+                }
+                setOnClickListener { navigateToPage(index) }
+            }
+            pageIndicator.addView(dot, LinearLayout.LayoutParams(
+                if (selected) dp(20) else dp(8), dp(8)
+            ).apply { marginStart = dp(5); marginEnd = dp(5) })
+            dot.minimumWidth = dp(48)
+            dot.minimumHeight = dp(34)
+            dot.setPadding(dp(14), dp(13), dp(14), dp(13))
+        }
+        if (editing) {
+            val add = pageControl("+", R.string.home_add_page) {
+                if (pageCount >= HomeLayout.MAX_PAGES) {
+                    toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
+                } else viewModel.addPage { added ->
+                    if (!added) toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
+                }
+            }
+            pageIndicator.addView(add, LinearLayout.LayoutParams(dp(48), dp(40)))
+            if (pageCount > 1) {
+                val remove = pageControl("−", R.string.home_remove_page) {
+                    viewModel.removePage(pageIndex) { removed ->
+                        if (!removed) toast(getString(R.string.home_page_remove_empty))
+                    }
+                }
+                pageIndicator.addView(remove, LinearLayout.LayoutParams(dp(48), dp(40)))
+            }
+        }
+    }
+
+    private fun pageControl(label: String, description: Int, action: () -> Unit): TextView = TextView(this).apply {
+        text = label
+        contentDescription = getString(description)
+        gravity = Gravity.CENTER
+        textSize = 20f
+        setTextColor(theme.colors.onSurface)
+        isFocusable = true
+        isClickable = true
+        background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(theme.colors.surface1)
+        }
+        setOnClickListener { action() }
+    }
+
+    private fun currentPagerPage(): Int {
+        val manager = homePager.layoutManager as? LinearLayoutManager ?: return viewModel.activePageIndex.value
+        val snapped = homePagerSnap.findSnapView(manager)
+        return if (snapped != null) manager.getPosition(snapped)
+        else manager.findFirstVisibleItemPosition().coerceAtLeast(0)
+    }
+
+    private fun navigateToPage(index: Int) {
+        val count = homePagesAdapter.itemCount
+        if (count <= 0) return
+        val target = index.coerceIn(0, count - 1)
+        if (target == currentPagerPage()) return
+        homePager.smoothScrollToPosition(target)
+    }
+
     private fun bindLayout(layout: com.lumaos.pro.launcher.launcher.model.HomeLayout) {
-        val page = layout.page(0)
+        val pageIndex = viewModel.activePageIndex.value.coerceIn(0, (layout.pageCount - 1).coerceAtLeast(0))
         // Zen shows widgets only; everything else lives in the drawer.
-        val shown = if (appearance.preset.showGrid) page else page.filterIsInstance<HomeItem.Widget>()
-        homeAdapter.submit(shown)
+        val pages = if (appearance.preset.showGrid) layout.pages
+        else layout.pages.map { page -> page.filterIsInstance<HomeItem.Widget>() }
+        homePagesAdapter.submitPages(pages)
+        if (pageIndex != currentPagerPage()) homePager.post { homePager.scrollToPosition(pageIndex) }
+        homePagesAdapter.gridAt(pageIndex)?.let { grid ->
+            homePagesAdapter.adapterAt(pageIndex)?.let { adapter -> onHomeGridBound(pageIndex, grid, adapter) }
+        }
+        val shown = pages.getOrElse(pageIndex) { emptyList() }
         homeEmpty.visibility = if (shown.isEmpty() && appearance.preset.showGrid) View.VISIBLE else View.GONE
+        updatePageIndicator(layout.pageCount, pageIndex)
         val dockItems = layout.dock
         val span = dockItems.size.coerceIn(1, gridColumns.coerceAtLeast(dockItems.size.coerceAtLeast(1)))
         (dockRow.layoutManager as GridLayoutManager).spanCount = span
@@ -1469,8 +1686,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         )
         undoBar?.let { styleUndoBar(it, t) }
         if (::homeAdapter.isInitialized && !themeAnimating) {
-            homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
-            homeAdapter.refreshWidgetFrames()
+            forEachHomeAdapter { adapter ->
+                adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                adapter.refreshWidgetFrames()
+            }
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
             drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
         }
@@ -1650,7 +1869,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val cols = GridRules.effectiveColumns(a.gridColumns, if (desktop.sideBySide) (widthDp * 0.6f).toInt() else widthDp)
         if (cols != gridColumns) {
             gridColumns = cols
-            (homeGrid.layoutManager as GridLayoutManager).spanCount = cols
+            if (::homePagesAdapter.isInitialized) homePagesAdapter.visibleGrids().forEach { grid ->
+                (grid.layoutManager as? GridLayoutManager)?.spanCount = cols
+            }
         }
         val currentDrawerManager = drawerGrid.layoutManager
         val presentationChanged = when (a.drawerPresentation) {
@@ -1705,7 +1926,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         )
         findViewById<ImageButton>(R.id.search_pill_settings).visibility = View.GONE
         val gridVisibility = if (preset.showGrid) View.VISIBLE else View.GONE
-        homeGrid.visibility = gridVisibility
+        homePager.visibility = gridVisibility
         findViewById<View>(R.id.home_grid_frame).visibility = gridVisibility
         homeContext.requestLayout()
     }
@@ -1724,15 +1945,28 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun iconSizeForGrid(preferredPx: Int, grid: RecyclerView, columns: Int, insetsPx: Int): Int =
         responsiveIconSizePx(preferredPx, grid.width, insetsPx, columns, dp(8), dp(24))
 
+    private fun forEachHomeAdapter(action: (HomeGridAdapter) -> Unit) {
+        if (::homePagesAdapter.isInitialized) homePagesAdapter.forEachAdapter(action)
+        else if (::homeAdapter.isInitialized) action(homeAdapter)
+    }
+
     private fun refreshResponsiveIcons() {
         if (!::homeAdapter.isInitialized) return
         val requested = dp(appearance.iconSizeDp)
-        val homeSize = iconSizeForGrid(requested, homeGrid, gridColumns, homeGrid.paddingLeft + homeGrid.paddingRight)
+        val horizontalHomeSize = iconSizeForGrid(requested, homeGrid, gridColumns, homeGrid.paddingLeft + homeGrid.paddingRight)
+        val rows = appearance.gridRows.coerceAtLeast(1)
+        val rowBudget = if (homeGrid.height > 0) {
+            (homeGrid.height - homeGrid.paddingTop - homeGrid.paddingBottom - dp(8) * rows) / rows
+        } else Int.MAX_VALUE
+        val labelHeight = if (homeCellConfig.showLabels) {
+            (AppEntryAdapter.BASE_LABEL_SP * homeCellConfig.textScale * 2f * resources.displayMetrics.density).toInt()
+        } else 0
+        val homeSize = minOf(horizontalHomeSize, (rowBudget - dp(25) - labelHeight).coerceAtLeast(dp(24)))
         val dockSize = iconSizeForGrid(requested, dockRow, LumaTokens.dockIconCount, 0)
         if (homeCellConfig.iconSizePx != homeSize || dockCellConfig.iconSizePx != dockSize) {
             homeCellConfig = homeCellConfig.copy(iconSizePx = homeSize)
             dockCellConfig = dockCellConfig.copy(iconSizePx = dockSize, showLabels = false)
-            homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
+            forEachHomeAdapter { it.notifyItemRangeChanged(0, it.itemCount) }
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         }
         val drawerSize = if (appearance.drawerPresentation == DrawerPresentation.LIST) requested else
@@ -1749,35 +1983,36 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
-    /**
-     * The row preference controls how many rows fit in the visible grid; rows
-     * beyond that scroll. A minimum based on icon and label size avoids
-     * clipping on compact screens.
-     */
+    /** Fits the configured home rows to each page's bounded viewport. */
     private fun updateHomeCellSizing() {
         if (homeGrid.height <= 0) return
         val labelHeight = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_SP, AppEntryAdapter.BASE_LABEL_SP * homeCellConfig.textScale * 2f, resources.displayMetrics
         ).toInt()
         val minimum = homeCellConfig.iconSizePx + dp(25) + if (homeCellConfig.showLabels) labelHeight else 0
-        val target = homeCellHeightPx(homeGrid.height, appearance.gridRows, minimum)
+        val rows = appearance.gridRows.coerceAtLeast(1)
+        val availableRowsHeight = (homeGrid.height - homeGrid.paddingTop - homeGrid.paddingBottom - dp(8) * rows)
+            .coerceAtLeast(0)
+        val target = homeCellHeightPx(availableRowsHeight, rows, minimum)
         if (cellHeightPx != target) {
             cellHeightPx = target
             homeCellConfig = homeCellConfig.copy(cellHeightPx = target)
-            homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
+            forEachHomeAdapter { it.notifyItemRangeChanged(0, it.itemCount) }
             if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
         }
     }
 
     private fun refreshAll() {
         if (!::homeAdapter.isInitialized) return
-        homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
+        forEachHomeAdapter { it.notifyItemRangeChanged(0, it.itemCount) }
         dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
     }
 
     private fun onIconReady(key: ComponentKey) {
-        homeAdapter.positionsFor(key).forEach { homeAdapter.notifyItemChanged(it) }
+        forEachHomeAdapter { adapter ->
+            adapter.positionsFor(key).forEach { adapter.notifyItemChanged(it) }
+        }
         dockAdapter.positionsFor(key).forEach { dockAdapter.notifyItemChanged(it) }
         drawerAdapter.currentList.forEachIndexed { i, row ->
             if (row is DrawerRow.App && row.entry.key == key) drawerAdapter.notifyItemChanged(i)
@@ -1989,13 +2224,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
     }
 
-    override fun commitOrder(arranged: List<HomeItem>) = viewModel.reorderHome(arranged)
+    override fun commitOrder(arranged: List<HomeItem>) = viewModel.reorderHome(arranged, homeGridSpec())
 
     override fun dropOnto(source: HomeItem, target: HomeItem) {
         val page = homeAdapter.items
         val s = page.indexOfFirst { HomeGridIdentity.of(it) == HomeGridIdentity.of(source) }
         val t = page.indexOfFirst { HomeGridIdentity.of(it) == HomeGridIdentity.of(target) }
-        val display = viewModel.layout.value.page(0)
+        val display = viewModel.layout.value.page(viewModel.activePageIndex.value)
         val ds = display.indexOfFirst { HomeGridIdentity.of(it) == HomeGridIdentity.of(source) }
         val dt = display.indexOfFirst { HomeGridIdentity.of(it) == HomeGridIdentity.of(target) }
         if (s >= 0 && t >= 0 && ds >= 0 && dt >= 0) viewModel.dropOnto(ds, dt)
@@ -2006,7 +2241,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             removeWidgetWithUndo(item)
             return
         }
-        val display = viewModel.layout.value.page(0)
+        val display = viewModel.layout.value.page(viewModel.activePageIndex.value)
         val index = display.indexOfFirst { HomeGridIdentity.of(it) == HomeGridIdentity.of(item) }
         if (index >= 0) viewModel.removeFromHome(index)
     }
@@ -2144,6 +2379,23 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun menu() = LumaMenu(this, theme, effects, motion)
 
+    private fun addPageMoveOptions(entries: MutableList<MenuEntry>, currentPage: Int) {
+        viewModel.layout.value.pages.indices.filter { it != currentPage }.forEach { page ->
+            entries += MenuEntry(
+                M_MOVE_TO_PAGE_BASE + page,
+                getString(R.string.home_move_to_page, page + 1),
+                R.drawable.ic_rx_move,
+                group = 1
+            )
+        }
+    }
+
+    private fun moveItemToPage(position: Int, pageIndex: Int) {
+        viewModel.moveHomeItemToPage(position, pageIndex, homeGridSpec()) { moved ->
+            if (!moved) toast(getString(R.string.toast_home_page_no_space))
+        }
+    }
+
     private fun showHomeMenu(item: HomeItem, position: Int, anchor: View, isDock: Boolean) {
         when (item) {
             is HomeItem.App -> showAppMenu(item.key, viewModel.labelFor(item.key), anchor,
@@ -2154,8 +2406,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 entries += MenuEntry(M_OPEN, getString(R.string.action_open_folder), R.drawable.ic_rx_folder)
                 if (!isDock) entries += MenuEntry(M_EDIT_HOME, getString(R.string.action_edit_home), R.drawable.ic_rx_move)
                 if (isDock) entries += MenuEntry(M_TO_HOME, getString(R.string.action_move_to_home), R.drawable.ic_rx_home_add)
-                else if (viewModel.hasDockSpace()) {
-                    entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock)
+                else {
+                    if (viewModel.hasDockSpace()) entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock)
+                    addPageMoveOptions(entries, viewModel.activePageIndex.value)
                 }
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_folder), R.drawable.ic_rx_remove, destructive = true, group = 1)
                 menu().show(anchor, name, entries) { e ->
@@ -2164,6 +2417,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         M_EDIT_HOME -> edit.enter()
                         M_TO_DOCK -> viewModel.moveHomeToDock(position)
                         M_TO_HOME -> viewModel.moveDockToHome(position)
+                        in M_MOVE_TO_PAGE_BASE until M_SHORTCUT_BASE -> moveItemToPage(position, e.id - M_MOVE_TO_PAGE_BASE)
                         M_REMOVE -> if (isDock) viewModel.removeFromDock(position) else viewModel.removeFromHome(position)
                     }
                 }
@@ -2186,6 +2440,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 if (caps?.reconfigurable == true) {
                     entries += MenuEntry(M_CONFIGURE, getString(R.string.action_configure_widget), R.drawable.ic_rx_settings, group = 0)
                 }
+                addPageMoveOptions(entries, viewModel.activePageIndex.value)
                 if (!edit.isActive) entries += MenuEntry(M_EDIT_HOME, getString(R.string.action_edit_home), R.drawable.ic_rx_move, group = 1)
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_widget), R.drawable.ic_rx_remove, destructive = true, group = 1)
                 val label = info?.loadLabel(packageManager) ?: getString(R.string.widget_generic)
@@ -2194,7 +2449,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         e.id in (M_RESIZE_BASE + 1)..(M_RESIZE_BASE + 4) -> {
                             val rows = e.id - M_RESIZE_BASE
                             val safeRows = caps?.let { WidgetPlan.clampRows(rows, it) } ?: rows
-                            viewModel.resizeWidget(item.appWidgetId, safeRows)
+                            viewModel.resizeWidget(
+                                item.appWidgetId, safeRows, homeGridSpec(),
+                                minRows = caps?.minRows ?: HomeLayout.MIN_WIDGET_ROWS,
+                                maxRows = caps?.maxRows ?: HomeLayout.MAX_WIDGET_ROWS
+                            )
                             reportWidgetSize(item.appWidgetId, safeRows)
                         }
                         e.id == M_CONFIGURE -> {
@@ -2205,6 +2464,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             }
                         }
                         e.id == M_EDIT_HOME -> edit.enter()
+                        e.id in M_MOVE_TO_PAGE_BASE until M_SHORTCUT_BASE -> moveItemToPage(position, e.id - M_MOVE_TO_PAGE_BASE)
                         e.id == M_REMOVE -> remove(item)
                     }
                 }
@@ -2235,6 +2495,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 if (viewModel.hasDockSpace()) {
                     entries += MenuEntry(M_TO_DOCK, getString(R.string.action_move_to_dock), R.drawable.ic_rx_dock, group = 1)
                 }
+                addPageMoveOptions(entries, viewModel.activePageIndex.value)
                 entries += MenuEntry(M_REMOVE, getString(R.string.action_remove_from_home), R.drawable.ic_rx_remove, group = 1)
             }
             MenuContext.DOCK -> {
@@ -2262,11 +2523,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     if (!core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
                     else if (drawer.isOpen) drawer.close()
                 }
-                e.id == M_ADD_HOME -> { viewModel.addToHome(key); toast(getString(R.string.toast_added_to_home)) }
+                e.id == M_ADD_HOME -> viewModel.addToHome(key, homeGridSpec()) { added ->
+                    toast(getString(if (added) R.string.toast_added_to_home else R.string.toast_home_page_no_space))
+                }
                 e.id == M_ADD_DOCK -> { viewModel.addToDock(key); toast(getString(R.string.toast_added_to_dock)) }
                 e.id == M_EDIT_HOME -> edit.enter()
                 e.id == M_TO_DOCK -> viewModel.moveHomeToDock(position)
                 e.id == M_TO_HOME -> viewModel.moveDockToHome(position)
+                e.id in M_MOVE_TO_PAGE_BASE until M_SHORTCUT_BASE -> moveItemToPage(position, e.id - M_MOVE_TO_PAGE_BASE)
                 e.id == M_REMOVE -> if (context == MenuContext.DOCK) viewModel.removeFromDock(position) else viewModel.removeFromHome(position)
                 e.id == M_PIN -> viewModel.setAppPinned(key, true)
                 e.id == M_UNPIN -> viewModel.setAppPinned(key, false)
@@ -2375,7 +2639,16 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         )
     }
 
+    private fun homeGridSpec() = HomeGridSpec(
+        columns = gridColumns.coerceAtLeast(1),
+        rows = appearance.gridRows
+    )
+
     private fun beginWidgetAdd(info: AppWidgetProviderInfo) {
+        if (pendingWidget != null || widgetPlacementCommitInFlight) {
+            toast(getString(R.string.toast_widget_add_in_progress))
+            return
+        }
         val (pending, consent) = try {
             widgets.begin(info)
         } catch (e: RuntimeException) {
@@ -2397,6 +2670,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     private fun continueWidgetAdd(pending: WidgetHostController.Pending) {
+        if (pendingWidget?.appWidgetId != pending.appWidgetId) return
         if (widgets.needsConfiguration(pending)) {
             if (!widgets.startConfiguration(this, pending, REQUEST_CONFIGURE_WIDGET)) {
                 releaseWidgetWhenUnreferenced(pending.appWidgetId)
@@ -2407,30 +2681,74 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     private fun finishWidgetAdd(pending: WidgetHostController.Pending) {
+        if (widgetPlacementCommitInFlight || pendingWidget?.appWidgetId != pending.appWidgetId) return
         pendingWidget = null
-        val caps = widgets.capabilities(pending.info, cellHeightPx)
+        widgetPlacementCommitInFlight = true
         val widget = HomeItem.Widget(
             pending.appWidgetId,
             pending.info.provider.flattenToString(),
-            caps.initialRows
+            widgets.capabilities(pending.info, cellHeightPx).initialRows
         )
-        // The planner owns the only insertion decision: it refuses duplicates and
-        // over-budget pages instead of displacing existing content.
-        val page = viewModel.layout.value.page(0)
-        when (val plan = WidgetPlan.planInsertion(page, widget)) {
-            is InsertionPlan.AtIndex -> {
-                viewModel.addWidget(widget, position = plan.index) { saved ->
-                    toast(getString(if (saved) R.string.toast_widget_added else R.string.toast_widget_failed))
-                }
-            }
+        val layout = viewModel.layout.value
+        val active = viewModel.activePageIndex.value
+        val grid = homeGridSpec()
+        when (WidgetPlan.planInsertion(layout, active, widget, grid)) {
+            is InsertionPlan.AtIndex -> commitWidgetPlacement(widget, active, grid, createPage = false)
             InsertionPlan.AlreadyPresent -> {
-                // A restored result can arrive after the placement was saved.
-                // Never delete the id of the widget that's already on the page.
+                widgetPlacementCommitInFlight = false
+                // A repeated callback must not release the id already in use.
                 toast(getString(R.string.toast_widget_already_added))
             }
-            InsertionPlan.NoSpace -> {
-                releaseWidgetWhenUnreferenced(pending.appWidgetId)
-                toast(getString(R.string.toast_widget_no_space))
+            InsertionPlan.NoSpace -> chooseWidgetPlacement(widget, grid)
+        }
+    }
+
+    private fun chooseWidgetPlacement(widget: HomeItem.Widget, grid: HomeGridSpec) {
+        val layout = viewModel.layout.value
+        val active = viewModel.activePageIndex.value
+        val destinations = layout.pages.indices.filter { index ->
+            index != active && WidgetPlan.planInsertion(layout, index, widget, grid) is InsertionPlan.AtIndex
+        }
+        val canCreatePage = layout.pageCount < HomeLayout.MAX_PAGES &&
+            WidgetPlan.planInsertion(layout, layout.pageCount, widget, grid) is InsertionPlan.AtIndex
+        if (destinations.isEmpty() && !canCreatePage) {
+            widgetPlacementCommitInFlight = false
+            releaseWidgetWhenUnreferenced(widget.appWidgetId)
+            toast(getString(R.string.toast_widget_no_space))
+            return
+        }
+        val choices = destinations.map { it to getString(R.string.home_page_indicator_desc, it + 1, layout.pageCount) } +
+            if (canCreatePage) listOf(layout.pageCount to getString(R.string.widget_new_page)) else emptyList()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.widget_choose_placement)
+            .setItems(choices.map { it.second }.toTypedArray()) { dialog, which ->
+                val page = choices[which].first
+                val newPage = page == layout.pageCount
+                commitWidgetPlacement(widget, page, grid, createPage = newPage)
+            }
+            .setOnCancelListener {
+                widgetPlacementCommitInFlight = false
+                releaseWidgetWhenUnreferenced(widget.appWidgetId)
+            }
+            .show()
+    }
+
+    private fun commitWidgetPlacement(widget: HomeItem.Widget, pageIndex: Int, grid: HomeGridSpec, createPage: Boolean) {
+        viewModel.addWidget(
+            widget = widget,
+            position = 0,
+            pageIndex = pageIndex,
+            grid = grid,
+            createPageIfMissing = createPage
+        ) { saved ->
+            widgetPlacementCommitInFlight = false
+            if (saved) {
+                viewModel.setActivePage(pageIndex)
+                reportWidgetSize(widget.appWidgetId, widget.rows)
+                toast(getString(R.string.toast_widget_added))
+            } else {
+                releaseWidgetWhenUnreferenced(widget.appWidgetId)
+                toast(getString(R.string.toast_widget_failed))
             }
         }
     }
@@ -2443,7 +2761,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     /** A removed widget kept alive (host id included) until the undo window closes. */
-    private data class PendingWidgetRemoval(val widget: HomeItem.Widget, val position: Int)
+    private data class PendingWidgetRemoval(val widget: HomeItem.Widget, val pageIndex: Int, val position: Int)
+    private val widgetRemovalsInFlight = HashSet<Int>()
 
     private val widgetRemovalTimeout = Runnable {
         pendingWidgetRemoval?.let { releaseWidgetWhenUnreferenced(it.widget.appWidgetId) }
@@ -2472,16 +2791,24 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      * retaining an unreferenced id is safer than deleting a saved placement.
      */
     private fun removeWidgetWithUndo(item: HomeItem.Widget) {
-        val position = viewModel.layout.value.page(0).indexOfFirst {
+        if (!widgetRemovalsInFlight.add(item.appWidgetId)) return
+        val pageIndex = viewModel.activePageIndex.value
+        val position = viewModel.layout.value.page(pageIndex).indexOfFirst {
             it is HomeItem.Widget && it.appWidgetId == item.appWidgetId
         }
-        viewModel.removeWidget(item.appWidgetId)
-        // A second removal finalises the first one; only one undo slot is offered.
-        pendingWidgetRemoval?.let { releaseWidgetWhenUnreferenced(it.widget.appWidgetId) }
-        pendingWidgetRemoval = PendingWidgetRemoval(item, position.coerceAtLeast(0))
-        undoHandler.removeCallbacks(widgetRemovalTimeout)
-        undoHandler.postDelayed(widgetRemovalTimeout, WIDGET_UNDO_WINDOW_MS)
-        showUndoBar()
+        viewModel.removeWidget(item.appWidgetId) { removed ->
+            widgetRemovalsInFlight.remove(item.appWidgetId)
+            if (!removed) {
+                toast(getString(R.string.toast_widget_failed))
+                return@removeWidget
+            }
+            // A second removal finalises the first one; only one undo slot is offered.
+            pendingWidgetRemoval?.let { releaseWidgetWhenUnreferenced(it.widget.appWidgetId) }
+            pendingWidgetRemoval = PendingWidgetRemoval(item, pageIndex, position.coerceAtLeast(0))
+            undoHandler.removeCallbacks(widgetRemovalTimeout)
+            undoHandler.postDelayed(widgetRemovalTimeout, WIDGET_UNDO_WINDOW_MS)
+            showUndoBar()
+        }
     }
 
     private fun undoWidgetRemoval() {
@@ -2489,7 +2816,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         undoHandler.removeCallbacks(widgetRemovalTimeout)
         pendingWidgetRemoval = null
         hideUndoBar()
-        viewModel.addWidget(pending.widget, pending.position) { saved ->
+        viewModel.addWidget(
+            widget = pending.widget,
+            position = pending.position,
+            pageIndex = pending.pageIndex,
+            grid = homeGridSpec()
+        ) { saved ->
             if (saved) {
                 reportWidgetSize(pending.widget.appWidgetId, pending.widget.rows)
             } else {
@@ -2673,6 +3005,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val STATE_PENDING_WIDGET_ID = "pending_widget_id"
         private const val STATE_PENDING_WIDGET_INFO = "pending_widget_info"
         private const val STATE_RECONFIGURE_WIDGET_ID = "reconfigure_widget_id"
+        private const val STATE_ONBOARDING_LAUNCH_IN_FLIGHT = "onboarding_launch_in_flight"
 
         private const val SWIPE_MIN_DISTANCE_DP = 60
         private const val REQUEST_CONFIGURE_WIDGET = 4101
@@ -2696,6 +3029,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val M_CONFIGURE = 150
         private const val M_PRESET_BASE = 200
         private const val M_SMART_BASE = 300
+        private const val M_MOVE_TO_PAGE_BASE = 400
         private const val M_SHORTCUT_BASE = 1000
     }
 }

@@ -36,6 +36,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- RoleHelper resolves the configured HOME activity for truthful status. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+            <category android:name="android.intent.category.DEFAULT" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.WEB_SEARCH" />
         </intent>

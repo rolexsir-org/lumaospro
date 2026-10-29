@@ -32,7 +32,8 @@ class DesktopLayout @JvmOverloads constructor(
 
     private val header: View? get() = findViewById(R.id.home_header)
     private val right: List<View> get() = listOfNotNull(
-        findViewById(R.id.home_grid_frame), findViewById(R.id.home_search_pill), findViewById(R.id.dock_surface)
+        findViewById(R.id.home_grid_frame), findViewById(R.id.home_page_indicator),
+        findViewById(R.id.home_search_pill), findViewById(R.id.dock_surface)
     )
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

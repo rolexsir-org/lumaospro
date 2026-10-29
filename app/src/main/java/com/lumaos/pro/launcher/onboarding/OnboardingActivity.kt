@@ -65,19 +65,17 @@ import kotlinx.coroutines.launch
 class OnboardingActivity : ComponentActivity() {
 
     private val prefs by lazy { (application as LumaApp).core.prefs }
+    private var roleRequestInFlight = false
 
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        // Record the outcome whatever it was: the user has been asked, and
-        // nagging them again on every launch would be worse than not asking.
-        lifecycleScope.launch {
-            // Completion means the user answered, not that the role was
-            // granted. A denial must not re-open onboarding on every launch;
-            // Home-role status continues to be read independently in Settings.
-            prefs.setOnboardingDone(true)
-            finish()
-        }
+        roleRequestInFlight = false
+        // Do not infer success from resultCode. Re-read Android's current HOME
+        // selection; onboarding completion is a separate, already-persisted fact.
+        val isDefault = RoleHelper.isDefaultLauncher(this)
+        LumaLog.i("Home-role request returned; LumaOS Pro default=$isDefault")
+        finish()
     }
 
     private suspend fun safelyUpdateAppearance(update: suspend () -> Unit) {
@@ -94,6 +92,11 @@ class OnboardingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                completeOnboardingAndFinish()
+            }
+        })
 
         val themes = (application as LumaApp).core.themes
         setContent {
@@ -169,6 +172,14 @@ class OnboardingActivity : ComponentActivity() {
                             Spacer(Modifier.height(10.dp))
                         }
                         Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.onboarding_home_role_explainer),
+                            modifier = Modifier.widthIn(max = 440.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = ::requestHomeRole,
                             modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
@@ -177,12 +188,7 @@ class OnboardingActivity : ComponentActivity() {
                         }
                         Spacer(Modifier.height(10.dp))
                         OutlinedButton(
-                            onClick = {
-                                lifecycleScope.launch {
-                                    prefs.setOnboardingDone(true)
-                                    finish()
-                                }
-                            },
+                            onClick = ::completeOnboardingAndFinish,
                             modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
                         ) {
                             Text(stringResource(R.string.onboarding_skip))
@@ -246,22 +252,54 @@ class OnboardingActivity : ComponentActivity() {
         }
     }
 
+    private fun completeOnboardingAndFinish() {
+        lifecycleScope.launch {
+            if (persistOnboardingCompletion()) finish()
+        }
+    }
+
+    private suspend fun persistOnboardingCompletion(): Boolean = try {
+        prefs.setOnboardingDone(true)
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        LumaLog.e("Could not persist onboarding completion", e)
+        Toast.makeText(this, R.string.onboarding_save_failed, Toast.LENGTH_LONG).show()
+        false
+    }
+
     private fun requestHomeRole() {
-        val intent = RoleHelper.homeRoleRequestIntent(this)
-        if (intent != null) {
-            runCatching { roleLauncher.launch(intent) }
-                .onFailure { fallbackToHomeSettings() }
-        } else {
-            fallbackToHomeSettings()
+        if (roleRequestInFlight || isFinishing || isDestroyed) return
+        roleRequestInFlight = true
+        lifecycleScope.launch {
+            // Persist the user's onboarding decision before crossing into Android
+            // Settings. Process death there must not cause onboarding to restart.
+            if (!persistOnboardingCompletion()) {
+                roleRequestInFlight = false
+                return@launch
+            }
+            if (RoleHelper.isDefaultLauncher(this@OnboardingActivity)) {
+                roleRequestInFlight = false
+                finish()
+                return@launch
+            }
+            val intent = RoleHelper.homeRoleRequestIntent(this@OnboardingActivity)
+            if (intent != null) {
+                runCatching { roleLauncher.launch(intent) }
+                    .onFailure {
+                        LumaLog.w("Home role request unavailable; opening Home settings")
+                        fallbackToHomeSettings()
+                    }
+            } else {
+                fallbackToHomeSettings()
+            }
         }
     }
 
     /** Older Android, or an OEM that has not implemented the Home role. */
     private fun fallbackToHomeSettings() {
         RoleHelper.openHomeSettings(this)
-        lifecycleScope.launch {
-            prefs.setOnboardingDone(true)
-            finish()
-        }
+        finish()
     }
 }

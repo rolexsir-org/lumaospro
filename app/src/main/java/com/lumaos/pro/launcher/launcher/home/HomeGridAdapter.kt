@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -58,6 +59,9 @@ class HomeGridAdapter(
         fun onWidgetResizeOptions(item: HomeItem.Widget, position: Int, view: View) {
             onItemLongClick(item, position, view)
         }
+        fun onWidgetRemove(item: HomeItem.Widget, position: Int, view: View) {
+            onItemLongClick(item, position, view)
+        }
         fun onWidgetResize(item: HomeItem.Widget, rows: Int, commit: Boolean) {}
     }
 
@@ -77,6 +81,8 @@ class HomeGridAdapter(
          * legacy fixed 1..4 row range rather than hiding every affordance.
          */
         fun capabilitiesFor(item: HomeItem.Widget): WidgetCapabilities? = null
+        /** False for cached off-screen pages whose host view belongs to the active page. */
+        fun showMissingWidgetPlaceholder(): Boolean = true
     }
 
     val items = ArrayList<HomeItem>()
@@ -242,10 +248,17 @@ class HomeGridAdapter(
             holder.container.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             holder.missing.visibility = View.GONE
         } else {
-            holder.missing.visibility = View.VISIBLE
+            holder.missing.visibility = if (host?.showMissingWidgetPlaceholder() == false) View.GONE else View.VISIBLE
         }
         holder.itemView.contentDescription = holder.itemView.context.getString(R.string.widget_description, displayRows)
         holder.outline.visibility = if (editMode) View.VISIBLE else View.GONE
+        holder.remove.visibility = if (editMode) View.VISIBLE else View.GONE
+        holder.remove.imageTintList = android.content.res.ColorStateList.valueOf(config().labelColor)
+        holder.remove.setOnClickListener {
+            val pos = holder.bindingAdapterPosition
+            val current = items.getOrNull(pos) as? HomeItem.Widget
+            if (current != null) listener.onWidgetRemove(current, pos, holder.itemView)
+        }
         // Fixed-height providers get no resize affordance at all.
         holder.handle.visibility = if (editMode && verticallyResizable) View.VISIBLE else View.GONE
         if (editMode && host != null) {
@@ -319,6 +332,7 @@ class HomeGridAdapter(
         val container: FrameLayout = view.findViewById(R.id.widget_container)
         val missing: TextView = view.findViewById(R.id.widget_missing)
         val outline: View = view.findViewById(R.id.widget_outline)
+        val remove: ImageButton = view.findViewById(R.id.widget_remove)
         val handle: View = view.findViewById(R.id.widget_resize)
         val handleIndicator: View = view.findViewById(R.id.widget_resize_indicator)
 

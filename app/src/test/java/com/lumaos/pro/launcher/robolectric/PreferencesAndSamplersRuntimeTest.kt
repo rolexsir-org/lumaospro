@@ -98,6 +98,17 @@ class PreferencesAndSamplersRuntimeTest {
     }
 
     @Test
+    fun `onboarding dismissal is persisted independently from launcher role`() = runTest {
+        assertEquals(false, prefs.onboardingDone.first())
+        // This is the same outcome for Skip and for an unanswered/declined
+        // Android role request: completion is durable, role ownership is not
+        // represented by this preference.
+        prefs.setOnboardingDone(true)
+        assertEquals(true, prefs.onboardingDone.first())
+        assertEquals(true, prefs.isOnboardingDoneOnce())
+    }
+
+    @Test
     fun `theme choice round trips`() = runTest {
         prefs.setThemeMode(ThemeMode.DARK)
         assertEquals(ThemeMode.DARK, prefs.themeMode.first())

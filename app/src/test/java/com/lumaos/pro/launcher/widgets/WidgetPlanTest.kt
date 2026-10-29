@@ -132,23 +132,54 @@ class WidgetPlanTest {
     }
 
     @Test
-    fun `page widget count budget is enforced`() {
-        val page = (1..WidgetPlan.MAX_WIDGETS_PER_PAGE).map { widget(it, 1) }
-        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(page, widget(99, 1)))
+    fun `configured page widget count budget is enforced`() {
+        val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(
+            rows = 3,
+            maxWidgetsPerPage = 2,
+            maxWidgetsTotal = 6
+        )
+        val page = (1..grid.maxWidgetsPerPage).map { widget(it, 1) }
+        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(page, widget(99, 1), grid))
     }
 
     @Test
     fun `combined widget row budget is enforced`() {
-        // Three 4-row widgets already use the full 12-row budget.
-        val page = listOf(widget(1, 4), widget(2, 4), widget(3, 4))
-        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(page, widget(4, 1)))
-        assertTrue(WidgetPlan.canFit(page.drop(1), widget(4, 1)))
+        val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(columns = 4, rows = 8)
+        val page = listOf(widget(1, 4), widget(2, 4))
+        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(page, widget(3, 1), grid))
+        assertTrue(WidgetPlan.canFit(page.drop(1), widget(4, 1), grid))
     }
 
     @Test
-    fun `apps do not count against the widget row budget`() {
-        val page = listOf(app(), app(), widget(1, 4), app())
-        assertEquals(4, WidgetPlan.widgetRows(page))
-        assertTrue(WidgetPlan.canFit(page, widget(2, 4)))
+    fun `widget and app cells share the page grid with full width widgets row aligned`() {
+        val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(columns = 4, rows = 7)
+        val page = listOf(app(), app(), widget(1, 2), app())
+        assertEquals(2, WidgetPlan.widgetRows(page))
+        assertEquals(25, grid.cellsUsed(listOf(widget(2, 2)) + page))
+        assertEquals(InsertionPlan.AtIndex(0), WidgetPlan.planInsertion(page, widget(2, 2), grid))
+    }
+
+    @Test
+    fun `full layout plan detects cross page duplicates and total widget limits`() {
+        val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(
+            columns = 2,
+            rows = 2,
+            maxWidgetsPerPage = 2,
+            maxWidgetsTotal = 1
+        )
+        val layout = HomeLayout(pages = listOf(listOf(widget(7, 1)), emptyList()))
+
+        assertEquals(InsertionPlan.AlreadyPresent, WidgetPlan.planInsertion(layout, 1, widget(7, 1), grid))
+        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(layout, 1, widget(8, 1), grid))
+    }
+
+    @Test
+    fun `full layout plan validates page index and provider row boundaries`() {
+        val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(columns = 2, rows = 2)
+        val layout = HomeLayout(pages = listOf(emptyList()))
+
+        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(layout, 3, widget(8, 1), grid))
+        assertEquals(InsertionPlan.NoSpace, WidgetPlan.planInsertion(layout, 0, widget(9, 5), grid))
+        assertEquals(InsertionPlan.AtIndex(0), WidgetPlan.planInsertion(layout, 0, widget(10, 2), grid))
     }
 }

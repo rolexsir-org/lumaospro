@@ -344,6 +344,11 @@ private fun HomeRoleSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Text(
+            text = stringResource(R.string.role_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (!role.isDefault && role.currentDefaultLabel != null) {
             Text(
                 text = stringResource(R.string.role_current_default, role.currentDefaultLabel ?: ""),

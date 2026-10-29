@@ -7,9 +7,12 @@
     <!-- Onboarding -->
     <string name="onboarding_welcome">LumaOS Pro</string>
     <string name="onboarding_subtitle">A calm, lightweight home for your day.</string>
+    <string name="onboarding_home_role_explainer">Your default launcher is the app Android opens when you press Home. Android will ask you to confirm; you can also skip and choose later in Settings.</string>
+    <string name="role_explanation">The default launcher is the app Android opens when you press Home. Android controls this choice and displays its own confirmation.</string>
     <string name="onboarding_contexts">Work, Study, Personal, and Sleep spaces with on-device schedules and layouts.</string>
     <string name="onboarding_set_default">Set as default launcher</string>
     <string name="onboarding_skip">Not now</string>
+    <string name="onboarding_save_failed">Couldn’t save this choice. Please try again.</string>
     <string name="onboarding_privacy_note">You can change this at any time in LumaOS Pro Settings. LumaOS Pro has no account or app server. Android backup may transfer launcher settings if enabled.</string>
 
     <!-- Home -->
@@ -30,6 +33,15 @@
     <string name="dnd_access_unavailable">This device does not expose Notification Policy Access settings.</string>
     <string name="notification_settings_unavailable">This device does not expose app notification settings.</string>
     <string name="home_empty_hint">Swipe up to explore your apps</string>
+    <string name="home_page_indicator_desc">Home page %1$d of %2$d</string>
+    <string name="home_add_page">Add home page</string>
+    <string name="home_remove_page">Remove empty home page</string>
+    <string name="home_page_remove_empty">Move this page’s items elsewhere before removing it.</string>
+    <string name="home_page_limit">You can have up to %1$d home pages.</string>
+    <string name="home_page_added">Page added</string>
+    <string name="home_page_removed">Page removed</string>
+    <string name="home_move_to_page">Move to page %1$d</string>
+    <string name="toast_home_page_no_space">That page does not have enough room.</string>
     <string name="drawer_title">Apps</string>
     <string name="drawer_close_description">Close app drawer</string>
     <string name="drawer_alphabet_index_description">Alphabetical app index. Scroll to choose a letter.</string>

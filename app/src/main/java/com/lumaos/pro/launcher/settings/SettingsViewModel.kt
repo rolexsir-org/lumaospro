@@ -317,7 +317,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val context = getApplication<Application>()
         val current = RoleHelper.defaultHomePackage(context)
         _roleState.value = RoleState(
-            isDefault = current == context.packageName,
+            isDefault = RoleHelper.isDefaultLauncher(context),
             currentDefaultPackage = current,
             currentDefaultLabel = RoleHelper.defaultHomeLabel(context),
             checkedAtMillis = System.currentTimeMillis()

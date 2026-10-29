@@ -1,6 +1,5 @@
 package com.lumaos.pro.launcher.core.util
 
-import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -24,17 +23,39 @@ import android.provider.Settings
 object RoleHelper {
 
     /** Package name of the current default launcher, or null if none. */
-    fun defaultHomePackage(context: Context): String? {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val resolved = context.packageManager.resolveActivity(
+    fun defaultHomePackage(context: Context): String? = runCatching {
+        val intent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addCategory(Intent.CATEGORY_DEFAULT)
+        context.packageManager.resolveActivity(
             intent,
             PackageManager.MATCH_DEFAULT_ONLY
-        )
-        return resolved?.activityInfo?.packageName
-    }
+        )?.activityInfo?.packageName
+    }.onFailure {
+        LumaLog.w("Could not resolve the current HOME activity")
+    }.getOrNull()
 
-    fun isDefaultLauncher(context: Context): Boolean =
-        defaultHomePackage(context) == context.packageName
+    fun isDefaultLauncher(context: Context): Boolean {
+        // Resolve what Android will actually launch for HOME and, where the
+        // platform exposes it, cross-check the explicit HOME role. A saved
+        // onboarding result or a successful result code is never evidence of
+        // current role ownership.
+        val resolvedHomeIsLuma = defaultHomePackage(context) == context.packageName
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = runCatching { context.getSystemService(RoleManager::class.java) }.getOrNull()
+            if (roleManager != null && runCatching {
+                    roleManager.isRoleAvailable(RoleManager.ROLE_HOME)
+                }.getOrDefault(false)) {
+                val roleHeld = runCatching {
+                    roleManager.isRoleHeld(RoleManager.ROLE_HOME)
+                }.getOrNull()
+                if (roleHeld != null) return roleHeld && resolvedHomeIsLuma
+            }
+        }
+        // Android versions/OEM builds without an available Home role retain
+        // the resolved HOME activity as the compatibility source of truth.
+        return resolvedHomeIsLuma
+    }
 
     /** Name of the current default launcher, for display in Settings. */
     fun defaultHomeLabel(context: Context): String? {
@@ -60,11 +81,15 @@ object RoleHelper {
      */
     fun homeRoleRequestIntent(context: Context): Intent? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
-        val roleManager = context.getSystemService(RoleManager::class.java) ?: return null
-        if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) return null
-        if (roleManager.isRoleHeld(RoleManager.ROLE_HOME)) return null
-        return runCatching { roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME) }
-            .getOrNull()
+        return runCatching {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+                ?: return@runCatching null
+            if (!roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) return@runCatching null
+            if (roleManager.isRoleHeld(RoleManager.ROLE_HOME)) return@runCatching null
+            roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+        }.onFailure {
+            LumaLog.w("Home role request unavailable on this device")
+        }.getOrNull()
     }
 
     /**
