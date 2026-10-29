@@ -9,67 +9,151 @@ import android.util.AttributeSet
 import android.view.View
 
 /**
- * Edit-mode placement guides drawn over the home grid: a faint outline for
- * every cell (occupied or free), and a highlighted target while dragging -
- * accent for "move here", a filled pulse for "drop to create/extend a folder".
+ * Edit-mode placement guides drawn over the home grid.
+ *
+ * One dashed drop zone per *empty* slot — aligned to the real RecyclerView
+ * cells rather than to a guessed cell size — plus a highlighted target while
+ * dragging: accent stroke for "move here", accent fill for "drop to create or
+ * extend a folder".
+ *
+ * Geometry contract with [EditModeController.updateGuideMetrics]:
+ *  - [columns] is the grid's span count;
+ *  - [contentWidth] is the grid's width *minus* its own horizontal padding, so
+ *    `contentWidth / columns` is exactly one cell wide;
+ *  - [cellHeight] is the row height the adapter actually uses;
+ *  - [scrollOffset] is the grid's vertical scroll in pixels, so the zones stay
+ *    glued to the cells while the grid scrolls;
+ *  - [occupied] lists the on-screen bounds of every placed item, in this view's
+ *    coordinates, so only genuinely free slots are outlined.
+ *
+ * Drawing is allocation-free: three paints, one reusable rect.
  */
 class PlacementGuideView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    private val density = resources.displayMetrics.density
+
+    /** Grid span count. */
     var columns = 4
+
+    /** Configured rows (used only as a sanity bound when the view is taller). */
     var rows = 5
+
+    /** Row height in px, as the adapter lays cells out. */
     var cellHeight = 0
+
+    /** Grid content width in px (RecyclerView width minus horizontal padding). */
+    var contentWidth = 0
+
+    /** Vertical scroll of the grid in px. */
     var scrollOffset = 0
-    var guideColor = 0x40FFFFFF
+
+    /** Gap between two zones; each zone is inset by half of it on every side. */
+    var gutterPx = EditModeDesign.gutterPx(density)
+
+    /** Corner radius of a drop zone. */
+    var cornerPx = EditModeDesign.slotRadiusPx(density)
+
+    /** Dash colour: white at 15%. */
+    var guideColor = 0x26FFFFFF
+
+    /** Zone fill: white at 3%. */
+    var fillColor = 0x08FFFFFF
+
     /** Unset until the theme applies a semantic accent; 0 means transparent. */
     var accentColor = 0
-    var cornerPx = 16f
+
+    /** Bounds of placed items, in this view's coordinates. */
+    var occupied: List<RectF> = emptyList()
 
     /** Highlight in this view's coordinates, or null. */
     var target: RectF? = null
         set(v) { field = v; invalidate() }
+
+    /** True when the target would merge into a folder. */
     var mergeTarget = false
         set(v) { field = v; invalidate() }
 
     private val dash = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = resources.displayMetrics.density
+        strokeWidth = EditModeDesign.slotBorderDp * density
     }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val rect = RectF()
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        dash.pathEffect = DashPathEffect(floatArrayOf(6f * resources.displayMetrics.density, 5f * resources.displayMetrics.density), 0f)
+        setWillNotDraw(false)
+        dash.pathEffect = DashPathEffect(
+            floatArrayOf(
+                EditModeDesign.slotDashOnDp * density,
+                EditModeDesign.slotDashOffDp * density
+            ),
+            0f
+        )
     }
+
+    /** Half gutter: the per-side inset that produces a [EditModeDesign.gridGutterDp] gutter. */
+    private val inset: Float get() = gutterPx / 2f
 
     override fun onDraw(canvas: Canvas) {
         if (columns <= 0 || cellHeight <= 0) return
-        val cellW = width / columns.toFloat()
-        val inset = resources.displayMetrics.density * 5
+        val cellW = (if (contentWidth > 0) contentWidth else width) / columns.toFloat()
+        if (cellW <= 0f) return
+
         dash.color = guideColor
-        var r = 0
-        while (r < rows + 1) {
-            val top = r * cellHeight - (scrollOffset % cellHeight).toFloat()
-            if (top > height) break
+        fill.color = fillColor
+
+        // Walk the rows the content actually occupies, anchored to the scroll
+        // offset so a zone moves with its cell instead of drifting.
+        var top = -scrollOffset.toFloat()
+        var guard = 0
+        while (top < height && guard < MAX_ROWS) {
             for (c in 0 until columns) {
-                rect.set(c * cellW + inset, top + inset, (c + 1) * cellW - inset, top + cellHeight - inset)
+                rect.set(
+                    c * cellW + inset,
+                    top + inset,
+                    (c + 1) * cellW - inset,
+                    top + cellHeight - inset
+                )
+                if (rect.bottom < 0f || rect.top > height) continue
+                if (isOccupied(rect)) continue
+                canvas.drawRoundRect(rect, cornerPx, cornerPx, fill)
                 canvas.drawRoundRect(rect, cornerPx, cornerPx, dash)
             }
-            r++
+            top += cellHeight
+            guard++
         }
+
         target?.let { t ->
             if (mergeTarget) {
-                fill.style = Paint.Style.FILL
+                // Filled accent plate while a merge is armed: the strongest,
+                // clearest "let go here" signal in the screen.
                 fill.color = (accentColor and 0x00FFFFFF) or 0x38000000
                 canvas.drawRoundRect(t, cornerPx, cornerPx, fill)
             }
-            fill.style = Paint.Style.STROKE
-            fill.strokeWidth = resources.displayMetrics.density * 2
-            fill.color = accentColor
-            canvas.drawRoundRect(t, cornerPx, cornerPx, fill)
+            accent.strokeWidth = 2f * density
+            accent.color = accentColor
+            canvas.drawRoundRect(t, cornerPx, cornerPx, accent)
         }
+    }
+
+    /** True when a placed item already covers (most of) this slot. */
+    private fun isOccupied(cell: RectF): Boolean {
+        for (i in occupied.indices) {
+            val o = occupied[i]
+            if (o.left < cell.right && o.right > cell.left && o.top < cell.bottom && o.bottom > cell.top) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private companion object {
+        /** Bounded loop: never draw more than a very tall phone's worth of rows. */
+        const val MAX_ROWS = 24
     }
 }

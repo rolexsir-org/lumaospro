@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Centre hint pill ("Swipe up to explore your apps"): fully rounded floating
+    glass. The themed glass drawable replaces this at bind time; the shape here
+    keeps the pill reading correctly before the first theme pass.
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <corners android:radius="@dimen/luma_radius_large" />
-    <solid android:color="#380E121B" />
-    <stroke android:width="@dimen/luma_glass_border_width" android:color="#2EFFFFFF" />
+    <corners android:radius="@dimen/luma_radius_full" />
+    <solid android:color="#CC0F1720" />
+    <stroke android:width="@dimen/luma_glass_border_width" android:color="#14FFFFFF" />
 </shape>

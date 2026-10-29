@@ -21,6 +21,22 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!--
+        Edit-mode veil: 55% black over the wallpaper only. It sits above the
+        wallpaper/atmosphere and below the desktop, so the clock, grid, dock and
+        chrome stay crisp while a bright or busy wallpaper is pushed back.
+        Alpha is animated 0..1 by EditModeController.applyProgress().
+    -->
+    <View
+        android:id="@+id/edit_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:background="#8C000000"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
+
     <View
         android:id="@+id/glass_scrim"
         android:layout_width="match_parent"
@@ -99,8 +115,8 @@
                         android:letterSpacing="0.02"
                         android:longClickable="true"
                         android:textAppearance="@style/TextAppearance.Luma.Caption"
-                        android:textColor="#B3FFFFFF"
-                        android:textSize="@dimen/luma_type_caption" />
+                        android:textColor="#CCFFFFFF"
+                        android:textSize="@dimen/luma_edit_date" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -156,14 +172,24 @@
                 android:paddingBottom="@dimen/luma_space_xs"
                 android:scrollbars="none" />
 
+            <!--
+                Drop zones. Margins are overwritten at runtime with the same
+                margin the grid uses while editing, so the zones land exactly on
+                the cells (see HomeActivity.applyChromeInsets).
+            -->
             <com.lumaos.pro.launcher.launcher.home.PlacementGuideView
                 android:id="@+id/placement_guide"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginStart="@dimen/luma_edit_screen_margin"
+                android:layout_marginEnd="@dimen/luma_edit_screen_margin"
                 android:visibility="gone" />
 
+            <!--
+                Centre hint pill: "Swipe up to explore your apps". Floats over the
+                grid on its own soft shadow (never inside the grid flow), fully
+                rounded, one line, 14sp at 85% white. Still the drawer shortcut.
+            -->
             <TextView
                 android:id="@+id/home_empty"
                 android:layout_width="wrap_content"
@@ -172,17 +198,19 @@
                 android:background="@drawable/bg_home_empty"
                 android:clickable="true"
                 android:drawablePadding="@dimen/luma_space_sm"
+                android:elevation="@dimen/luma_edit_hint_elevation"
                 android:focusable="true"
                 android:gravity="center"
-                android:maxWidth="300dp"
-                android:paddingStart="@dimen/luma_space_xl"
-                android:paddingTop="@dimen/luma_space_lg"
-                android:paddingEnd="@dimen/luma_space_xl"
-                android:paddingBottom="@dimen/luma_space_lg"
+                android:includeFontPadding="false"
+                android:maxWidth="320dp"
+                android:maxLines="1"
+                android:paddingStart="@dimen/luma_edit_hint_padding_h"
+                android:paddingTop="@dimen/luma_edit_hint_padding_v"
+                android:paddingEnd="@dimen/luma_edit_hint_padding_h"
+                android:paddingBottom="@dimen/luma_edit_hint_padding_v"
                 android:text="@string/home_empty_hint"
-                android:textAppearance="@style/TextAppearance.Luma.Body"
-                android:textColor="#E6FFFFFF"
-                android:textSize="@dimen/luma_type_body"
+                android:textColor="#D9FFFFFF"
+                android:textSize="@dimen/luma_edit_hint_text"
                 android:visibility="gone" />
         </FrameLayout>
 
@@ -251,10 +279,10 @@
             android:layout_marginBottom="@dimen/luma_dock_bottom_margin"
             android:background="@drawable/bg_dock_surface"
             android:clipChildren="false"
-            android:paddingStart="@dimen/luma_space_md"
-            android:paddingTop="@dimen/luma_space_md"
-            android:paddingEnd="@dimen/luma_space_md"
-            android:paddingBottom="@dimen/luma_space_md">
+            android:paddingStart="@dimen/luma_edit_dock_padding"
+            android:paddingTop="@dimen/luma_edit_dock_padding"
+            android:paddingEnd="@dimen/luma_edit_dock_padding"
+            android:paddingBottom="@dimen/luma_edit_dock_padding">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/dock_row"
@@ -266,18 +294,29 @@
         </FrameLayout>
     </com.lumaos.pro.launcher.launcher.home.DesktopLayout>
 
-    <!-- Edit mode chrome -->
+    <!--
+        ============================ EDIT MODE CHROME ============================
+        Two floating glass cards, nothing else: the desktop reserves their height
+        (HomeActivity.applyChromeInsets) so the header can never cover the clock
+        and the toolbar can never cover the dock.
+        Margins/padding below are the pre-theme fallbacks; EditModeController
+        re-applies them from the glass palette and EditModeDesign.
+    -->
+
+    <!-- 1. HEADER: full-width glass card, 24dp corners, 18dp padding -->
     <LinearLayout
         android:id="@+id/edit_top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
+        android:layout_marginStart="@dimen/luma_edit_screen_margin"
+        android:layout_marginTop="@dimen/luma_edit_header_top_margin"
+        android:layout_marginEnd="@dimen/luma_edit_screen_margin"
+        android:background="@drawable/bg_edit_card"
+        android:elevation="@dimen/luma_edit_header_elevation"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="@dimen/luma_screen_margin_horizontal"
-        android:paddingTop="@dimen/luma_space_xs"
-        android:paddingEnd="@dimen/luma_space_md"
-        android:paddingBottom="@dimen/luma_space_xs"
+        android:padding="@dimen/luma_edit_header_padding"
         android:visibility="gone">
 
         <LinearLayout
@@ -288,50 +327,65 @@
 
             <TextView
                 android:id="@+id/edit_title"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:fontFamily="@font/inter_semibold"
+                android:includeFontPadding="false"
+                android:maxLines="1"
                 android:text="@string/edit_title"
-                android:textAppearance="@style/TextAppearance.Luma.Title"
-                android:textSize="@dimen/luma_type_heading" />
+                android:textColor="#FFFFFFFF"
+                android:textSize="@dimen/luma_edit_header_title" />
 
+            <!-- Auto-shrink 13sp→10sp: two lines maximum, never truncated. -->
             <TextView
                 android:id="@+id/edit_hint"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/luma_space_xxs"
+                android:autoSizeMaxTextSize="@dimen/luma_edit_header_subtitle"
+                android:autoSizeMinTextSize="@dimen/luma_edit_header_subtitle_min"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:fontFamily="@font/inter_regular"
+                android:maxLines="2"
                 android:text="@string/edit_hint"
-                android:textAppearance="@style/TextAppearance.Luma.Caption"
-                android:textSize="@dimen/luma_type_caption" />
+                android:textColor="#A6FFFFFF"
+                android:textSize="@dimen/luma_edit_header_subtitle" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/edit_done"
             android:layout_width="wrap_content"
-            android:layout_height="@dimen/luma_min_touch_target"
+            android:layout_height="@dimen/luma_edit_done_height"
+            android:layout_marginStart="@dimen/luma_space_sm"
+            android:background="@drawable/bg_edit_pill"
             android:clickable="true"
             android:focusable="true"
             android:fontFamily="@font/inter_medium"
             android:gravity="center"
-            android:minWidth="@dimen/luma_dock_height"
-            android:paddingStart="@dimen/luma_space_md"
-            android:paddingEnd="@dimen/luma_space_md"
+            android:includeFontPadding="false"
+            android:minWidth="@dimen/luma_edit_done_min_width"
+            android:paddingStart="@dimen/luma_space_lg"
+            android:paddingEnd="@dimen/luma_space_lg"
             android:text="@string/edit_done"
-            android:textAppearance="@style/TextAppearance.Luma.Label"
-            android:textSize="@dimen/luma_type_body" />
+            android:textColor="#FFFFFFFF"
+            android:textSize="@dimen/luma_edit_done_text" />
     </LinearLayout>
 
+    <!-- 6. BOTTOM EDIT TOOLBAR: one glass container, five equal buttons -->
     <LinearLayout
         android:id="@+id/edit_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-        android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+        android:layout_marginStart="@dimen/luma_edit_screen_margin"
+        android:layout_marginEnd="@dimen/luma_edit_screen_margin"
+        android:background="@drawable/bg_edit_toolbar"
+        android:elevation="@dimen/luma_edit_toolbar_elevation"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingTop="@dimen/luma_space_xs"
-        android:paddingBottom="@dimen/luma_space_xs"
+        android:padding="@dimen/luma_edit_toolbar_padding"
         android:visibility="gone" />
 
     <FrameLayout

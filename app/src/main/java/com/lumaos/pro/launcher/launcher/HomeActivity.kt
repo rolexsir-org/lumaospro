@@ -41,6 +41,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -78,6 +79,7 @@ import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
 import com.lumaos.pro.launcher.launcher.home.DrawerController
 import com.lumaos.pro.launcher.launcher.home.DrawerRowStyle
 import com.lumaos.pro.launcher.launcher.home.EditModeController
+import com.lumaos.pro.launcher.launcher.home.EditModeDesign
 import com.lumaos.pro.launcher.launcher.home.FolderOverlay
 import com.lumaos.pro.launcher.launcher.home.FolderStyle
 import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
@@ -215,6 +217,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var searchPill: LinearLayout
     private lateinit var dockSurface: FrameLayout
     private lateinit var dockRow: RecyclerView
+    // Edit-mode chrome (see EditModeController / EditModeDesign).
+    private lateinit var editScrim: View
+    private lateinit var editTopBar: LinearLayout
+    private lateinit var editToolbar: LinearLayout
     private lateinit var drawerContainer: FrameLayout
     private lateinit var drawerSheet: LinearLayout
     private lateinit var drawerGrid: RecyclerView
@@ -255,6 +261,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var cellHeightPx = 0
     private var gridColumns = 4
     private var drawerColumns = 4
+
+    /** Window insets are stored once and re-used by every margin calculation. */
+    private var safeInsets: Insets = Insets.NONE
+    /** The header block's resting top margin, restored when edit mode ends. */
+    private var headerTopMarginPx = -1
+    private var editBackdropBlurred = false
 
     private var drawerProgress = 0f
     private var folderProgress = 0f
@@ -587,6 +599,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         searchPill = findViewById(R.id.home_search_pill)
         dockSurface = findViewById(R.id.dock_surface)
         dockRow = findViewById(R.id.dock_row)
+        editScrim = findViewById(R.id.edit_scrim)
+        editTopBar = findViewById(R.id.edit_top_bar)
+        editToolbar = findViewById(R.id.edit_toolbar)
         drawerContainer = findViewById(R.id.drawer_container)
         drawerSheet = findViewById(R.id.drawer_sheet)
         drawerGrid = findViewById(R.id.drawer_grid)
@@ -602,6 +617,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             refreshResponsiveIcons()
             updateHomeCellSizing()
+            // Cell widths/positions moved: re-anchor the dashed drop zones.
+            if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
         }
         homeGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -775,21 +792,115 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun setupInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(homeRoot) { _, insets ->
-            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            desktop.setPadding(safe.left, safe.top + dp(4), safe.right, safe.bottom + dp(4))
-            drawerSheet.setPadding(safe.left, 0, safe.right, 0)
+            safeInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            applyChromeInsets()
+            drawerSheet.setPadding(safeInsets.left, 0, safeInsets.right, 0)
             findViewById<View>(R.id.drawer_top_pad).layoutParams =
-                findViewById<View>(R.id.drawer_top_pad).layoutParams.apply { height = safe.top }
+                findViewById<View>(R.id.drawer_top_pad).layoutParams.apply { height = safeInsets.top }
             findViewById<View>(R.id.drawer_bottom_pad).layoutParams =
-                findViewById<View>(R.id.drawer_bottom_pad).layoutParams.apply { height = safe.bottom }
-            findViewById<View>(R.id.edit_top_bar).setPadding(dp(20) + safe.left, safe.top + dp(8), dp(12) + safe.right, dp(8))
-            (findViewById<View>(R.id.edit_toolbar).layoutParams as FrameLayout.LayoutParams).bottomMargin = safe.bottom + dp(12)
-            bottomInset = safe.bottom
+                findViewById<View>(R.id.drawer_bottom_pad).layoutParams.apply { height = safeInsets.bottom }
+            bottomInset = safeInsets.bottom
             insets
         }
         ViewCompat.requestApplyInsets(homeRoot)
         updateSideBySide()
     }
+
+    /**
+     * Single source of truth for the home composition's insets.
+     *
+     * At rest: the design system's 24dp screen margin and a 4dp optical inset.
+     * While editing, the desktop reserves exactly the chrome's height —
+     *   top    = safe area + header top margin + header card + 16dp clear gap
+     *   bottom = safe area + toolbar bottom margin + toolbar
+     * and the grid, drop zones, dock and chrome all share one 16dp margin, so
+     * nothing overlaps and every left/right edge lines up.
+     *
+     * Idempotent and guarded: it is called from the insets listener, on every
+     * edit-mode transition and whenever the chrome's measured height changes.
+     */
+    private fun applyChromeInsets() {
+        if (!::desktop.isInitialized) return
+        val safe = safeInsets
+        val editing = ::edit.isInitialized && edit.isActive
+        val marginPx = currentScreenMarginPx()
+
+        val headerHeight = if (::edit.isInitialized) edit.headerHeightPx() else 0
+        val toolbarHeight = if (::edit.isInitialized) edit.toolbarHeightPx() else 0
+        val top = if (editing) {
+            safe.top + dp(EditModeDesign.headerTopMarginDp.toInt()) + headerHeight +
+                dp(EditModeDesign.headerToClockGapDp.toInt())
+        } else {
+            safe.top + dp(4)
+        }
+        val bottom = if (editing) {
+            safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt()) + toolbarHeight
+        } else {
+            safe.bottom + dp(4)
+        }
+        desktop.setPadding(safe.left, top, safe.right, bottom)
+
+        // The clock/date keeps its own resting breath; in edit mode the header
+        // block owns the gap above it, so its margin drops to keep the reserved
+        // 16dp exact instead of stacking two gaps.
+        val headerLp = homeHeader.layoutParams as LinearLayout.LayoutParams
+        if (headerTopMarginPx < 0) headerTopMarginPx = headerLp.topMargin
+        val headerTop = if (editing) 0 else headerTopMarginPx
+        if (headerLp.topMargin != headerTop) {
+            headerLp.topMargin = headerTop
+            homeHeader.layoutParams = headerLp
+        }
+
+        // Grid and drop zones share one content box, so a dashed slot sits
+        // exactly on its cell.
+        if (homeGrid.paddingLeft != marginPx || homeGrid.paddingRight != marginPx) {
+            homeGrid.setPadding(marginPx, homeGrid.paddingTop, marginPx, homeGrid.paddingBottom)
+        }
+        setHorizontalMargins(guide, marginPx)
+        setHorizontalMargins(dockSurface, marginPx)
+
+        // Chrome: horizontal margins match the grid, vertical margins clear the
+        // status bar and the gesture bar.
+        (editTopBar.layoutParams as FrameLayout.LayoutParams).apply {
+            val start = marginPx + safe.left
+            val end = marginPx + safe.right
+            val topMarginWanted = safe.top + dp(EditModeDesign.headerTopMarginDp.toInt())
+            if (marginStart != start || marginEnd != end || topMargin != topMarginWanted) {
+                marginStart = start
+                marginEnd = end
+                topMargin = topMarginWanted
+                editTopBar.layoutParams = this
+            }
+        }
+        (editToolbar.layoutParams as FrameLayout.LayoutParams).apply {
+            val start = marginPx + safe.left
+            val end = marginPx + safe.right
+            val bottomMarginWanted = safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt())
+            if (marginStart != start || marginEnd != end || bottomMargin != bottomMarginWanted) {
+                marginStart = start
+                marginEnd = end
+                bottomMargin = bottomMarginWanted
+                editToolbar.layoutParams = this
+            }
+        }
+    }
+
+    private fun setHorizontalMargins(view: View, marginPx: Int) {
+        val lp = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (lp.marginStart == marginPx && lp.marginEnd == marginPx) return
+        lp.marginStart = marginPx
+        lp.marginEnd = marginPx
+        view.layoutParams = lp
+    }
+
+    /**
+     * The edit screen's own 16dp margin while editing; the design system's
+     * 24dp everywhere else. The dock reads this too, so it never disagrees
+     * with the toolbar above it.
+     */
+    private fun currentScreenMarginPx(): Int =
+        if (::edit.isInitialized && edit.isActive) dp(EditModeDesign.screenMarginDp.toInt())
+        else dp(LumaTokens.screenMarginHorizontal.roundToInt())
 
     private var bottomInset = 0
 
@@ -1269,12 +1380,21 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // the legibility comes from the wallpaper veil, not letter halos.
         homeClock.setTextColor(c.homeForeground)
         homeClock.setShadowLayer(if (artwork) 4f else 0f, 0f, 1f, c.homeShadow)
-        homeDate.setTextColor(if (artwork) ColorMath.withAlpha(c.homeForeground, 0.92f) else c.homeMuted)
+        // Date line: 14sp at 80% white — readable on any wallpaper, still quiet.
+        homeDate.setTextColor(
+            if (artwork) ColorMath.withAlpha(c.homeForeground, EditModeDesign.dateAlpha) else c.homeMuted
+        )
         homeDate.setShadowLayer(if (artwork) 3f else 0f, 0f, 1f, c.homeShadow)
 
+        // The empty-state hint is the one floating pill on the desktop: fully
+        // rounded, 14sp at 85%, lifted on its own soft shadow.
         val emptySpec = glass[GlassRole.OVERLAY]
-        GlassViews.apply(homeEmpty, emptySpec, d, ripple = true)
-        homeEmpty.setTextColor(emptySpec.rest.content)
+        GlassViews.apply(
+            homeEmpty, emptySpec, d, ripple = true,
+            radiusOverrideDp = EditModeDesign.pillRadiusDp
+        )
+        homeEmpty.elevation = dp(EditModeDesign.hintElevationDp.toInt()).toFloat()
+        homeEmpty.setTextColor(ColorMath.withAlpha(emptySpec.rest.content, EditModeDesign.hintTextAlpha))
         homeEmpty.compoundDrawableTintList = ColorStateList.valueOf(emptySpec.rest.content)
 
         // Compatibility controls remain bound to their actions but are no longer
@@ -1404,13 +1524,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeDate.typeface = Typefaces.body(style)
         homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.50f else 0.01f
         homeDate.isAllCaps = false
-        homeDate.textSize = LumaTokens.typeCaptionSp
+        homeDate.textSize = EditModeDesign.dateSp
         homeContext.typeface = Typefaces.readout(style)
         homeContext.letterSpacing = style.readoutTracking
         homeContext.isAllCaps = style.readoutCaps
         homeContext.textSize = LumaTokens.typeMicroSp
         homeEmpty.typeface = Typefaces.body(style)
-        homeEmpty.textSize = LumaTokens.typeBodySp
+        homeEmpty.textSize = EditModeDesign.hintTextSp
         findViewById<TextView>(R.id.search_pill_text).apply {
             typeface = Typefaces.body(style)
             textSize = LumaTokens.typeBodySp
@@ -1446,7 +1566,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val d = resources.displayMetrics.density
         val spec = glassPalette[GlassRole.DOCK].copy(radiusDp = LumaTokens.radiusXLarge)
         val lp = dockSurface.layoutParams as ViewGroup.MarginLayoutParams
-        val marginPx = dp(LumaTokens.screenMarginHorizontal.roundToInt())
+        val marginPx = currentScreenMarginPx()
         lp.marginStart = marginPx
         lp.marginEnd = marginPx
         lp.height = dp(LumaTokens.dockHeight.roundToInt())
@@ -1832,11 +1952,41 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun glassPalette(): GlassPalette = glassPalette
     override fun depthAllowed(): Boolean = effects.depthTransforms
 
+    /**
+     * Edit mode touches the *wallpaper*, never the launcher's own content:
+     * a 55% black veil plus a slight defocus pushes a bright or busy wallpaper
+     * back while the clock, the apps and the dock stay fully crisp. The veil
+     * peaks a busy pattern at ~16% effective opacity.
+     */
     override fun onEditProgress(progress: Float) {
         editProgress = progress
         applyDepth()
-        searchPill.alpha = 1f - progress
-        homeHeader.alpha = 1f - 0.5f * progress
+        editScrim.alpha = progress.coerceIn(0f, 1f)
+        wallpaperArt.alpha = 1f - (1f - EditModeDesign.wallpaperAlphaInEdit) * progress.coerceIn(0f, 1f)
+        applyEditBackdropBlur(progress > 0.01f)
+    }
+
+    /** Slight wallpaper defocus while editing (API 31+), so glass edges read cleanly. */
+    private fun applyEditBackdropBlur(enabled: Boolean) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val wanted = enabled && effects.blur
+        if (wanted == editBackdropBlurred) return
+        editBackdropBlurred = wanted
+        if (wanted) {
+            val radius = dp(EditModeDesign.wallpaperBlurDp.toInt()).toFloat()
+            wallpaperArt.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
+        } else {
+            wallpaperArt.setRenderEffect(null)
+        }
+    }
+
+    /**
+     * [EditModeController.Host]: the chrome appeared, disappeared or changed
+     * height. Re-reserve the desktop's space and re-anchor the drop zones.
+     */
+    override fun onEditChromeChanged() {
+        applyChromeInsets()
+        if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
     }
 
     override fun commitOrder(arranged: List<HomeItem>) = viewModel.reorderHome(arranged)

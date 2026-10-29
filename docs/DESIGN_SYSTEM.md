@@ -461,9 +461,11 @@ Layer order in `res/layout/activity_home.xml` (bottom → top):
 
 1. `wallpaper_art` — bundled artwork, or gone.
 2. `backdrop` — `AmbientBackdropView`: atmosphere plan, legibility scrims, glow.
-3. `desktop` — header, grid, search, dock.
-4. Edit chrome — top bar and toolbar.
-5. Drawer container — scrim + sheet.
+3. `edit_scrim` — edit mode only: 55% black veil over the wallpaper (alpha 0→1).
+4. `glass_scrim` — the theme's polarity-aware legibility veil.
+5. `desktop` — header, grid, search, dock.
+6. Edit chrome — header card + bottom toolbar (see §7.1).
+7. Drawer container — scrim + sheet.
 
 Desktop, top to bottom:
 
@@ -490,6 +492,40 @@ Desktop, top to bottom:
 
 Every element in this composition is driven by the tokens above; the layout file
 contains no padding or radius that is not mirrored in a token.
+
+### 7.1 Edit Home (edit mode)
+
+Edit mode is a *framed* composition, not an overlay: the desktop reserves exactly
+the height of the chrome, so nothing can sit on top of anything else. Every value
+is authored in `launcher/home/EditModeDesign.kt` and mirrored 1:1 in
+`res/values/dimens.xml` as `luma_edit_*`.
+
+| Section | Geometry | Type |
+| --- | --- | --- |
+| Screen margin | 16 dp for the header, grid, drop zones, dock and toolbar | — |
+| Vertical rhythm | 12 dp between sections; 16 dp clear below the header card | — |
+| Header card | 24 dp radius, 18 dp padding, 1 px white-8% border, 12 dp shadow | title 20 sp SemiBold, subtitle 13 sp at 65% (max 2 lines) |
+| Done | 76×40 dp pill, dark glass, 1 px hairline | 14 sp Medium |
+| Clock/date | own block, never under the header | date 14 sp at 80% |
+| Drop zones | 20 dp radius, 1 dp dashed white-15% outline, 3% fill, 12 dp gutters | — |
+| Hint pill | fully rounded, 14/20 dp padding, 16 dp shadow | 14 sp at 85% |
+| Dock | 28 dp radius, 14 dp padding, one row, equal spacing | icons at the user's size |
+| Toolbar | 24 dp radius, 10 dp padding, 16 dp above the gesture bar, five equal buttons 64 dp tall, 16 dp radius | icon 22 dp, label 12 sp Medium, single line, auto-shrink to 9 sp |
+
+Rules this section enforces:
+
+* the desktop's insets are computed once, in `HomeActivity.applyChromeInsets()`,
+  from the measured chrome — no hard-coded card height anywhere;
+* the wallpaper is the only thing dimmed while editing (55% black + a slight
+  API 31+ defocus), so a bright or patterned wallpaper lands near 16% effective
+  opacity while text and icons stay crisp;
+* the desktop does not scale in edit mode (`LumaDepthStack`), because the layout
+  already reserves the space a scale would otherwise steal from the dock;
+* drop zones are derived from the real grid — content width ÷ span count, the
+  adapter's row height, the grid's scroll offset and the live child bounds — so
+  they cannot drift out of alignment or outline an occupied slot;
+* selected/pressed toolbar buttons use one 8% white fill; the accent colour
+  appears only as the drag target in the grid.
 
 ---
 

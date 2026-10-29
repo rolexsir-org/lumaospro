@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Edit Home header card.
+    Pre-theme fallback only: EditModeController replaces this with the themed
+    glass drawable (24dp radius) at bind time. Values here are the authored
+    design so the layout is readable in a bare preview or a Robolectric inflate.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="@dimen/luma_edit_header_radius" />
+    <!-- rgba(15, 23, 32, 0.85) -->
+    <solid android:color="#D90F1720" />
+    <!-- 1px white at 8% -->
+    <stroke android:width="@dimen/luma_glass_border_width" android:color="#14FFFFFF" />
+</shape>
