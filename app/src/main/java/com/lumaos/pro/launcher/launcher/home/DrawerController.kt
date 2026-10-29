@@ -25,13 +25,17 @@ import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
 import com.lumaos.pro.launcher.launcher.model.DrawerRow
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
 import com.lumaos.pro.launcher.ui.theme.GlassMaterials
 import com.lumaos.pro.launcher.ui.theme.GlassPalette
 import com.lumaos.pro.launcher.ui.theme.GlassRole
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import kotlin.math.abs
@@ -84,8 +88,10 @@ class DrawerController(
 
     var isOpen = false
         private set
+    val isAnimating: Boolean get() = spring.isRunning
     var progress = 0f
         private set
+    private var staggerCancel: Runnable? = null
     private var buckets: List<Pair<Char, Int>> = emptyList()
     private var currentRows: List<DrawerRow> = emptyList()
     private var observedQuery = searchField.text?.toString().orEmpty()
@@ -170,14 +176,22 @@ class DrawerController(
     }
 
     fun open(focusSearch: Boolean) {
+        val shouldStagger = !isOpen && progress < 0.08f
         ensureVisible()
         val wasOpen = isOpen
         isOpen = true
-        if (!wasOpen) host.onDrawerOpened()
+        if (!wasOpen) {
+            LumaHaptics.snap(sheet)
+            host.onDrawerOpened()
+        }
         // Wait one layout pass when the sheet was GONE, so travel is real.
         sheet.post {
             if (!isOpen) return@post
-            spring.animateTo(1f, MotionTokens.SNAPPY, host.motion())
+            spring.animateTo(1f, MotionTokens.LUMA, host.motion())
+            if (shouldStagger) {
+                staggerCancel?.run()
+                staggerCancel = LumaSpring.staggerRecyclerView(grid, host.motion())
+            }
             if (focusSearch) {
                 searchField.requestFocus()
                 showKeyboard()
@@ -188,13 +202,17 @@ class DrawerController(
     fun close() {
         if (!isOpen && container.visibility != View.VISIBLE) return
         isOpen = false
+        staggerCancel?.run()
+        staggerCancel = null
         hideKeyboard()
-        spring.animateTo(0f, MotionTokens.SNAPPY, host.motion()) { finishClose() }
+        spring.animateTo(0f, MotionTokens.LUMA, host.motion()) { finishClose() }
     }
 
     /** Immediately closed (returning home with the Home button). */
     fun closeInstantly() {
         isOpen = false
+        staggerCancel?.run()
+        staggerCancel = null
         hideKeyboard()
         spring.snapTo(0f)
         finishClose()
@@ -202,6 +220,8 @@ class DrawerController(
 
     private fun finishClose() {
         if (container.visibility == View.GONE) return
+        staggerCancel?.run()
+        staggerCancel = null
         container.visibility = View.GONE
         if (searchField.text.isNotEmpty()) searchField.setText("")
         host.onFilterSelected(DrawerFilter.All)
@@ -213,6 +233,8 @@ class DrawerController(
 
     fun startTracking() {
         ensureVisible()
+        staggerCancel?.run()
+        staggerCancel = null
         spring.cancel()
     }
 
@@ -223,29 +245,31 @@ class DrawerController(
     }
 
     /** Settles after a drag; [velocityY] in px/s, negative = upward fling. */
-    fun release(velocityY: Float) {
+    fun release(velocityY: Float, focusSearchWhenOpened: Boolean = false) {
         val v = -velocityY / sheetTravel()
-        val target = when {
-            v > 1.2f -> 1f
-            v < -1.2f -> 0f
-            progress > 0.42f -> 1f
-            else -> 0f
-        }
+        val target = LumaSpring.resolveBinarySnapTarget(progress, v)
         spring.setVelocity(v)
         if (target == 1f) {
             val wasOpen = isOpen
             isOpen = true
+            LumaHaptics.snap(sheet)
             if (!wasOpen) host.onDrawerOpened()
-            spring.animateTo(1f, MotionTokens.SNAPPY, host.motion())
+            spring.animateTo(1f, MotionTokens.LUMA, host.motion()) {
+                if (focusSearchWhenOpened && isOpen) {
+                    searchField.requestFocus()
+                    showKeyboard()
+                }
+            }
         } else {
+            if (isOpen) LumaHaptics.snap(sheet)
             isOpen = false
             hideKeyboard()
-            spring.animateTo(0f, MotionTokens.SNAPPY, host.motion()) { finishClose() }
+            spring.animateTo(0f, MotionTokens.LUMA, host.motion()) { finishClose() }
         }
     }
 
     /** True when a downward drag on the drawer should close it rather than scroll. */
-    fun canDragClose(): Boolean = isOpen && !grid.canScrollVertically(-1)
+    fun canDragClose(): Boolean = (isOpen || spring.isRunning) && !grid.canScrollVertically(-1)
 
     // ------------------------------------------------------------- content
 
@@ -285,9 +309,10 @@ class DrawerController(
 
     private fun setIndexVisible(visible: Boolean) {
         alphaIndex.visibility = if (visible) View.VISIBLE else View.GONE
-        // The full 48 dp rail is reserved only when it is visible, so it does
-        // not cover app names or waste space while searching.
-        val end = dp(if (visible) 56f else 20f)
+        val end = dp(
+            if (visible) LumaTokens.alphaScrubberVisualWidth + LumaTokens.spaceSM
+            else LumaTokens.screenMarginHorizontal
+        )
         if (grid.paddingEnd != end) {
             grid.setPaddingRelative(grid.paddingStart, grid.paddingTop, end, grid.paddingBottom)
         }
@@ -354,9 +379,10 @@ class DrawerController(
         val sheetColors = sheetSpec.rest
         val searchColors = searchSpec.rest
 
-        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false)
-        GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = false)
-        scrim.setBackgroundColor(c.scrim)
+        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
+        GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
+        // Keep home screen visible and progressively blurred behind the glass drawer sheet.
+        scrim.setBackgroundColor(ColorMath.withAlpha(0xFF000000.toInt(), 0.28f))
         handle.background = GradientDrawable().apply {
             setColor(sheetColors.edgeTop)
             cornerRadius = dp(2f).toFloat()
@@ -364,15 +390,15 @@ class DrawerController(
         searchField.setTextColor(searchColors.content)
         searchField.setHintTextColor(searchColors.muted)
         clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchColors.muted)
-        searchField.typeface = Typefaces.label(theme.typography)
+        searchField.typeface = Typefaces.body(theme.typography)
         ContextCompat.getDrawable(context, R.drawable.ic_rx_search)?.mutate()?.let { d ->
             d.setTint(searchColors.muted)
-            d.setBounds(0, 0, dp(20f), dp(20f))
+            d.setBounds(0, 0, dp(LumaTokens.iconInline), dp(LumaTokens.iconInline))
             searchField.setCompoundDrawablesRelative(d, null, null, null)
         }
         title.setTextColor(sheetColors.content)
         title.typeface = Typefaces.title(theme.typography)
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.titleLargeSp)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeTitleSp)
         subtitle.typeface = Typefaces.body(theme.typography)
         subtitle.setTextColor(sheetColors.muted)
         emptyView.setTextColor(sheetColors.muted)

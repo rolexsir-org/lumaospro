@@ -104,25 +104,25 @@ class GlassPalette(private val specs: Map<GlassRole, GlassSpec>) {
 
 /** Geometry, spacing and motion tokens; one scale for both UI toolkits. */
 object GlassGeometry {
-    const val GUTTER_DP = 20f
-    const val SECTION_GAP_DP = 24f
-    const val CONTROL_DP = 48f
-    const val SEARCH_HEIGHT_DP = 56f
-    const val DOCK_HEIGHT_DP = 76f
-    const val BORDER_DP = 1f
+    const val GUTTER_DP = LumaTokens.screenMarginHorizontal
+    const val SECTION_GAP_DP = LumaTokens.spaceXL
+    const val CONTROL_DP = LumaTokens.minTouchTarget
+    const val SEARCH_HEIGHT_DP = LumaTokens.searchBarHeight
+    const val DOCK_HEIGHT_DP = LumaTokens.dockHeight
+    const val BORDER_DP = LumaTokens.glassBorderWidth
     const val SPECULAR_DP = 1f
 
     val ROLE_RADIUS_DP = mapOf(
-        GlassRole.PRIMARY to 30f,
-        GlassRole.SECONDARY to 24f,
-        GlassRole.SEARCH to 26f,
-        GlassRole.DOCK to 34f,
-        GlassRole.FOLDER to 30f,
-        GlassRole.MENU to 20f,
-        GlassRole.SHEET to 36f,
-        GlassRole.WIDGET to 24f,
-        GlassRole.SETTINGS_CONTROL to 18f,
-        GlassRole.OVERLAY to 16f
+        GlassRole.PRIMARY to LumaTokens.radiusXLarge,
+        GlassRole.SECONDARY to LumaTokens.radiusLarge,
+        GlassRole.SEARCH to LumaTokens.radiusLarge,
+        GlassRole.DOCK to LumaTokens.radiusXLarge,
+        GlassRole.FOLDER to LumaTokens.radiusFolder,
+        GlassRole.MENU to LumaTokens.radiusMedium,
+        GlassRole.SHEET to LumaTokens.radiusXLarge,
+        GlassRole.WIDGET to LumaTokens.radiusLarge,
+        GlassRole.SETTINGS_CONTROL to LumaTokens.radiusSmall,
+        GlassRole.OVERLAY to LumaTokens.radiusMedium
     )
 }
 
@@ -236,16 +236,16 @@ object GlassMaterials {
     )
 
     private val RECIPES = mapOf(
-        GlassRole.PRIMARY to Recipe(30f, 0.24f, 0.40f, 0.72f, 9f, 0.34f),
-        GlassRole.SECONDARY to Recipe(24f, 0.18f, 0.32f, 0.54f, 5f, 0.25f),
-        GlassRole.SEARCH to Recipe(26f, 0.15f, 0.28f, 0.42f, 3f, 0.30f),
-        GlassRole.DOCK to Recipe(34f, 0.21f, 0.36f, 0.78f, 10f, 0.38f),
-        GlassRole.FOLDER to Recipe(30f, 0.28f, 0.46f, 0.86f, 12f, 0.34f),
-        GlassRole.MENU to Recipe(20f, 0.34f, 0.54f, 0.70f, 11f, 0.38f),
-        GlassRole.SHEET to Recipe(36f, 0.42f, 0.66f, 0.56f, 12f, 0.26f, topOnly = true),
-        GlassRole.WIDGET to Recipe(24f, 0.17f, 0.30f, 0.48f, 4f, 0.22f),
-        GlassRole.SETTINGS_CONTROL to Recipe(18f, 0.11f, 0.20f, 0.24f, 1f, 0.18f),
-        GlassRole.OVERLAY to Recipe(16f, 0.08f, 0.13f, 0.16f, 0f, 0.14f)
+        GlassRole.PRIMARY to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SECONDARY to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SEARCH to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.78f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.DOCK to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.FOLDER to Recipe(LumaTokens.radiusFolder, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.MENU to Recipe(LumaTokens.radiusMedium, LumaTokens.glassDarkCardAlpha + 0.04f, LumaTokens.glassLightCardAlpha + 0.04f, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SHEET to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha, topOnly = true),
+        GlassRole.WIDGET to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SETTINGS_CONTROL to Recipe(LumaTokens.radiusSmall, LumaTokens.glassDarkBgAlpha * 0.85f, LumaTokens.glassLightBgAlpha * 0.85f, 0.50f, 2f, LumaTokens.glassBorderTopAlpha),
+        GlassRole.OVERLAY to Recipe(LumaTokens.radiusMedium, LumaTokens.glassDarkBgAlpha * 0.75f, LumaTokens.glassLightBgAlpha * 0.75f, 0.40f, 0f, LumaTokens.glassBorderTopAlpha)
     )
 
     fun palette(theme: ResolvedTheme, capabilities: GlassCapabilities = GlassCapabilities.DEFAULT): GlassPalette {

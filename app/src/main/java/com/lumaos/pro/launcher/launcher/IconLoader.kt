@@ -157,15 +157,22 @@ class IconLoader(
      * Queues icons for the whole list. Used when the active profile requests
      * preloading; otherwise icons arrive on demand as rows bind.
      */
-    fun preload(keys: Collection<ComponentKey>, density: Int) {
+    fun preload(keys: Collection<ComponentKey>, density: Int, maxCount: Int = 260) {
         if (shutdown.get()) return
+        var queued = 0
         for (key in keys) {
-            if (cache[key] == null) get(key, density)
+            if (queued >= maxCount) break
+            if (cache[key] == null) {
+                get(key, density)
+                queued++
+            }
         }
     }
 
     fun shutdown() {
         if (shutdown.compareAndSet(false, true)) {
+            onIconReady = null
+            handler.removeCallbacksAndMessages(null)
             executor.shutdownNow()
             inFlight.clear()
             unavailable.clear()

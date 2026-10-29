@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    LumaOS Pro XML Dimension & Typography Tokens.
+    Mirrors com.lumaos.pro.launcher.ui.theme.LumaTokens 1:1 so zero XML layout,
+    style, or drawable carries arbitrary magic numbers.
+-->
+<resources>
+    <!-- Spacing (8dp grid + optical steps) -->
+    <dimen name="luma_space_xxs">4dp</dimen>
+    <dimen name="luma_space_xs">8dp</dimen>
+    <dimen name="luma_space_sm">12dp</dimen>
+    <dimen name="luma_space_md">16dp</dimen>
+    <dimen name="luma_space_lg">20dp</dimen>
+    <dimen name="luma_space_xl">24dp</dimen>
+    <dimen name="luma_space_xxl">32dp</dimen>
+    <dimen name="luma_space_hero">48dp</dimen>
+    <dimen name="luma_screen_margin_horizontal">24dp</dimen>
+    <dimen name="luma_card_padding">16dp</dimen>
+    <dimen name="luma_card_gap">12dp</dimen>
+
+    <!-- Corner Radii -->
+    <dimen name="luma_radius_small">12dp</dimen>
+    <dimen name="luma_radius_medium">16dp</dimen>
+    <dimen name="luma_radius_large">22dp</dimen>
+    <dimen name="luma_radius_folder">24dp</dimen>
+    <dimen name="luma_radius_xlarge">28dp</dimen>
+    <dimen name="luma_radius_full">999dp</dimen>
+    <dimen name="luma_glass_border_width">1dp</dimen>
+
+    <!-- Shadows -->
+    <dimen name="luma_shadow_card_elevation">12dp</dimen>
+    <dimen name="luma_shadow_floating_elevation">24dp</dimen>
+
+    <!-- Icons & Grid -->
+    <dimen name="luma_icon_inline">18dp</dimen>
+    <dimen name="luma_icon_action">24dp</dimen>
+    <dimen name="luma_icon_tile">28dp</dimen>
+    <dimen name="luma_icon_notification">36dp</dimen>
+    <dimen name="luma_icon_app">56dp</dimen>
+    <dimen name="luma_icon_folder_preview">56dp</dimen>
+    <dimen name="luma_grid_icon_label_gap">6dp</dimen>
+    <dimen name="luma_grid_row_min_height">84dp</dimen>
+
+    <!-- Component Heights & Geometry -->
+    <dimen name="luma_dock_height">88dp</dimen>
+    <dimen name="luma_dock_bottom_margin">12dp</dimen>
+    <dimen name="luma_search_bar_height">44dp</dimen>
+    <dimen name="luma_quick_tile_height">64dp</dimen>
+    <dimen name="luma_volume_pill_width">48dp</dimen>
+    <dimen name="luma_volume_pill_height">180dp</dimen>
+    <dimen name="luma_slider_track_height">36dp</dimen>
+    <dimen name="luma_notification_card_min_height">68dp</dimen>
+    <dimen name="luma_alpha_scrubber_width">24dp</dimen>
+    <dimen name="luma_min_touch_target">48dp</dimen>
+    <dimen name="luma_folder_width">240dp</dimen>
+    <dimen name="luma_folder_min_height">280dp</dimen>
+    <dimen name="luma_drawer_handle_width">36dp</dimen>
+    <dimen name="luma_drawer_handle_height">4dp</dimen>
+
+    <!-- Typography -->
+    <dimen name="luma_type_display_clock">72sp</dimen>
+    <dimen name="luma_type_display_hero">34sp</dimen>
+    <dimen name="luma_type_title">20sp</dimen>
+    <dimen name="luma_type_heading">17sp</dimen>
+    <dimen name="luma_type_body">15sp</dimen>
+    <dimen name="luma_type_caption">13sp</dimen>
+    <dimen name="luma_type_section_header">13sp</dimen>
+    <dimen name="luma_type_micro">11sp</dimen>
+    <dimen name="luma_type_app_label">11sp</dimen>
+</resources>

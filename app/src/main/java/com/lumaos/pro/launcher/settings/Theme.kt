@@ -32,9 +32,12 @@ import com.lumaos.pro.launcher.ui.ThemeMode
 import com.lumaos.pro.launcher.ui.theme.FontFace
 import com.lumaos.pro.launcher.ui.theme.FontFamilyId
 import com.lumaos.pro.launcher.ui.theme.FontWeightToken
+import com.lumaos.pro.launcher.ui.theme.LocalLumaPalette
 import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.LumaMotionProfiles
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
+import com.lumaos.pro.launcher.ui.theme.LumaWallpaperPalette
 import com.lumaos.pro.launcher.ui.theme.MotionProfile
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
@@ -78,6 +81,7 @@ val LocalLumaComponents = staticCompositionLocalOf {
 fun LumaOSTheme(
     theme: ResolvedTheme,
     textScale: Float = 1.0f,
+    palette: LumaWallpaperPalette? = null,
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
@@ -85,12 +89,24 @@ fun LumaOSTheme(
     val motion = theme.motionProfile
     val components = LumaComponents.of(theme)
     val glassPalette = remember(theme) { GlassMaterials.palette(theme, GlassCapabilities.SOLID) }
+    val resolvedPalette = palette ?: remember(theme) {
+        LumaWallpaperPalette(
+            averageLuminance = if (theme.isDark) 0.08f else 0.78f,
+            dominantColor = theme.colors.surface2,
+            accentColor = theme.colors.accent,
+            warmthColor = theme.colors.secondary,
+            warmth = 0f,
+            topLuminance = if (theme.isDark) 0.08f else 0.78f,
+            bottomLuminance = if (theme.isDark) 0.08f else 0.78f
+        )
+    }
     CompositionLocalProvider(
         LocalLumaTheme provides theme,
         LocalLumaSemantics provides semantics,
         LocalLumaMotion provides motion,
         LocalLumaComponents provides components,
         LocalGlassPalette provides glassPalette,
+        LocalLumaPalette provides resolvedPalette,
         LocalDensity provides Density(
             density = density.density,
             fontScale = density.fontScale * textScale.coerceIn(0.75f, 1.6f)
@@ -100,7 +116,7 @@ fun LumaOSTheme(
             colorScheme = colorSchemeFor(theme),
             typography = typographyFor(theme.typography),
             shapes = Shapes(
-                extraSmall = RoundedCornerShape((6f * theme.cornerScale).dp),
+                extraSmall = RoundedCornerShape((LumaTokens.radiusSmall * 0.5f * theme.cornerScale).dp),
                 small = RoundedCornerShape(LumaCorners.small * theme.cornerScale),
                 medium = RoundedCornerShape(LumaCorners.medium * theme.cornerScale),
                 large = RoundedCornerShape(LumaCorners.card * theme.cornerScale),

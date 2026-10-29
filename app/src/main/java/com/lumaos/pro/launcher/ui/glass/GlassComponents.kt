@@ -46,11 +46,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +75,8 @@ import com.lumaos.pro.launcher.ui.theme.GlassMaterials
 import com.lumaos.pro.launcher.ui.theme.GlassPalette
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.GlassSpec
+import com.lumaos.pro.launcher.ui.theme.LocalLumaPalette
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
@@ -110,23 +118,42 @@ private fun glassShape(spec: GlassSpec): RoundedCornerShape {
     }
 }
 
-private fun fillBrush(colors: GlassColors): Brush = Brush.verticalGradient(
-    0f to Color(ColorMath.lerp(colors.fillTop, colors.specular, 0.38f)),
-    0.045f to Color(colors.fillTop),
-    1f to Color(colors.fillBottom)
+private fun shiftComposeAlpha(color: Int, delta: Float): Color {
+    if (delta == 0f) return Color(color)
+    val baseA = ColorMath.alpha(color) / 255f
+    if (baseA >= 0.99f) return Color(color)
+    return Color(ColorMath.withAlpha(color, (baseA + delta).coerceIn(0.12f, 0.94f)))
+}
+
+private fun fillBrush(colors: GlassColors, alphaDelta: Float = 0f): Brush = Brush.verticalGradient(
+    0f to shiftComposeAlpha(colors.fillTop, alphaDelta),
+    1f to shiftComposeAlpha(colors.fillBottom, alphaDelta)
 )
 
-private fun edgeBrush(colors: GlassColors): Brush = Brush.verticalGradient(
-    listOf(Color(colors.edgeTop), Color(colors.edgeBottom))
-)
-
-private fun specularBrush(colors: GlassColors): Brush = Brush.horizontalGradient(
-    listOf(Color.Transparent, Color(colors.specular), Color.Transparent)
-)
+private fun directionalBorderBrush(colors: GlassColors, focused: Boolean): Brush {
+    val isBrightSurface = ColorMath.luminance(ColorMath.opaque(colors.fillBottom)) > 0.65
+    val anchor = if (isBrightSurface) {
+        ColorMath.lerp(0xFFFFFFFF.toInt(), ColorMath.opaque(colors.edgeTop), 0.35f)
+    } else {
+        0xFFFFFFFF.toInt()
+    }
+    val topLeft = if (focused) {
+        Color(colors.edgeTop)
+    } else {
+        Color(ColorMath.withAlpha(ColorMath.opaque(anchor), LumaTokens.glassBorderTopAlpha))
+    }
+    val bottomRight = Color(ColorMath.withAlpha(ColorMath.opaque(anchor), LumaTokens.glassBorderBottomAlpha))
+    return Brush.linearGradient(colors = listOf(topLeft, bottomRight))
+}
 
 /**
- * The one Compose glass surface. All other glass components compose it, so
- * pressed, focused and selected states cannot drift from the Android Views.
+ * Unified 6-layer Compose glass surface:
+ *  1. Backdrop / theme-aware glass capability resolution
+ *  2. Tinted fill + depth variation + 1/8 background luminance sampling (+8% >0.7, -5% <0.2)
+ *  3. Permanently cached 256x256 procedural noise grain at 0.02f opacity
+ *  4. Diagonal top-left -> bottom-right 6% white overhead specular sheen
+ *  5. 1dp directional inner border (18% top/left light catch -> 6% bottom/right)
+ *  6. Hardware-clipped content
  */
 @Composable
 fun LumaGlassSurface(
@@ -137,10 +164,18 @@ fun LumaGlassSurface(
     focused: Boolean = false,
     pressed: Boolean? = null,
     enabled: Boolean = true,
+    depth: Float = GlassDrawable.defaultDepthForRole(role),
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val spec = rememberGlassSpec(theme, role)
+    val palette = LocalLumaPalette.current
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenW = with(density) { config.screenWidthDp.dp.toPx().coerceAtLeast(1f) }
+    val screenH = with(density) { config.screenHeightDp.dp.toPx().coerceAtLeast(1f) }
+    var lumDelta by remember { mutableStateOf(0f) }
+
     val interactionSource = remember { MutableInteractionSource() }
     val interactionPressed by interactionSource.collectIsPressedAsState()
     val isPressed = pressed ?: interactionPressed
@@ -150,7 +185,9 @@ fun LumaGlassSurface(
         focused -> spec.states.focused
         else -> spec.states.rest
     }
+    val depthShift = ((depth - LumaTokens.depthHome) * 0.02f).coerceIn(-0.04f, 0.06f)
     val shape = glassShape(spec)
+    val noiseBrush = remember { LumaGlassNoise.composeBrush() }
     val clickModifier = if (onClick != null) {
         Modifier.clickable(
             interactionSource = interactionSource,
@@ -164,6 +201,28 @@ fun LumaGlassSurface(
 
     Box(
         modifier = modifier
+            .onGloballyPositioned { coords ->
+                val pos = coords.positionInWindow()
+                val sz = coords.size
+                if (sz.width > 0 && sz.height > 0) {
+                    val regionLum = palette.sampleRegionLuminance(
+                        leftNorm = (pos.x / screenW).coerceIn(0f, 1f),
+                        topNorm = (pos.y / screenH).coerceIn(0f, 1f),
+                        rightNorm = ((pos.x + sz.width) / screenW).coerceIn(0f, 1f),
+                        bottomNorm = ((pos.y + sz.height) / screenH).coerceIn(0f, 1f)
+                    )
+                    val nextDelta = when {
+                        regionLum > 0.70f -> 0.08f
+                        regionLum > 0.55f -> ((regionLum - 0.55f) / 0.15f) * 0.08f
+                        regionLum < 0.20f -> -0.05f
+                        regionLum < 0.30f -> -((0.30f - regionLum) / 0.10f) * 0.05f
+                        else -> 0f
+                    }
+                    if (kotlin.math.abs(nextDelta - lumDelta) > 0.005f) {
+                        lumDelta = nextDelta
+                    }
+                }
+            }
             .then(clickModifier)
             .shadow(
                 elevation = spec.elevationDp.dp,
@@ -173,23 +232,30 @@ fun LumaGlassSurface(
                 spotColor = Color(theme.colors.shadowColor)
             )
             .clip(shape)
-            .background(fillBrush(colors), shape)
-            .border(BorderStroke(spec.borderDp.dp, edgeBrush(colors)), shape),
-        content = {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .padding(horizontal = (spec.radiusDp * 0.55f).dp)
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(specularBrush(colors))
+            .background(fillBrush(colors, lumDelta + depthShift), shape)
+            .drawWithCache {
+                val sheen = Brush.linearGradient(
+                    0f to Color.White.copy(alpha = LumaTokens.glassSheenAlpha),
+                    0.42f to Color.White.copy(alpha = LumaTokens.glassSheenAlpha * 0.35f),
+                    1f to Color.Transparent,
+                    start = Offset.Zero,
+                    end = Offset(size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))
                 )
+                onDrawBehind {
+                    if (noiseBrush != null) {
+                        drawRect(brush = noiseBrush, alpha = LumaTokens.glassNoiseOpacity)
+                    }
+                    drawRect(brush = sheen)
+                }
             }
-            content()
-        }
+            .border(
+                BorderStroke(
+                    LumaTokens.Compose.glassBorderWidth,
+                    directionalBorderBrush(colors, focused || selected)
+                ),
+                shape
+            ),
+        content = content
     )
 }
 
@@ -205,18 +271,22 @@ fun LumaGlassCard(
     val spec = rememberGlassSpec(theme, role)
     val colors = spec.rest
     LumaGlassSurface(theme, role, modifier.fillMaxWidth()) {
-        Column(Modifier.padding(GlassGeometry.GUTTER_DP.dp)) {
+        Column(Modifier.padding(LumaTokens.Compose.cardPadding)) {
             Text(
                 title,
                 color = Color(colors.content),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = LumaTokens.Compose.typeHeadingSize,
+                fontWeight = LumaTokens.Compose.typeHeadingWeight
             )
             if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(subtitle, color = Color(colors.muted), fontSize = 13.sp)
+                Spacer(Modifier.height(LumaTokens.Compose.spaceXXS))
+                Text(
+                    subtitle,
+                    color = Color(colors.muted),
+                    fontSize = LumaTokens.Compose.typeCaptionSize
+                )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(LumaTokens.Compose.spaceMD))
             content()
         }
     }
@@ -231,11 +301,11 @@ fun LumaGlassSectionTitle(
     val colors = rememberGlassSpec(theme, GlassRole.SECONDARY).rest
     Text(
         text,
-        modifier = modifier.padding(vertical = 8.dp),
-        color = Color(colors.muted),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 1.2.sp
+        modifier = modifier.padding(vertical = LumaTokens.Compose.spaceXS),
+        color = Color(colors.content).copy(alpha = LumaTokens.typeSectionHeaderAlpha),
+        fontSize = LumaTokens.Compose.typeSectionHeaderSize,
+        fontWeight = LumaTokens.Compose.typeSectionHeaderWeight,
+        letterSpacing = 0.8.sp
     )
 }
 

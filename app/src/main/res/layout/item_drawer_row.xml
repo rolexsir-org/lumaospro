@@ -1,57 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Full-width row: app shortcut or search action. Theme supplies colours, type and ripple. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:focusable="true"
+    android:minHeight="@dimen/luma_min_touch_target"
     android:gravity="center_vertical"
-    android:minHeight="56dp"
     android:orientation="horizontal"
-    android:paddingStart="12dp"
-    android:paddingEnd="12dp">
+    android:paddingStart="@dimen/luma_space_sm"
+    android:paddingTop="@dimen/luma_space_xs"
+    android:paddingEnd="@dimen/luma_space_sm"
+    android:paddingBottom="@dimen/luma_space_xs"
+    android:background="?android:attr/selectableItemBackground">
 
     <ImageView
         android:id="@+id/row_icon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="@dimen/luma_icon_notification"
+        android:layout_height="@dimen/luma_icon_notification"
         android:importantForAccessibility="no"
         android:scaleType="fitCenter" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="14dp"
         android:layout_weight="1"
+        android:layout_marginStart="@dimen/luma_space_md"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/row_title"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:fontFamily="@font/inter_regular"
-            android:includeFontPadding="false"
             android:maxLines="1"
-            android:textSize="15sp" />
+            android:textAppearance="@style/TextAppearance.Luma.Body"
+            android:textSize="@dimen/luma_type_body" />
 
         <TextView
             android:id="@+id/row_subtitle"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
             android:ellipsize="end"
-            android:fontFamily="@font/inter_regular"
-            android:includeFontPadding="false"
             android:maxLines="1"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Luma.Caption"
+            android:textSize="@dimen/luma_type_caption"
+            android:visibility="gone" />
     </LinearLayout>
 
     <ImageView
         android:id="@+id/row_action"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_marginStart="8dp"
+        android:layout_width="@dimen/luma_icon_inline"
+        android:layout_height="@dimen/luma_icon_inline"
+        android:layout_marginStart="@dimen/luma_space_xs"
         android:importantForAccessibility="no"
-        android:src="@drawable/ic_rx_chevron_right"
         android:visibility="gone" />
 </LinearLayout>

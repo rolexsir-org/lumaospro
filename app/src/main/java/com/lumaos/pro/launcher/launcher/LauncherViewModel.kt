@@ -223,12 +223,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun shortcutFor(ref: ShortcutRef): AppShortcut? =
         _shortcuts.value.firstOrNull { it.packageName == ref.packageName && it.id == ref.id }
 
-    /** First run only: fill the dock with the device's real dialler/browser/etc. */
+    /** First run only: fill the 4-icon dock and breathing home grid from device apps. */
     private suspend fun seedDefaultDockIfNeeded(apps: List<AppEntry>) {
         if (apps.isEmpty()) return
         if (prefs.layoutSeeded.first()) return
-        val keys = DefaultDockResolver.resolve(getApplication(), apps)
-        if (keys.isEmpty()) return
+        val appContext = getApplication<Application>()
+        val keys = DefaultDockResolver.resolve(appContext, apps)
+        val screenWidthDp = appContext.resources.configuration.screenWidthDp.takeIf { it > 0 } ?: 412
+        val cols = (prefs.gridColumns.first().takeIf { it > 0 }
+            ?: com.lumaos.pro.launcher.launcher.model.GridRules.defaultColumns(screenWidthDp))
+        val rows = prefs.gridRows.first().coerceAtLeast(4)
+        val maxHome = DefaultDockResolver.computeFirstRunHomeCapacity(cols, rows)
+        val homeKeys = DefaultDockResolver.resolveInitialHomeApps(appContext, apps, keys, maxHome)
+        if (keys.isEmpty() && homeKeys.isEmpty()) return
 
         val profile = activeContextProfile.value
         val snapshot = prefs.allHomeLayoutsRaw()
@@ -244,7 +251,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             prefs.setLayoutSeeded(true)
             return
         }
-        val seeded = HomeLayoutOps.seedDockIfEmpty(current, keys)
+        val seeded = HomeLayoutOps.seedFirstRunIfEmpty(current, keys, homeKeys)
         if (seeded == current) return
 
         if (!prefs.setHomeLayoutRawIfUnchanged(profile, currentRaw, HomeLayoutCodec.encode(seeded))) return
@@ -252,7 +259,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         // that race this work win, and DataStore's normal flow updates the UI.
         val base = HomeLayoutCodec.decode(baseRaw)
         if (!hasLayoutContent(base)) {
-            val seededBase = HomeLayoutOps.seedDockIfEmpty(base, keys)
+            val seededBase = HomeLayoutOps.seedFirstRunIfEmpty(base, keys, homeKeys)
             if (seededBase != base) {
                 prefs.setHomeLayoutRawIfUnchanged(null, baseRaw, HomeLayoutCodec.encode(seededBase))
             }

@@ -22,6 +22,7 @@ import com.lumaos.pro.launcher.core.usage.LaunchHistoryStore
 import com.lumaos.pro.launcher.effects.EffectsController
 import com.lumaos.pro.launcher.icons.IconPackManager
 import com.lumaos.pro.launcher.launcher.home.WallpaperBitmaps
+import com.lumaos.pro.launcher.ui.theme.LumaThemeManager
 import com.lumaos.pro.launcher.ui.theme.ThemeRepository
 import com.lumaos.pro.launcher.wallpaper.WallpaperImageStore
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +71,9 @@ class LumaCore(private val application: Application) {
     /** Theme engine runtime: settings + system dark + schedule + context + wallpaper. */
     val themes: ThemeRepository = ThemeRepository(application, prefs, coreScope)
 
+    /** Adaptive wallpaper luminance, tint, accent & warmth state across Views and Compose. */
+    val themeManager: LumaThemeManager = LumaThemeManager(application, prefs, coreScope)
+
     /** Effects tiering from live device signals. */
     val effects: EffectsController = EffectsController(application, capability, prefs, intelligence.state, coreScope)
 
@@ -87,6 +91,7 @@ class LumaCore(private val application: Application) {
 
         intelligence.attach()
         themes.start()
+        themeManager.start()
         effects.start()
 
         // One-shot wall-clock alarms drive context changes; there is no periodic poll.
@@ -152,6 +157,7 @@ class LumaCore(private val application: Application) {
                 iconCache.clear()
                 WallpaperImageStore.clearCache()
                 WallpaperBitmaps.clear()
+                themeManager.trimMemory()
             }
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
             ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
@@ -161,6 +167,7 @@ class LumaCore(private val application: Application) {
                 iconCache.trim(fraction = 0.5f, keep = Optimizer.ICON_CACHE_KEEP)
                 WallpaperImageStore.trimCache(0.5f)
                 WallpaperBitmaps.trim(0.5f)
+                themeManager.trimMemory()
             }
         }
     }
@@ -170,9 +177,36 @@ class LumaCore(private val application: Application) {
         iconCache.clear()
         WallpaperImageStore.clearCache()
         WallpaperBitmaps.clear()
+        themeManager.trimMemory()
+    }
+
+    private var idleCacheReleaseJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Schedules a 30-second background cache release when the launcher UI leaves
+     * the foreground so idle PSS stays well below the <150MB memory ceiling.
+     */
+    fun scheduleBackgroundCacheRelease(
+        delayMs: Long = com.lumaos.pro.launcher.ui.theme.LumaTokens.backgroundCacheReleaseDelayMs
+    ) {
+        idleCacheReleaseJob?.cancel()
+        idleCacheReleaseJob = coreScope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            LumaLog.i("30s background idle: releasing transient caches to stay well under <150MB budget")
+            iconCache.trim(fraction = 0.35f, keep = Optimizer.ICON_CACHE_KEEP)
+            WallpaperImageStore.trimCache(0.25f)
+            WallpaperBitmaps.trim(0.25f)
+            themeManager.trimMemory()
+        }
+    }
+
+    fun cancelBackgroundCacheRelease() {
+        idleCacheReleaseJob?.cancel()
+        idleCacheReleaseJob = null
     }
 
     fun shutdown() {
+        idleCacheReleaseJob?.cancel()
         intelligence.shutdown()
     }
 }

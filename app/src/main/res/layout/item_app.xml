@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    One app (or folder) cell.
-
-    The label uses a shadow rather than a background plate: on a wallpaper the
-    text must stay legible over arbitrary images, and a shadow is far cheaper to
-    draw than a blurred scrim. Inside opaque surfaces the shadow is turned off.
-    The theme supplies the label colour, typeface and ripple at runtime.
+    One app (or folder) cell: 56dp icon + 6dp gap + 11sp Regular single-line label.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -13,17 +8,17 @@
     android:clipChildren="false"
     android:focusable="true"
     android:gravity="center"
-    android:minHeight="48dp"
+    android:minHeight="@dimen/luma_min_touch_target"
     android:orientation="vertical"
-    android:paddingLeft="2dp"
-    android:paddingTop="6dp"
-    android:paddingRight="2dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="@dimen/luma_space_xxs"
+    android:paddingTop="@dimen/luma_space_xxs"
+    android:paddingEnd="@dimen/luma_space_xxs"
+    android:paddingBottom="@dimen/luma_space_xxs">
 
     <ImageView
         android:id="@+id/app_icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="@dimen/luma_icon_app"
+        android:layout_height="@dimen/luma_icon_app"
         android:background="@drawable/bg_icon_placeholder"
         android:contentDescription="@null"
         android:importantForAccessibility="no"
@@ -33,20 +28,18 @@
         android:id="@+id/app_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="@dimen/luma_grid_icon_label_gap"
         android:ellipsize="end"
-        android:fontFamily="@font/inter_medium"
+        android:fontFamily="@font/inter_regular"
         android:gravity="center"
         android:importantForAccessibility="no"
         android:includeFontPadding="false"
-        android:letterSpacing="0.005"
-        android:lineSpacingMultiplier="1.12"
-        android:maxLines="2"
+        android:maxLines="1"
         android:shadowColor="#B3000000"
         android:shadowDx="0"
         android:shadowDy="1"
         android:shadowRadius="3"
-        android:textColor="#FFFFFFFF"
-        android:textSize="12sp" />
+        android:textColor="#D9FFFFFF"
+        android:textSize="@dimen/luma_type_app_label" />
 
 </LinearLayout>

@@ -73,7 +73,7 @@ class MusicAccessActivity : ComponentActivity() {
                         LumaGlassTopBar(
                             theme = theme,
                             title = stringResource(R.string.music_access_title),
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                             navigationIcon = {
                                 LumaGlassChoice(
                                     theme = theme,
@@ -87,7 +87,7 @@ class MusicAccessActivity : ComponentActivity() {
                             Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             LumaGlassCard(
