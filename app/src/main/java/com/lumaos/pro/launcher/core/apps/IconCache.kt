@@ -38,6 +38,14 @@ class IconCache(maxEntries: Int) {
         cache.remove(key)
     }
 
+    /** Removes every cached component belonging to [packageName] across profiles. */
+    @Synchronized
+    fun removePackage(packageName: String): List<ComponentKey> {
+        val matching = cache.snapshot().keys.filter { it.packageName == packageName }
+        matching.forEach { cache.remove(it) }
+        return matching
+    }
+
     /** Changes the ceiling, evicting least-recently-used entries if needed. */
     @Synchronized
     fun resize(newMaxEntries: Int) {

@@ -11,9 +11,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
+import android.os.UserManager
 import android.provider.Settings
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.util.LumaLog
+import java.util.concurrent.ConcurrentHashMap
 
 /** Result of an installed-app enumeration; false means [apps] is only the last known snapshot. */
 data class AppRefreshResult(val apps: List<AppEntry>, val successful: Boolean)
@@ -42,18 +44,29 @@ class AppRepository(
         context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
     }
 
+    private val userManager: UserManager? by lazy {
+        runCatching { context.getSystemService(Context.USER_SERVICE) as? UserManager }.getOrNull()
+    }
+
     private val userHandle: UserHandle = Process.myUserHandle()
+    private val profileHandles = ConcurrentHashMap<Long, UserHandle>().apply {
+        put(0L, userHandle)
+    }
 
     @Volatile
     private var snapshot: Map<ComponentKey, LauncherActivityInfo> = emptyMap()
+
+    @Volatile
+    private var hasCompletedInitialScan: Boolean = false
 
     /** Last complete list, retained if the system service temporarily fails. */
     @Volatile
     private var lastEntries: List<AppEntry> = emptyList()
 
     /**
-     * Reads the launchable activity list. Must be called off the main thread:
-     * on a device with several hundred apps this is a binder-heavy call.
+     * Reads the launchable activity list across personal and managed work
+     * profiles. Must be called off the main thread: on a device with several
+     * hundred apps this is a binder-heavy call.
      *
      * A failed binder/security query is not the same as a successful empty
      * result. Callers that remove stale layout entries must only do so after a
@@ -63,23 +76,53 @@ class AppRepository(
     @Suppress("MissingPermission")
     @Synchronized
     fun refreshSnapshot(): AppRefreshResult {
-        val infos = try {
-            activityListQuery?.invoke() ?: launcherApps.getActivityList(null, userHandle)
-        } catch (e: SecurityException) {
-            LumaLog.e("Not permitted to enumerate apps", e)
-            return AppRefreshResult(lastEntries, successful = false)
-        } catch (e: RuntimeException) {
-            // LauncherApps is a system service; a dead binder here must not take
-            // down the home screen or turn every installed app into an uninstall.
-            LumaLog.e("LauncherApps query failed", e)
-            return AppRefreshResult(lastEntries, successful = false)
+        val taggedInfos = ArrayList<Pair<Long, LauncherActivityInfo>>()
+        if (activityListQuery != null) {
+            val infos = try {
+                activityListQuery.invoke()
+            } catch (e: SecurityException) {
+                LumaLog.e("Not permitted to enumerate apps", e)
+                return AppRefreshResult(lastEntries, successful = false)
+            } catch (e: RuntimeException) {
+                LumaLog.e("LauncherApps query failed", e)
+                return AppRefreshResult(lastEntries, successful = false)
+            }
+            infos.forEach { taggedInfos += 0L to it }
+        } else {
+            val profiles = runCatching { launcherApps.profiles }
+                .getOrNull()
+                ?.takeIf { it.isNotEmpty() }
+                ?: listOf(userHandle)
+            for (profile in profiles) {
+                val isPrimary = profile == userHandle
+                val serial = if (isPrimary) 0L else {
+                    runCatching { userManager?.getSerialNumberForUser(profile) ?: 0L }.getOrDefault(0L)
+                }
+                profileHandles[serial] = profile
+                try {
+                    val list = launcherApps.getActivityList(null, profile).orEmpty()
+                    for (info in list) taggedInfos += serial to info
+                } catch (e: SecurityException) {
+                    if (isPrimary) {
+                        LumaLog.e("Not permitted to enumerate apps", e)
+                        return AppRefreshResult(lastEntries, successful = false)
+                    }
+                    LumaLog.w("Work profile enumeration skipped: ${e.javaClass.simpleName}")
+                } catch (e: RuntimeException) {
+                    if (isPrimary) {
+                        LumaLog.e("LauncherApps query failed", e)
+                        return AppRefreshResult(lastEntries, successful = false)
+                    }
+                    LumaLog.w("Work profile unavailable: ${e.javaClass.simpleName}")
+                }
+            }
         }
 
-        val entries = ArrayList<AppEntry>(infos.size)
-        val map = HashMap<ComponentKey, LauncherActivityInfo>(infos.size)
-        for (info in infos) {
+        val entries = ArrayList<AppEntry>(taggedInfos.size)
+        val map = HashMap<ComponentKey, LauncherActivityInfo>(taggedInfos.size)
+        for ((serial, info) in taggedInfos) {
             val component = info.componentName ?: continue
-            val key = ComponentKey(component.packageName, component.className)
+            val key = ComponentKey(component.packageName, component.className, serial)
             val label = info.label?.toString().orEmpty().ifBlank { component.packageName }
             entries += AppEntry(
                 key = key,
@@ -91,6 +134,7 @@ class AppRepository(
         }
         val sorted = AppMatcher.sort(entries).toList()
         snapshot = map
+        hasCompletedInitialScan = true
         lastEntries = sorted
         return AppRefreshResult(sorted, successful = true)
     }
@@ -98,12 +142,47 @@ class AppRepository(
     /** Compatibility helper for consumers that only need the latest known list. */
     fun refresh(): List<AppEntry> = refreshSnapshot().apps
 
-    /** Decodes an icon at [density]. Returns null if the app is gone. */
-    fun iconFor(key: ComponentKey, density: Int): Drawable? =
-        snapshot[key]?.getIcon(density)
+    /** Decodes an icon at [density] (badged automatically for work profiles). Returns null if gone. */
+    fun iconFor(key: ComponentKey, density: Int): Drawable? {
+        val info = snapshot[key] ?: if (!hasCompletedInitialScan) resolveSingleInfo(key) else null
+        info ?: return null
+        return runCatching {
+            if (key.userSerial != 0L) info.getBadgedIcon(density) else info.getIcon(density)
+        }.getOrNull()
+    }
 
-    /** Whether [key] is currently installed and launchable. */
-    fun isInstalled(key: ComponentKey): Boolean = snapshot.containsKey(key)
+    /** Whether [key] is currently installed and launchable (resolves directly during cold start). */
+    fun isInstalled(key: ComponentKey): Boolean {
+        if (snapshot.containsKey(key)) return true
+        if (!hasCompletedInitialScan) return resolveSingleInfo(key) != null
+        return false
+    }
+
+    /** Applies the OS managed-profile badge when [userSerial] belongs to a work profile. */
+    fun badgeIfManagedProfile(drawable: Drawable, userSerial: Long): Drawable {
+        if (userSerial == 0L) return drawable
+        val profile = profileForSerial(userSerial) ?: return drawable
+        if (profile == userHandle) return drawable
+        return runCatching { context.packageManager.getUserBadgedIcon(drawable, profile) }
+            .getOrDefault(drawable)
+    }
+
+    private fun resolveSingleInfo(key: ComponentKey): LauncherActivityInfo? {
+        if (activityListQuery != null) return null
+        val profile = profileForSerial(key.userSerial) ?: return null
+        return runCatching {
+            launcherApps.getActivityList(key.packageName, profile)
+                ?.firstOrNull { it.componentName?.className == key.className }
+        }.getOrNull()
+    }
+
+    private fun profileForSerial(serial: Long): UserHandle? {
+        if (serial == 0L) return userHandle
+        profileHandles[serial]?.let { return it }
+        val resolved = runCatching { userManager?.getUserForSerialNumber(serial) }.getOrNull()
+        if (resolved != null) profileHandles[serial] = resolved
+        return resolved
+    }
 
     /**
      * Launches an app. Returns false if the app is no longer installed - the
@@ -111,10 +190,11 @@ class AppRepository(
      */
     fun launch(key: ComponentKey, sourceBounds: android.graphics.Rect? = null, options: android.os.Bundle? = null): Boolean {
         val component = android.content.ComponentName(key.packageName, key.className)
+        val targetProfile = profileForSerial(key.userSerial) ?: return false
         return try {
             // sourceBounds tells the system where the icon is; options carry
             // LumaOS Pro's clip-reveal opening animation from that icon.
-            launcherApps.startMainActivity(component, userHandle, sourceBounds, options)
+            launcherApps.startMainActivity(component, targetProfile, sourceBounds, options)
             true
         } catch (e: ActivityNotFoundException) {
             LumaLog.w("App no longer installed: ${key.packageName}")

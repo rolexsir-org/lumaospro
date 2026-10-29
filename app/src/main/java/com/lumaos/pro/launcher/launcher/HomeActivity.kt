@@ -71,6 +71,7 @@ import com.lumaos.pro.launcher.effects.EffectsPolicy
 import com.lumaos.pro.launcher.effects.EffectsPreference
 import com.lumaos.pro.launcher.effects.EffectsSignals
 import com.lumaos.pro.launcher.icons.IconRenderSpec
+import com.lumaos.pro.launcher.icons.LivingIconOverride
 import com.lumaos.pro.launcher.intelligence.Profile
 import com.lumaos.pro.launcher.intelligence.Profiles
 import com.lumaos.pro.launcher.launcher.home.AmbientBackdropView
@@ -86,7 +87,9 @@ import com.lumaos.pro.launcher.launcher.home.FolderOverlay
 import com.lumaos.pro.launcher.launcher.home.FolderStyle
 import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
 import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
+import com.lumaos.pro.launcher.launcher.home.LivingIconPickerSheet
 import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
+import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.launcher.home.MenuEntry
 import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
 import com.lumaos.pro.launcher.launcher.home.ReadoutSources
@@ -243,6 +246,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var edit: EditModeController
     private lateinit var folders: FolderOverlay
     private var widgetPicker: WidgetPicker? = null
+    private var livingIconPicker: LivingIconPickerSheet? = null
     /** Synchronous lifecycle guards; the durable decision remains LumaPrefs.onboardingDone. */
     private var onboardingCheckInFlight = false
     private var onboardingLaunchInFlight = false
@@ -368,7 +372,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val drawerPresentation: DrawerPresentation = DrawerPresentation.LIST,
         val preset: HomePreset = HomePreset.DEFAULT,
         val dockStyle: DockStyle? = null,
-        val iconPack: String? = null
+        val iconPack: String? = null,
+        val livingIcons: Boolean = true,
+        val livingOverrides: Map<ComponentKey, LivingIconOverride> = emptyMap(),
+        val explicitTint: Boolean = false
     ) {
         val effectiveDock: DockStyle get() = dockStyle ?: preset.dock
     }
@@ -378,12 +385,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         onboardingLaunchInFlight = savedInstanceState?.getBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT) == true
+        savedInstanceState?.getInt(STATE_ACTIVE_PAGE_INDEX, -1)?.takeIf { it >= 0 }?.let {
+            viewModel.setActivePage(it)
+        }
         core.themes.onConfiguration(resources.configuration)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_home)
         bindViews()
 
-        iconLoader = IconLoader(core.appRepository, core.iconCache, core.iconPacks, resources)
+        iconLoader = IconLoader(core.appRepository, core.iconCache, core.iconPacks, resources, core.livingIcons)
         iconLoader.onIconReady = ::onIconReady
         widgets = WidgetHostController(this)
         restorePendingWidgets(savedInstanceState)
@@ -400,6 +410,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 // As the home screen, back must not finish the activity: doing
                 // so would leave the device with no home at all.
                 when {
+                    livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
                     widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
                     folders.isOpen -> folders.close()
                     drawer.isOpen -> drawer.close()
@@ -425,6 +436,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT, onboardingLaunchInFlight)
+        outState.putInt(STATE_ACTIVE_PAGE_INDEX, viewModel.activePageIndex.value)
         pendingWidget?.let {
             outState.putInt(STATE_PENDING_WIDGET_ID, it.appWidgetId)
             outState.putParcelable(STATE_PENDING_WIDGET_INFO, it.info)
@@ -476,6 +488,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // The pending layout write may still be in progress. Retaining an id is
         // safer than deleting a widget that a saved layout still references.
         pendingWidgetRemoval = null
+        livingIconPicker?.dismissImmediately()
+        livingIconPicker = null
         widgetPicker?.shutdown()
         iconLoader.shutdown()
         widgets.clearViews()
@@ -510,13 +524,20 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Pressing Home on the home screen returns to a clean desktop.
+        // Pressing Home on the home screen returns to a clean desktop on page 1.
         when {
+            livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
             widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
             folders.isOpen -> folders.close()
             drawer.isOpen -> drawer.close()
             edit.isActive -> edit.exit()
-            else -> homeGrid.smoothScrollToPosition(0)
+            else -> {
+                if (::homePagesAdapter.isInitialized && viewModel.activePageIndex.value != 0) {
+                    homePager.smoothScrollToPosition(0)
+                    onHomePageSelected(0)
+                }
+                homeGrid.smoothScrollToPosition(0)
+            }
         }
     }
 
@@ -1383,14 +1404,20 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         viewModel.prefs.iconSizeDp, viewModel.prefs.showLabels, viewModel.prefs.textScale,
                         viewModel.prefs.gridColumns, viewModel.prefs.gridRows, viewModel.prefs.drawerColumns,
                         viewModel.prefs.drawerPresentation, viewModel.prefs.homePreset,
-                        viewModel.prefs.dockStyleOverride, viewModel.prefs.iconPack
+                        viewModel.prefs.dockStyleOverride, viewModel.prefs.iconPack,
+                        viewModel.prefs.livingIconsEnabled, viewModel.prefs.livingIconOverrides,
+                        viewModel.prefs.themeSettings
                     )
                     combine(flows) { v ->
+                        @Suppress("UNCHECKED_CAST")
                         Appearance(
                             iconSizeDp = v[0] as Int, showLabels = v[1] as Boolean, textScale = v[2] as Float,
                             gridColumns = v[3] as Int, gridRows = v[4] as Int, drawerColumns = v[5] as Int,
                             drawerPresentation = v[6] as DrawerPresentation,
-                            preset = v[7] as HomePreset, dockStyle = v[8] as DockStyle?, iconPack = v[9] as String?
+                            preset = v[7] as HomePreset, dockStyle = v[8] as DockStyle?, iconPack = v[9] as String?,
+                            livingIcons = v[10] as Boolean,
+                            livingOverrides = v[11] as Map<ComponentKey, LivingIconOverride>,
+                            explicitTint = (v[12] as com.lumaos.pro.launcher.ui.theme.ThemeSettings).iconStyle == IconStyle.TINTED
                         )
                     }.distinctUntilChanged().collect { a ->
                         appearance = a
@@ -1934,7 +1961,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun updateIconSpec() {
         if (!::iconLoader.isInitialized) return
         val sizePx = dp(appearance.iconSizeDp)
-        val changed = iconLoader.updateSpec(IconRenderSpec.from(theme, sizePx, effects.iconDepth, appearance.iconPack))
+        core.livingIcons.updateConfiguration(appearance.livingIcons, appearance.livingOverrides)
+        val changed = iconLoader.updateSpec(
+            IconRenderSpec.from(
+                theme = theme,
+                sizePx = sizePx,
+                depth = effects.iconDepth,
+                iconPack = appearance.iconPack,
+                livingIcons = appearance.livingIcons,
+                livingOverridesHash = appearance.livingOverrides.hashCode(),
+                explicitTint = appearance.explicitTint
+            )
+        )
         if (changed) refreshAll()
     }
 
@@ -2007,6 +2045,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         forEachHomeAdapter { it.notifyItemRangeChanged(0, it.itemCount) }
         dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
+        if (::folders.isInitialized && folders.isOpen) folders.refreshAll()
     }
 
     private fun onIconReady(key: ComponentKey) {
@@ -2278,6 +2317,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun showFolderMemberMenu(entry: AppEntry, anchor: View, folderId: String?) {
         val entries = ArrayList<MenuEntry>()
         if (folderId != null) entries += MenuEntry(M_REMOVE_FROM_FOLDER, getString(R.string.action_remove_from_folder_short), R.drawable.ic_rx_remove)
+        entries += MenuEntry(M_CHOOSE_ICON, getString(R.string.action_choose_icon), R.drawable.ic_rx_spark, group = 1)
         entries += MenuEntry(M_INFO, getString(R.string.action_app_info), R.drawable.ic_rx_info, group = 1)
         entries += MenuEntry(M_UNINSTALL, getString(R.string.action_uninstall), R.drawable.ic_rx_uninstall, destructive = true, group = 1)
         menu().show(anchor, entry.label, entries) { e ->
@@ -2286,6 +2326,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     viewModel.removeFromFolder(it, entry.key)
                     folders.close()
                 }
+                M_CHOOSE_ICON -> openLivingIconPicker(entry.key, entry.label)
                 M_INFO -> appInfo(entry.key)
                 M_UNINSTALL -> uninstall(entry.key)
             }
@@ -2512,6 +2553,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 group = 2
             )
         }
+        entries += MenuEntry(M_CHOOSE_ICON, getString(R.string.action_choose_icon), R.drawable.ic_rx_spark, group = 2)
         entries += MenuEntry(M_HIDE, getString(R.string.action_hide_app, viewModel.activeContextProfile.value.title), R.drawable.ic_rx_hide, group = 2)
         entries += MenuEntry(M_INFO, getString(R.string.action_app_info), R.drawable.ic_rx_info, group = 2)
         entries += MenuEntry(M_UNINSTALL, getString(R.string.action_uninstall), R.drawable.ic_rx_uninstall, destructive = true, group = 2)
@@ -2534,9 +2576,43 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 e.id == M_REMOVE -> if (context == MenuContext.DOCK) viewModel.removeFromDock(position) else viewModel.removeFromHome(position)
                 e.id == M_PIN -> viewModel.setAppPinned(key, true)
                 e.id == M_UNPIN -> viewModel.setAppPinned(key, false)
+                e.id == M_CHOOSE_ICON -> openLivingIconPicker(key, label)
                 e.id == M_HIDE -> requestHideApp(key, label)
                 e.id == M_INFO -> appInfo(key)
                 e.id == M_UNINSTALL -> uninstall(key)
+            }
+        }
+    }
+
+    private fun openLivingIconPicker(key: ComponentKey, label: String) {
+        livingIconPicker?.dismissImmediately()
+        val sheet = LivingIconPickerSheet(
+            context = this,
+            root = homeRoot,
+            theme = theme,
+            effects = effects,
+            motion = motion,
+            bottomInset = safeInsets.bottom,
+            livingIcons = core.livingIcons,
+            iconLoader = iconLoader,
+            systemIconProvider = { k, d -> core.appRepository.iconFor(k, d) },
+            onDepthProgress = { progress ->
+                modalProgress = progress
+                applyDepth()
+            }
+        )
+        livingIconPicker = sheet
+        sheet.show(
+            key = key,
+            appLabel = label,
+            currentOverride = appearance.livingOverrides[key]
+                ?: if (key.userSerial != 0L) appearance.livingOverrides[key.copy(userSerial = 0L)] else null
+        ) { selected ->
+            lifecycleScope.launch {
+                viewModel.prefs.setLivingIconOverride(key, selected)
+                iconLoader.invalidate(key)
+                onIconReady(key)
+                toast(getString(R.string.toast_icon_updated, label))
             }
         }
     }
@@ -2976,19 +3052,35 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // -------------------------------------------------------- package changes
 
     private val packageCallback = object : LauncherApps.Callback() {
-        override fun onPackageAdded(packageName: String, user: UserHandle) = refresh(packageName)
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = refresh(packageName)
-        override fun onPackageChanged(packageName: String, user: UserHandle) = refresh(packageName)
+        override fun onPackageAdded(packageName: String, user: UserHandle) = refresh(packageName, removed = false)
+        override fun onPackageRemoved(packageName: String, user: UserHandle) = refresh(packageName, removed = true)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = refresh(packageName, removed = false)
         override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
-            packageNames.forEach(::refresh)
+            packageNames.forEach { refresh(it, removed = false) }
         override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
-            packageNames.forEach(::refresh)
+            packageNames.forEach { refresh(it, removed = !replacing) }
 
-        private fun refresh(packageName: String) {
+        private fun refresh(packageName: String, removed: Boolean) {
             runOnUiThread {
-                viewModel.apps.value.asSequence().filter { it.key.packageName == packageName }
-                    .forEach { iconLoader.invalidate(it.key) }
+                core.iconPacks.invalidate(packageName)
+                iconLoader.invalidatePackage(packageName)
+                if (appearance.iconPack == packageName) {
+                    if (removed) {
+                        lifecycleScope.launch { viewModel.prefs.setIconPack(null) }
+                    } else {
+                        iconLoader.updateSpec(
+                            IconRenderSpec.from(
+                                theme = theme,
+                                sizePx = dp(appearance.iconSizeDp),
+                                depth = effects.iconDepth,
+                                iconPack = null
+                            )
+                        )
+                        updateIconSpec()
+                    }
+                }
                 viewModel.refreshApps()
+                refreshAll()
             }
         }
     }
@@ -3006,6 +3098,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val STATE_PENDING_WIDGET_INFO = "pending_widget_info"
         private const val STATE_RECONFIGURE_WIDGET_ID = "reconfigure_widget_id"
         private const val STATE_ONBOARDING_LAUNCH_IN_FLIGHT = "onboarding_launch_in_flight"
+        private const val STATE_ACTIVE_PAGE_INDEX = "active_page_index"
 
         private const val SWIPE_MIN_DISTANCE_DP = 60
         private const val REQUEST_CONFIGURE_WIDGET = 4101
@@ -3025,6 +3118,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val M_REMOVE_FROM_FOLDER = 11
         private const val M_PIN = 12
         private const val M_UNPIN = 13
+        private const val M_CHOOSE_ICON = 14
         private const val M_RESIZE_BASE = 100
         private const val M_CONFIGURE = 150
         private const val M_PRESET_BASE = 200

@@ -13,6 +13,10 @@ import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.icons.IconPackManager
 import com.lumaos.pro.launcher.icons.IconRenderSpec
 import com.lumaos.pro.launcher.icons.IconRenderer
+import com.lumaos.pro.launcher.icons.LivingIconDrawable
+import com.lumaos.pro.launcher.icons.LivingIconManager
+import com.lumaos.pro.launcher.icons.LivingIconOverride
+import com.lumaos.pro.launcher.icons.LivingIconResolver
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -39,7 +43,8 @@ class IconLoader(
     private val repository: AppRepository,
     private val cache: IconCache,
     private val packs: IconPackManager,
-    private val resources: Resources
+    private val resources: Resources,
+    private val livingIcons: LivingIconManager? = null
 ) {
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
@@ -115,10 +120,25 @@ class IconLoader(
     }
 
     private fun produce(key: ComponentKey, density: Int, s: IconRenderSpec?): Drawable? {
-        val packIcon = s?.iconPack?.let { packs.iconFor(it, ComponentName(key.packageName, key.className), density) }
-        val raw = packIcon ?: repository.iconFor(key, density) ?: return null
-        if (s == null) return raw
-        return BitmapDrawable(resources, renderer.render(raw, s, fromIconPack = packIcon != null))
+        val targetPx = s?.sizePx ?: 256
+        val resolved = resolveSourceDrawable(
+            key = key,
+            density = density,
+            targetPx = targetPx,
+            iconPackPackage = s?.iconPack,
+            livingIconsEnabled = s?.livingIcons ?: (livingIcons?.enabled ?: true),
+            overrides = livingIcons?.overrides.orEmpty()
+        ) ?: return null
+        if (s == null) return repository.badgeIfManagedProfile(resolved.drawable, key.userSerial)
+        val rendered = BitmapDrawable(
+            resources,
+            renderer.render(resolved.drawable, s, fromIconPack = resolved.fromIconPack)
+        )
+        return if (resolved.drawable is LivingIconDrawable && key.userSerial != 0L) {
+            repository.badgeIfManagedProfile(rendered, key.userSerial)
+        } else {
+            rendered
+        }
     }
 
     /** Renders an arbitrary drawable (shortcut icons) with the current treatment. Background thread. */
@@ -131,10 +151,66 @@ class IconLoader(
      * Renders one app with a draft spec for live previews; bypasses the cache.
      * Must be called off the main thread.
      */
-    fun renderPreview(key: ComponentKey, density: Int, draft: IconRenderSpec): android.graphics.Bitmap? {
-        val packIcon = draft.iconPack?.let { packs.iconFor(it, ComponentName(key.packageName, key.className), density) }
-        val raw = packIcon ?: repository.iconFor(key, density) ?: return null
-        return renderer.render(raw, draft, fromIconPack = packIcon != null)
+    fun renderPreview(
+        key: ComponentKey,
+        density: Int,
+        draft: IconRenderSpec,
+        overrides: Map<ComponentKey, LivingIconOverride> = livingIcons?.overrides.orEmpty()
+    ): android.graphics.Bitmap? {
+        val resolved = resolveSourceDrawable(
+            key = key,
+            density = density,
+            targetPx = draft.sizePx,
+            iconPackPackage = draft.iconPack,
+            livingIconsEnabled = draft.livingIcons,
+            overrides = overrides
+        ) ?: return null
+        return renderer.render(resolved.drawable, draft, fromIconPack = resolved.fromIconPack)
+    }
+
+    private data class ResolvedSource(val drawable: Drawable, val fromIconPack: Boolean)
+
+    private fun resolveSourceDrawable(
+        key: ComponentKey,
+        density: Int,
+        targetPx: Int,
+        iconPackPackage: String?,
+        livingIconsEnabled: Boolean,
+        overrides: Map<ComponentKey, LivingIconOverride>
+    ): ResolvedSource? {
+        // Confirm the component exists before returning a bundled or pack icon,
+        // so uninstalled or disabled entries never masquerade as installed apps.
+        if (!repository.isInstalled(key)) return null
+
+        val exactOverride = overrides[key]
+            ?: if (key.userSerial != 0L) overrides[key.copy(userSerial = 0L)] else null
+
+        if (exactOverride is LivingIconOverride.UseLiving && livingIcons != null) {
+            livingIcons.drawableForId(exactOverride.icon, targetPx)?.let {
+                return ResolvedSource(it, fromIconPack = false)
+            }
+        }
+
+        if (exactOverride == LivingIconOverride.UseSystem) {
+            return repository.iconFor(key, density)?.let { ResolvedSource(it, fromIconPack = false) }
+        }
+
+        if (!iconPackPackage.isNullOrBlank()) {
+            packs.iconFor(iconPackPackage, ComponentName(key.packageName, key.className), density)?.let {
+                return ResolvedSource(it, fromIconPack = true)
+            }
+        }
+
+        if (livingIcons != null) {
+            val id = LivingIconResolver.resolve(key, livingIconsEnabled = livingIconsEnabled, overrides = overrides)
+            if (id != null) {
+                livingIcons.drawableForId(id, targetPx)?.let {
+                    return ResolvedSource(it, fromIconPack = false)
+                }
+            }
+        }
+
+        return repository.iconFor(key, density)?.let { ResolvedSource(it, fromIconPack = false) }
     }
 
     /** Runs [task] on the icon thread (used for shortcut icons and previews). */
@@ -152,6 +228,27 @@ class IconLoader(
         unavailable.remove(key)
         keyGenerations.merge(key, 1) { old, delta -> old + delta }
     }
+
+    /** Invalidates all cached or negative entries belonging to [packageName]. */
+    fun invalidatePackage(packageName: String) {
+        val removedCached = cache.removePackage(packageName)
+        val removedUnavailable = synchronized(unavailable) {
+            val matching = unavailable.filter { it.packageName == packageName }
+            unavailable.removeAll(matching.toSet())
+            matching
+        }
+        val knownKeys = HashSet<ComponentKey>().apply {
+            addAll(removedCached)
+            addAll(removedUnavailable)
+            addAll(keyGenerations.keys.filter { it.packageName == packageName })
+        }
+        knownKeys.forEach { key ->
+            keyGenerations.merge(key, 1) { old, delta -> old + delta }
+        }
+    }
+
+    /** Synchronously peeks a cached icon without scheduling background work. */
+    fun peek(key: ComponentKey): Drawable? = cache[key]
 
     /**
      * Queues icons for the whole list. Used when the active profile requests

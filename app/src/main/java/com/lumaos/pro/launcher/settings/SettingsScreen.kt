@@ -515,6 +515,8 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
 @Composable
 private fun AppearanceSection(viewModel: SettingsViewModel) {
     val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
+    val livingIconsEnabled by viewModel.prefs.livingIconsEnabled.collectAsState(true)
+    val livingOverrides by viewModel.prefs.livingIconOverrides.collectAsState(emptyMap())
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
     val gridRows by viewModel.prefs.gridRows.collectAsState(5)
     val drawerColumns by viewModel.prefs.drawerColumns.collectAsState(4)
@@ -522,9 +524,29 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(48)
     val showLabels by viewModel.prefs.showLabels.collectAsState(true)
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     SettingsSection(stringResource(R.string.section_appearance), LumaIcon.APPEARANCE) {
+        SwitchRow(
+            label = stringResource(R.string.pref_living_icons),
+            checked = livingIconsEnabled,
+            subtitle = stringResource(R.string.pref_living_icons_desc)
+        ) { enabled ->
+            scope.launch { viewModel.prefs.setLivingIconsEnabled(enabled) }
+        }
+        if (livingOverrides.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(onClick = {
+                scope.launch {
+                    viewModel.prefs.clearLivingIconOverrides()
+                    Toast.makeText(context, R.string.toast_icon_overrides_cleared, Toast.LENGTH_SHORT).show()
+                }
+            }) {
+                Text(stringResource(R.string.icon_override_reset_all, livingOverrides.size))
+            }
+            Spacer(Modifier.height(6.dp))
+        }
         ChoiceRow(
             label = stringResource(R.string.pref_theme),
             selected = when (themeMode) {

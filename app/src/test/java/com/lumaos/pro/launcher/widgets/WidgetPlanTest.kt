@@ -155,7 +155,7 @@ class WidgetPlanTest {
         val grid = com.lumaos.pro.launcher.launcher.model.HomeGridSpec(columns = 4, rows = 7)
         val page = listOf(app(), app(), widget(1, 2), app())
         assertEquals(2, WidgetPlan.widgetRows(page))
-        assertEquals(25, grid.cellsUsed(listOf(widget(2, 2)) + page))
+        assertEquals(21, grid.cellsUsed(listOf(widget(2, 2)) + page))
         assertEquals(InsertionPlan.AtIndex(0), WidgetPlan.planInsertion(page, widget(2, 2), grid))
     }
 

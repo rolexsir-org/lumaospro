@@ -133,9 +133,15 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     }
     val bitmaps by produceState(
         StudioPreviewIcons(emptyList(), emptyList()),
-        resolved, draft.iconPack, previewDepth
+        resolved, draft.iconPack, draft.livingIconsEnabled, draft.theme.iconStyle, previewDepth
     ) {
-        value = viewModel.loadPreviewIcons(resolved, draft.iconPack, previewDepth)
+        value = viewModel.loadPreviewIcons(
+            theme = resolved,
+            iconPack = draft.iconPack,
+            depth = previewDepth,
+            livingIconsEnabled = draft.livingIconsEnabled,
+            explicitTint = draft.theme.iconStyle == IconStyle.TINTED
+        )
     }
     val context = LocalContext.current
     val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
@@ -419,6 +425,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
 
             StudioSection(stringResource(R.string.studio_icons)) {
+                LumaGlassSwitchRow(
+                    label = stringResource(R.string.pref_living_icons),
+                    subtitle = stringResource(R.string.pref_living_icons_desc),
+                    checked = draft.livingIconsEnabled,
+                    onCheckedChange = { enabled ->
+                        draft = draft.copy(livingIconsEnabled = enabled)
+                    },
+                    theme = resolved
+                )
+                Spacer(Modifier.height(LumaSpacing.elementGap))
                 StudioChoice(
                     label = stringResource(R.string.studio_icon_shape),
                     selected = draft.theme.iconShape?.let { shapeLabel(it) } ?: stringResource(R.string.studio_theme_default),

@@ -17,15 +17,24 @@ import xml.etree.ElementTree as ET
 # --------------------------------------------------------------------------- #
 # Paths
 # --------------------------------------------------------------------------- #
-ROOT = "/home/user/rolexm"
-CACHE = os.path.join(ROOT, ".cache")
+ROOT = os.environ.get("LUMA_ROOT", os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+CACHE = os.environ.get("LUMA_CACHE", os.path.join(ROOT, ".cache"))
 NPM = os.path.join(CACHE, "deps", "npm")
 OUT = os.path.join(CACHE, "build")
-DIST = os.path.join(ROOT, "dist")
+DIST = os.environ.get("LUMA_DIST", os.path.join(OUT, "dist"))
 GEN = os.path.join(OUT, "gen")
 
-JAVA = os.path.join(CACHE, "toolchain/jdk/jdk4py/java-runtime/bin/java")
-KEYTOOL = os.path.join(CACHE, "toolchain/jdk/jdk4py/java-runtime/bin/keytool")
+def _find_jdk_bin(tool):
+    env_java = os.environ.get("LUMA_JAVA")
+    if env_java and os.path.exists(env_java):
+        return os.path.join(os.path.dirname(env_java), tool)
+    cand = os.path.join(CACHE, f"toolchain/jdk/jdk4py/java-runtime/bin/{tool}")
+    if os.path.exists(cand):
+        return cand
+    return shutil.which(tool) or cand
+
+JAVA = _find_jdk_bin("java")
+KEYTOOL = _find_jdk_bin("keytool")
 AAPT2 = os.path.join(NPM, "aaptjs3/bin/x64/linux/aapt2")
 KOTLINC = os.path.join(NPM, "kotlin-compiler/bin/kotlinc")
 KOTLINC_LIB = os.path.join(NPM, "kotlin-compiler/lib")
@@ -211,6 +220,9 @@ def phase_resources(manifest):
               "--auto-add-overlay",
               "--min-sdk-version", str(MIN_SDK), "--target-sdk-version", str(TARGET_SDK),
               "--version-code", str(VERSION_CODE), "--version-name", VERSION_NAME]
+    assets_dir = os.path.join(ROOT, "app/src/main/assets")
+    if os.path.isdir(assets_dir):
+        common += ["-A", assets_dir]
     for f in flats:
         common += ["-R", f]
 
@@ -270,18 +282,20 @@ def emit_r(package, table, only=None):
     lines.append("}")
     return "\n".join(lines) + "\n"
 
-def phase_codegen():
+def phase_codegen(debug=False):
     app_table = parse_r_txt(os.path.join(OUT, "R.txt"))
     os.makedirs(GEN, exist_ok=True)
     pkg_path = os.path.join(GEN, *APP_ID.split("."))
     os.makedirs(pkg_path, exist_ok=True)
     open(os.path.join(pkg_path, "R.kt"), "w").write(emit_r(APP_ID, app_table))
+    debug_lit = "true" if debug else "false"
+    build_type = "debug" if debug else "release"
     open(os.path.join(pkg_path, "BuildConfig.kt"), "w").write(f"""package {APP_ID}
 
 object BuildConfig {{
-    const val DEBUG = false
+    const val DEBUG = {debug_lit}
     const val APPLICATION_ID = "{APP_ID}"
-    const val BUILD_TYPE = "release"
+    const val BUILD_TYPE = "{build_type}"
     const val VERSION_CODE = {VERSION_CODE}
     const val VERSION_NAME = "{VERSION_NAME}"
 }}
@@ -355,14 +369,23 @@ def phase_test():
     tclasses = os.path.join(OUT, "test-classes")
     shutil.rmtree(tclasses, ignore_errors=True)
     os.makedirs(tclasses)
+    extra_test_jars = [os.path.join(TESTLIBS, fn) for fn in sorted(os.listdir(TESTLIBS)) if fn.endswith(".jar")] if os.path.isdir(TESTLIBS) else JUNIT_JARS
+    has_coroutines_test = any("coroutines-test" in os.path.basename(j) for j in extra_test_jars)
     srcs, skipped = [], []
     for dp, dns, fns in os.walk(test_root):
         rel = os.path.relpath(dp, test_root).split(os.sep)
         for fn in fns:
             if not fn.endswith(".kt"):
                 continue
-            (skipped if any(part in TEST_EXCLUDE_DIRS for part in rel) else srcs).append(os.path.join(dp, fn))
-    cp = [os.path.join(OUT, "classes"), ANDROID_JAR] + info["libjars"] + JUNIT_JARS
+            full = os.path.join(dp, fn)
+            txt = open(full, encoding="utf-8").read()
+            needs_robolectric = any(part in TEST_EXCLUDE_DIRS for part in rel) or ("import org.robolectric." in txt)
+            needs_coroutines_test = ("import kotlinx.coroutines.test." in txt) and not has_coroutines_test
+            if needs_robolectric or needs_coroutines_test:
+                skipped.append(full)
+            else:
+                srcs.append(full)
+    cp = [os.path.join(OUT, "classes"), ANDROID_JAR] + info["libjars"] + extra_test_jars
     # -Xfriend-paths lets tests see `internal` declarations, as Gradle does for
     # a module's own test source set.
     sh([KOTLINC, "-classpath", ":".join(cp), "-jvm-target", "17",
@@ -370,13 +393,13 @@ def phase_test():
     names = []
     for dp, _, fns in os.walk(tclasses):
         for fn in fns:
-            if fn.endswith("Test.class"):
+            if fn.endswith("Test.class") and "$" not in fn:
                 names.append(os.path.relpath(os.path.join(dp, fn), tclasses)[:-6].replace(os.sep, "."))
     names.sort()
     # android.jar goes LAST at runtime so real library classes win over stubs.
-    run_cp = [tclasses, os.path.join(OUT, "classes"), KOTLIN_STDLIB] + info["libjars"] + JUNIT_JARS + [ANDROID_JAR]
-    print(f"running {len(names)} test classes; skipped (Robolectric, not runnable offline): {len(skipped)} files")
-    sh([JAVA, "-cp", ":".join(run_cp), "org.junit.runner.JUnitCore"] + names)
+    run_cp = [tclasses, os.path.join(OUT, "classes"), KOTLIN_STDLIB] + info["libjars"] + extra_test_jars + [ANDROID_JAR]
+    print(f"running {len(names)} test classes; skipped (Robolectric/AndroidX-test offline): {len(skipped)} files")
+    sh([JAVA, "-cp", ":".join(run_cp), "org.junit.runner.JUnitCore"] + names, cwd=os.path.join(ROOT, "app"))
 
 # --------------------------------------------------------------------------- #
 # Phase 6: dex (D8)
@@ -493,7 +516,7 @@ def phase_verify():
         assert bad == 0
     print("\n=== apksig verify (APK v1/v2/v3) ===")
     verify_jar = os.path.join(OUT, "verify.jar")
-    apksig = subprocess.run(["bash", "-c", "find /home/user/rolexm/.cache/deps/lid -name 'apksig-8.13.0.jar' | head -1"],
+    apksig = subprocess.run(["bash", "-c", f"find '{CACHE}/deps/lid' -name 'apksig-8.13.0.jar' | head -1"],
                             capture_output=True, text=True).stdout.strip()
     sh([KOTLINC, "-classpath", apksig, "-include-runtime", "-d", verify_jar,
         os.path.join(ROOT, "toolchain/manual-build/verify.kt")])
@@ -539,30 +562,85 @@ def phase_keystore():
     os.chmod(KEYSTORE_PROPS, 0o600)
     print("generated upload keystore:", KEYSTORE, "(credentials in keystore.properties)")
 
+def zipalign_apk(src_apk, dst_apk):
+    """4-byte aligns STORED entries (resources.arsc, PNGs) as required on Android 11+ (R+)."""
+    import struct
+    with zipfile.ZipFile(src_apk, "r") as zin, zipfile.ZipFile(dst_apk, "w") as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            ni = zipfile.ZipInfo(filename=item.filename, date_time=item.date_time)
+            ni.compress_type = item.compress_type
+            ni.external_attr = item.external_attr
+            if ni.compress_type == zipfile.ZIP_STORED:
+                header_len = 30 + len(ni.filename.encode("utf-8"))
+                offset = zout.fp.tell() + header_len
+                pad = (4 - (offset % 4)) % 4
+                if pad:
+                    ni.extra = b"\x00" * pad
+            zout.writestr(ni, data)
+
+def phase_debug_apk():
+    """Assemble, 4-byte zipalign, and debug-sign a standalone debug APK without touching user release keystores."""
+    dbg_ks = os.path.join(CACHE, "debug.jks")
+    if not os.path.exists(dbg_ks):
+        sh([KEYTOOL, "-genkeypair", "-storetype", "JKS", "-keystore", dbg_ks, "-alias", "androiddebugkey",
+            "-keyalg", "RSA", "-keysize", "2048", "-validity", "10950",
+            "-storepass", "android", "-keypass", "android",
+            "-dname", "CN=Android Debug,O=Android,C=US"])
+    raw_apk = os.path.join(OUT, "app-debug-raw.apk")
+    shutil.copy(os.path.join(OUT, "base.apk"), raw_apk)
+    with zipfile.ZipFile(raw_apk, "a") as z:
+        for fn in sorted(os.listdir(os.path.join(OUT, "dex"))):
+            if fn.endswith(".dex"):
+                z.write(os.path.join(OUT, "dex", fn), fn, compress_type=zipfile.ZIP_DEFLATED)
+    unsigned_apk = os.path.join(OUT, "app-debug-unsigned.apk")
+    zipalign_apk(raw_apk, unsigned_apk)
+    os.makedirs(DIST, exist_ok=True)
+    out_apk = os.path.join(DIST, "app-debug.apk")
+    verify_jar = os.path.join(OUT, "verify.jar")
+    apksig = subprocess.run(["bash", "-c", f"find '{CACHE}/deps/lid' -name 'apksig-8.13.0.jar' | head -1"],
+                            capture_output=True, text=True).stdout.strip()
+    sh([KOTLINC, "-classpath", apksig, "-include-runtime", "-d", verify_jar,
+        os.path.join(ROOT, "toolchain/manual-build/verify.kt")])
+    sh([JAVA, "-cp", verify_jar + ":" + apksig, "VerifyKt",
+        "sign", dbg_ks, "android", "androiddebugkey", "android", unsigned_apk, out_apk])
+    sh([JAVA, "-cp", verify_jar + ":" + apksig, "VerifyKt", out_apk])
+    r2 = subprocess.run([AAPT2, "dump", "badging", out_apk], capture_output=True, text=True)
+    for line in r2.stdout.splitlines()[:12]:
+        print("  ", line)
+    print(f"app-debug.apk: {os.path.getsize(out_apk)/1024/1024:.2f} MB")
+
 # --------------------------------------------------------------------------- #
 def main():
     os.makedirs(OUT, exist_ok=True)
-    steps = sys.argv[1:] or ["all"]
+    steps = sys.argv[1:] or ["debug"]
+    is_debug = ("debug" in steps)
     manifest = os.path.join(OUT, "merged", "AndroidManifest.xml")
-    if "all" in steps or "keystore" in steps:
+    if "keystore" in steps:
         phase_keystore()
-    if "all" in steps or "libs" in steps:
+    if "all" in steps or "debug" in steps or "libs" in steps:
         phase_libs()
-    if "all" in steps or "manifest" in steps:
+    if "all" in steps or "debug" in steps or "manifest" in steps:
         manifest = phase_manifest()
-    if "all" in steps or "resources" in steps:
+    if "all" in steps or "debug" in steps or "resources" in steps:
         phase_resources(manifest)
-    if "all" in steps or "codegen" in steps:
-        phase_codegen()
-    if "all" in steps or "kotlin" in steps:
+    if "all" in steps or "debug" in steps or "codegen" in steps:
+        phase_codegen(debug=is_debug)
+    if "all" in steps or "debug" in steps or "kotlin" in steps:
         phase_kotlin()
-    if "test" in steps:
+    if "test" in steps or "debug" in steps:
         phase_test()
-    if "all" in steps or "dex" in steps:
+    if "all" in steps or "debug" in steps or "dex" in steps:
         phase_dex()
+    if "debug" in steps:
+        phase_debug_apk()
     if "all" in steps or "aab" in steps:
+        if not (os.path.exists(KEYSTORE) and os.path.exists(KEYSTORE_PROPS)):
+            sys.exit("Refusing to sign release AAB without configured keystore.properties (no debug fallback).")
         phase_aab()
     if "all" in steps or "apk" in steps:
+        if not (os.path.exists(KEYSTORE) and os.path.exists(KEYSTORE_PROPS)):
+            sys.exit("Refusing to sign release APK without configured keystore.properties (no debug fallback).")
         phase_apk()
     if "all" in steps or "verify" in steps:
         phase_verify()

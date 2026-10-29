@@ -36,10 +36,24 @@ data class IconRenderSpec(
     val tintPlateColor: Int,
     /** Soft drop shadow and rim light (effects BALANCED and above). */
     val depth: Boolean,
-    val iconPack: String?
+    val iconPack: String?,
+    /** Whether bundled LumaOS Pro Living Icons are active by default. */
+    val livingIcons: Boolean = true,
+    /** Hash/revision of per-app Living Icon overrides so cache invalidates on change. */
+    val livingOverridesHash: Int = 0,
+    /** True only when the user explicitly forced TINTED style (not merely a preset default). */
+    val explicitTint: Boolean = false
 ) {
     companion object {
-        fun from(theme: ResolvedTheme, sizePx: Int, depth: Boolean, iconPack: String?): IconRenderSpec {
+        fun from(
+            theme: ResolvedTheme,
+            sizePx: Int,
+            depth: Boolean,
+            iconPack: String?,
+            livingIcons: Boolean = true,
+            livingOverridesHash: Int = 0,
+            explicitTint: Boolean = false
+        ): IconRenderSpec {
             val c = theme.colors
             return IconRenderSpec(
                 sizePx = sizePx.coerceAtLeast(16),
@@ -50,7 +64,10 @@ data class IconRenderSpec(
                 tintColor = c.onAccentContainer,
                 tintPlateColor = c.accentContainer,
                 depth = depth,
-                iconPack = iconPack
+                iconPack = iconPack,
+                livingIcons = livingIcons,
+                livingOverridesHash = livingOverridesHash,
+                explicitTint = explicitTint
             )
         }
     }
@@ -78,6 +95,12 @@ class IconRenderer {
         // Leave a margin for the shadow so it is not clipped by the bitmap.
         val margin = if (spec.depth) size * 0.06f else size * 0.02f
         val rect = RectF(margin, margin * 0.7f, size - margin, size - margin * 1.3f)
+
+        if (source is LivingIconDrawable) {
+            renderLivingIcon(canvas, source, rect, size, spec)
+            return bitmap
+        }
+
         val adaptive = source as? AdaptiveIconDrawable
         val mask = maskPath(spec.shape, adaptive, rect)
 
@@ -281,6 +304,40 @@ class IconRenderer {
         return ColorMatrixColorFilter(gray)
     }
 
+    private fun renderLivingIcon(
+        canvas: Canvas,
+        living: LivingIconDrawable,
+        rect: RectF,
+        size: Int,
+        spec: IconRenderSpec
+    ) {
+        if (living.bitmap.isRecycled) return
+        val targetRect = if (spec.depth) rect else inset(rect, 0.94f)
+        if (spec.depth) {
+            val shadowFootprint = inset(targetRect, 0.93f)
+            val shadowPath = polygon(IconShapes.outline(IconShape.SQUIRCLE)!!, shadowFootprint)
+            drawShadow(canvas, shadowPath, size)
+        }
+        val bounds = computeLivingBounds(
+            iconId = living.iconId,
+            targetLeft = targetRect.left,
+            targetTop = targetRect.top,
+            targetRight = targetRect.right,
+            targetBottom = targetRect.bottom
+        )
+        val dst = RectF(bounds[0], bounds[1], bounds[2], bounds[3])
+        paint.reset()
+        paint.isAntiAlias = true
+        paint.isFilterBitmap = true
+        paint.colorFilter = if (spec.style == IconStyle.TINTED && spec.explicitTint) {
+            toneFilter(spec.tintColor)
+        } else {
+            null
+        }
+        canvas.drawBitmap(living.bitmap, null, dst, paint)
+        paint.colorFilter = null
+    }
+
     /** True when a legacy icon already fills its square (full-bleed artwork). */
     private fun isOpaqueSquare(d: Drawable): Boolean {
         val probe = Bitmap.createBitmap(PROBE, PROBE, Bitmap.Config.ARGB_8888)
@@ -297,5 +354,33 @@ class IconRenderer {
     companion object {
         private const val MASK_SIZE = 100f
         private const val PROBE = 24
+
+        /**
+         * Maps [iconId]'s measured optical-glass silhouette (`visibleSpanFraction`)
+         * onto `[targetLeft..targetRight, targetTop..targetBottom]` without
+         * distorting aspect ratio. Pure float math so unit tests verify alignment.
+         */
+        internal fun computeLivingBounds(
+            iconId: LivingIconId,
+            targetLeft: Float,
+            targetTop: Float,
+            targetRight: Float,
+            targetBottom: Float
+        ): FloatArray {
+            val w = (targetRight - targetLeft).coerceAtLeast(1f)
+            val h = (targetBottom - targetTop).coerceAtLeast(1f)
+            val targetSpan = minOf(w, h)
+            val fullSpan = targetSpan / iconId.visibleSpanFraction.coerceAtLeast(0.5f)
+            val targetCx = (targetLeft + targetRight) * 0.5f
+            val targetCy = (targetTop + targetBottom) * 0.5f
+            val cx = targetCx - (iconId.centerXFraction - 0.5f) * fullSpan
+            val cy = targetCy - (iconId.centerYFraction - 0.5f) * fullSpan
+            return floatArrayOf(
+                cx - fullSpan * 0.5f,
+                cy - fullSpan * 0.5f,
+                cx + fullSpan * 0.5f,
+                cy + fullSpan * 0.5f
+            )
+        }
     }
 }

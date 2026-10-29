@@ -12,12 +12,13 @@ import xml.etree.ElementTree as ET
 #   lid   <- github.com/TechnoVen-UG/LiD                     (gradle-home/caches/..., also D8 + apksig)
 #   zhudi <- github.com/ThanhPham2111/Face_Filter            (.gradle-local/caches/...)
 # Roots that are absent are skipped (a warning is printed).
+CACHE_BASE = os.environ.get("LUMA_CACHE", os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.cache")))
 CACHE_ROOTS = [
-    "/home/user/rolexm/.cache/deps/edmo/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/lid/gradle-home/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/cap/Mobile Development/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/masud/caches/modules-2/files-2.1",
-    "/home/user/rolexm/.cache/deps/zhudi/.gradle-local/caches/modules-2/files-2.1",
+    os.path.join(CACHE_BASE, "deps/edmo/caches/modules-2/files-2.1"),
+    os.path.join(CACHE_BASE, "deps/lid/gradle-home/caches/modules-2/files-2.1"),
+    os.path.join(CACHE_BASE, "deps/cap/Mobile Development/caches/modules-2/files-2.1"),
+    os.path.join(CACHE_BASE, "deps/masud/caches/modules-2/files-2.1"),
+    os.path.join(CACHE_BASE, "deps/zhudi/.gradle-local/caches/modules-2/files-2.1"),
 ]
 
 # group -> module -> version -> {filename -> path}
@@ -233,7 +234,8 @@ def main():
     ]
     arts = resolve(direct)
     out = [{"group": g, "module": m, "version": v, "file": f} for g, m, v, f in arts]
-    json.dump(out, open("/home/user/rolexm/.cache/deps/resolved.json", "w"), indent=1)
+    os.makedirs(os.path.join(CACHE_BASE, "deps"), exist_ok=True)
+    json.dump(out, open(os.path.join(CACHE_BASE, "deps/resolved.json"), "w"), indent=1)
     print(f"resolved artifacts: {len(arts)}")
     for a in arts:
         print(f"  {a[0]}:{a[1]}:{a[2]}  ->  {os.path.basename(a[3])}")

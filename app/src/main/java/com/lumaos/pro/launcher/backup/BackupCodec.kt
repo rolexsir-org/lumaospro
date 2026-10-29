@@ -1,5 +1,6 @@
 package com.lumaos.pro.launcher.backup
 
+import com.lumaos.pro.launcher.icons.LivingIconOverridesCodec
 import com.lumaos.pro.launcher.launcher.model.HomeLayoutCodec
 import com.lumaos.pro.launcher.launcher.model.HomeLayoutOps
 
@@ -47,6 +48,9 @@ object BackupCodec {
         "icon_shape" to ValueType.STRING,
         "icon_style" to ValueType.STRING,
         "icon_pack" to ValueType.STRING,
+        "living_icons_enabled" to ValueType.BOOLEAN,
+        "living_icon_overrides" to ValueType.STRING,
+        "experience_profile" to ValueType.STRING,
         "backdrop" to ValueType.STRING,
         "dynamic_wallpaper_colors" to ValueType.BOOLEAN,
         "active_wallpaper_id" to ValueType.STRING,
@@ -112,7 +116,13 @@ object BackupCodec {
             val value = coerce(raw, type) ?: continue
             // Private imported photo IDs reference device-local files not carried in backups.
             if (key == "active_wallpaper_id" && !(value as String).startsWith("art:")) continue
-            val stored = if (isLayoutKey(key)) sanitizeLayout(value as String) else value
+            val stored = when {
+                isLayoutKey(key) -> sanitizeLayout(value as String)
+                key == "living_icon_overrides" -> LivingIconOverridesCodec.encode(
+                    LivingIconOverridesCodec.decode(value as String)
+                )
+                else -> value
+            }
             settings[key] = linkedMapOf("t" to type.tag, "v" to stored)
         }
         val doc = linkedMapOf<String, Any?>(

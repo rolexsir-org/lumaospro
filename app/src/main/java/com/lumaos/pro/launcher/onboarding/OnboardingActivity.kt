@@ -6,8 +6,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -28,8 +31,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -38,18 +47,24 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RoleHelper
+import com.lumaos.pro.launcher.icons.LivingIconId
 import com.lumaos.pro.launcher.settings.ExperienceProfileController
 import com.lumaos.pro.launcher.settings.LumaOSTheme
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * First-run onboarding.
@@ -98,11 +113,36 @@ class OnboardingActivity : ComponentActivity() {
             }
         })
 
-        val themes = (application as LumaApp).core.themes
+        val core = (application as LumaApp).core
+        val themes = core.themes
         setContent {
             val theme by themes.theme.collectAsState()
             val textScale by prefs.textScale.collectAsState(1.0f)
             val selectedProfile by prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
+            val lifecycleOwner = LocalLifecycleOwner.current
+            var isDefaultHome by remember { mutableStateOf(RoleHelper.isDefaultLauncher(this@OnboardingActivity)) }
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        isDefaultHome = RoleHelper.isDefaultLauncher(this@OnboardingActivity)
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+            val showcaseIcons by produceState<List<Pair<String, ImageBitmap>>>(emptyList()) {
+                value = withContext(Dispatchers.IO) {
+                    listOf(
+                        LivingIconId.PHONE,
+                        LivingIconId.MESSAGES,
+                        LivingIconId.CAMERA,
+                        LivingIconId.PHOTOS,
+                        LivingIconId.SETTINGS
+                    ).mapNotNull { id ->
+                        core.livingIcons.bitmapForId(id, 144)?.let { id.displayName to it.asImageBitmap() }
+                    }
+                }
+            }
             LumaOSTheme(theme = theme, textScale = textScale) {
                 // A restored or previously customised appearance always wins.
                 // The guard and default write are one DataStore transaction.
@@ -143,7 +183,41 @@ class OnboardingActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(24.dp))
+                        if (showcaseIcons.isNotEmpty()) {
+                            Spacer(Modifier.height(18.dp))
+                            LumaGlassSurface(
+                                theme = theme,
+                                role = GlassRole.SECONDARY,
+                                modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceEvenly,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        showcaseIcons.forEach { (name, bmp) ->
+                                            Image(
+                                                bitmap = bmp,
+                                                contentDescription = name,
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.onboarding_living_icons_caption),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(22.dp))
                         Text(
                             text = stringResource(R.string.onboarding_profiles_title),
                             style = MaterialTheme.typography.titleMedium,
@@ -173,25 +247,36 @@ class OnboardingActivity : ComponentActivity() {
                         }
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            text = stringResource(R.string.onboarding_home_role_explainer),
+                            text = stringResource(
+                                if (isDefaultHome) R.string.role_status_default else R.string.onboarding_home_role_explainer
+                            ),
                             modifier = Modifier.widthIn(max = 440.dp),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isDefaultHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(12.dp))
-                        Button(
-                            onClick = ::requestHomeRole,
-                            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.onboarding_set_default))
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        OutlinedButton(
-                            onClick = ::completeOnboardingAndFinish,
-                            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.onboarding_skip))
+                        if (isDefaultHome) {
+                            Button(
+                                onClick = ::completeOnboardingAndFinish,
+                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.onboarding_enter_home))
+                            }
+                        } else {
+                            Button(
+                                onClick = ::requestHomeRole,
+                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.onboarding_set_default))
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = ::completeOnboardingAndFinish,
+                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.onboarding_skip))
+                            }
                         }
                         Spacer(Modifier.height(20.dp))
                         Text(

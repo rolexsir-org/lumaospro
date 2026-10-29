@@ -64,6 +64,7 @@ data class CellConfig(
 
 class AppCellViewHolder(view: View) : RecyclerView.ViewHolder(view) {
     val iconWrap: View? = view.findViewById(R.id.app_icon_wrap)
+    val iconPlaceholder: View? = view.findViewById(R.id.app_icon_placeholder)
     val icon: ImageView = view.findViewById(R.id.app_icon)
     val label: TextView = view.findViewById(R.id.app_label)
     var boundRipple: Int = 0
@@ -131,6 +132,7 @@ class AppEntryAdapter(
             // While an icon decodes - or when it can never be resolved - the cell
             // shows the app's initial in the active icon shape rather than a
             // blank square. The app's own artwork is never recoloured.
+            holder.iconPlaceholder?.visibility = View.GONE
             if (icon == null) {
                 holder.icon.setImageDrawable(
                     MonogramDrawable(

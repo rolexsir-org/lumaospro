@@ -60,6 +60,13 @@ class IconPackManager(private val context: Context) {
         return pack
     }
 
+    /** Clears cached appfilter state when an icon pack is updated or uninstalled. */
+    fun invalidate(packageName: String) {
+        if (loaded?.packageName == packageName) {
+            loaded = null
+        }
+    }
+
     /** The pack's icon for [component], or null when the pack does not cover it. */
     fun iconFor(packageName: String?, component: ComponentName, density: Int): Drawable? {
         val pack = ensureLoaded(packageName) ?: return null

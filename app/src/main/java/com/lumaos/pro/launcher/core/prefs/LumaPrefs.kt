@@ -32,6 +32,8 @@ import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.effects.EffectsPreference
+import com.lumaos.pro.launcher.icons.LivingIconOverride
+import com.lumaos.pro.launcher.icons.LivingIconOverridesCodec
 import com.lumaos.pro.launcher.launcher.model.DockStyle
 import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.launcher.model.HomePreset
@@ -94,6 +96,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val ICON_SHAPE = stringPreferencesKey("icon_shape")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val ICON_PACK = stringPreferencesKey("icon_pack")
+        val LIVING_ICONS_ENABLED = booleanPreferencesKey("living_icons_enabled")
+        val LIVING_ICON_OVERRIDES = stringPreferencesKey("living_icon_overrides")
         val BACKDROP = stringPreferencesKey("backdrop")
         val DYNAMIC_WALLPAPER_COLORS = booleanPreferencesKey("dynamic_wallpaper_colors")
         val ACTIVE_WALLPAPER_ID = stringPreferencesKey("active_wallpaper_id")
@@ -346,12 +350,16 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         homePreset: HomePreset,
         dockStyle: DockStyle?,
         effects: EffectsPreference,
-        motion: MotionPreference
+        motion: MotionPreference,
+        livingIconsEnabled: Boolean? = null
     ) {
         dataStore.edit { p ->
             val previousPreset = HomePreset.fromStorageKey(p[Keys.HOME_PRESET])
             putThemeSettings(p, theme)
             putOrRemove(p, Keys.ICON_PACK, iconPack?.takeIf { it.isNotBlank() })
+            if (livingIconsEnabled != null) {
+                p[Keys.LIVING_ICONS_ENABLED] = livingIconsEnabled
+            }
             if (previousPreset != homePreset) {
                 p[Keys.HOME_PRESET] = homePreset.storageKey
                 p[Keys.GRID_ROWS] = homePreset.defaultRows
@@ -378,11 +386,12 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 Keys.EXPERIENCE_PROFILE, Keys.THEME_MODE, Keys.THEME_ID, Keys.THEME_SWITCHING,
                 Keys.THEME_LIGHT_ID, Keys.THEME_DARK_ID, Keys.THEME_DARK_WINDOW,
                 Keys.ACCENT_OVERRIDE, Keys.BACKGROUND_OVERRIDE, Keys.TYPOGRAPHY,
-                Keys.ICON_SHAPE, Keys.ICON_STYLE, Keys.ICON_PACK, Keys.BACKDROP,
+                Keys.ICON_SHAPE, Keys.ICON_STYLE, Keys.ICON_PACK,
+                Keys.LIVING_ICONS_ENABLED, Keys.LIVING_ICON_OVERRIDES, Keys.BACKDROP,
                 Keys.DYNAMIC_WALLPAPER_COLORS, Keys.ACTIVE_WALLPAPER_ID,
                 Keys.HOME_PRESET, Keys.DOCK_STYLE, Keys.EFFECTS_PREF, Keys.MOTION_PREF,
                 Keys.GRID_COLUMNS, Keys.GRID_ROWS, Keys.DRAWER_COLUMNS, Keys.ICON_SIZE_DP,
-                Keys.SHOW_LABELS, Keys.TEXT_SCALE
+                Keys.SHOW_LABELS, Keys.TEXT_SCALE, Keys.HOME_LAYOUT, Keys.LAYOUT_SEEDED
             )
             val configured = appearanceKeys.any { it in p.asMap() } ||
                 ContextProfile.entries.any { p[profileThemeKey(it)] != null }
@@ -409,6 +418,27 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     val iconPack: Flow<String?> = readNullable(Keys.ICON_PACK)
     suspend fun setIconPack(packageName: String?) {
         dataStore.edit { p -> putOrRemove(p, Keys.ICON_PACK, packageName?.takeIf { it.isNotBlank() }) }
+    }
+
+    /** Whether bundled LumaOS Pro Living Icons are enabled across launcher surfaces. */
+    val livingIconsEnabled: Flow<Boolean> = read(Keys.LIVING_ICONS_ENABLED) { true }
+    suspend fun setLivingIconsEnabled(enabled: Boolean) = write(Keys.LIVING_ICONS_ENABLED, enabled)
+
+    /** Per-component user overrides (custom Living Icon assignment or forced system icon). */
+    val livingIconOverrides: Flow<Map<ComponentKey, LivingIconOverride>> =
+        readNullable(Keys.LIVING_ICON_OVERRIDES).map { LivingIconOverridesCodec.decode(it) }
+
+    suspend fun setLivingIconOverride(key: ComponentKey, override: LivingIconOverride?) {
+        dataStore.edit { p ->
+            val updated = LivingIconOverridesCodec.decode(p[Keys.LIVING_ICON_OVERRIDES]).toMutableMap()
+            if (override == null) updated.remove(key) else updated[key] = override
+            val encoded = LivingIconOverridesCodec.encode(updated)
+            putOrRemove(p, Keys.LIVING_ICON_OVERRIDES, encoded.takeIf { it.isNotEmpty() })
+        }
+    }
+
+    suspend fun clearLivingIconOverrides() {
+        dataStore.edit { p -> p.remove(Keys.LIVING_ICON_OVERRIDES) }
     }
 
     val effectsPreference: Flow<EffectsPreference> = readNullable(Keys.EFFECTS_PREF)

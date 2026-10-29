@@ -7,17 +7,21 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const require = createRequire(import.meta.url);
-const LIBDIR = process.env.APK_SIGN_TS_LIB || '/home/user/rolexm/.cache/deps/npm/apk_sign_ts';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = process.env.LUMA_ROOT || join(__dirname, '..', '..');
+const CACHE = process.env.LUMA_CACHE || join(ROOT, '.cache');
+const LIBDIR = process.env.APK_SIGN_TS_LIB || join(CACHE, 'deps/npm/apk_sign_ts');
 const { ApkSigner, SigningKey, parseKeystore } = await import(join(LIBDIR, 'dist/index.js'));
 const { V1Signer } = await import(join(LIBDIR, 'dist/V1Signer.js'));
 
-const ROOT = '/home/user/rolexm';
+const propsPath = process.env.LUMA_KEYSTORE_PROPS || join(ROOT, 'keystore.properties');
 const props = {};
-for (const line of readFileSync(join(ROOT, 'keystore.properties'), 'utf8').split('\n')) {
+for (const line of readFileSync(propsPath, 'utf8').split('\n')) {
   const m = line.match(/^(\w+)=(.*)$/);
   if (m) props[m[1]] = m[2].trim();
 }
-const ksBytes = new Uint8Array(readFileSync(join(ROOT, props.storeFile)));
+const storePath = props.storeFile.startsWith('/') ? props.storeFile : join(ROOT, props.storeFile);
+const ksBytes = new Uint8Array(readFileSync(storePath));
 
 const entry = await parseKeystore(ksBytes, props.storePassword, props.keyAlias);
 const key = SigningKey.fromPEM(entry.privateKey, entry.certificate);
