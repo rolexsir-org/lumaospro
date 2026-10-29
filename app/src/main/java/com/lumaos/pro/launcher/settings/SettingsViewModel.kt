@@ -58,6 +58,7 @@ data class RoleState(
 data class StudioConfiguration(
     val theme: ThemeSettings = ThemeSettings(),
     val iconPack: String? = null,
+    val livingIconsEnabled: Boolean = true,
     val homePreset: HomePreset = HomePreset.DEFAULT,
     val dockStyle: DockStyle? = null,
     val effects: EffectsPreference = EffectsPreference.AUTO,
@@ -73,6 +74,7 @@ data class BackupUiState(val busy: Boolean = false, val message: String? = null)
 private data class StudioVisuals(
     val theme: ThemeSettings,
     val iconPack: String?,
+    val livingIconsEnabled: Boolean,
     val homePreset: HomePreset,
     val dockStyle: DockStyle?
 )
@@ -99,13 +101,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // its placeholder defaults over a previously saved appearance at startup.
     val studioConfiguration: StateFlow<StudioConfiguration?> = combine(
         combine(
-            prefs.themeSettings, prefs.iconPack, prefs.homePreset, prefs.dockStyleOverride
-        ) { theme, pack, preset, dock -> StudioVisuals(theme, pack, preset, dock) },
+            prefs.themeSettings,
+            prefs.iconPack,
+            prefs.livingIconsEnabled,
+            prefs.homePreset,
+            prefs.dockStyleOverride
+        ) { theme, pack, living, preset, dock -> StudioVisuals(theme, pack, living, preset, dock) },
         prefs.effectsPreference,
         prefs.motionPreference
     ) { visuals, effects, motion ->
         StudioConfiguration(
-            visuals.theme, visuals.iconPack, visuals.homePreset, visuals.dockStyle, effects, motion
+            theme = visuals.theme,
+            iconPack = visuals.iconPack,
+            livingIconsEnabled = visuals.livingIconsEnabled,
+            homePreset = visuals.homePreset,
+            dockStyle = visuals.dockStyle,
+            effects = effects,
+            motion = motion
         )
     }.stateIn<StudioConfiguration?>(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -191,7 +203,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     homePreset = configuration.homePreset,
                     dockStyle = configuration.dockStyle,
                     effects = configuration.effects,
-                    motion = configuration.motion
+                    motion = configuration.motion,
+                    livingIconsEnabled = configuration.livingIconsEnabled
                 )
                 _studioApplyState.value = StudioApplyState.IDLE
             } catch (e: CancellationException) {
@@ -280,23 +293,51 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     suspend fun loadPreviewIcons(
         theme: ResolvedTheme,
         iconPack: String?,
-        depth: Boolean
+        depth: Boolean,
+        livingIconsEnabled: Boolean = true,
+        explicitTint: Boolean = false
     ): StudioPreviewIcons = withContext(Dispatchers.IO) {
         val context = getApplication<Application>()
         val profile = prefs.activeContextProfile.first()
+        val overrides = prefs.livingIconOverrides.first()
         val layout = HomeLayoutCodec.decode(prefs.homeLayoutRaw(profile).first())
         val homeKeys = layout.page(0).filterIsInstance<HomeItem.App>().take(12).map { it.key }
         val dockKeys = layout.dock.filterIsInstance<HomeItem.App>().take(4).map { it.key }
         val metrics = context.resources.displayMetrics
         val size = (52 * metrics.density).toInt().coerceIn(48, 156)
-        val spec = IconRenderSpec.from(theme, size, depth, iconPack)
+        val spec = IconRenderSpec.from(
+            theme = theme,
+            sizePx = size,
+            depth = depth,
+            iconPack = iconPack,
+            livingIcons = livingIconsEnabled,
+            livingOverridesHash = overrides.hashCode(),
+            explicitTint = explicitTint
+        )
         val renderer = IconRenderer()
 
         fun render(key: ComponentKey): Bitmap? {
             val component = ComponentName(key.packageName, key.className)
             return try {
-                val packed = iconPack?.let { core.iconPacks.iconFor(it, component, metrics.densityDpi) }
-                val source = packed ?: core.appRepository.iconFor(key, metrics.densityDpi) ?: return null
+                if (!core.appRepository.isInstalled(key)) return null
+                val exactOverride = overrides[key]
+                    ?: if (key.userSerial != 0L) overrides[key.copy(userSerial = 0L)] else null
+                val overrideLiving = (exactOverride as? com.lumaos.pro.launcher.icons.LivingIconOverride.UseLiving)
+                    ?.let { core.livingIcons.drawableForId(it.icon, size) }
+                val forceSystem = exactOverride == com.lumaos.pro.launcher.icons.LivingIconOverride.UseSystem
+                val packed = if (!forceSystem && overrideLiving == null && !iconPack.isNullOrBlank()) {
+                    core.iconPacks.iconFor(iconPack, component, metrics.densityDpi)
+                } else null
+                val defaultLiving = if (!forceSystem && overrideLiving == null && packed == null) {
+                    com.lumaos.pro.launcher.icons.LivingIconResolver
+                        .resolve(key, livingIconsEnabled = livingIconsEnabled, overrides = overrides)
+                        ?.let { core.livingIcons.drawableForId(it, size) }
+                } else null
+                val source = overrideLiving
+                    ?: packed
+                    ?: defaultLiving
+                    ?: core.appRepository.iconFor(key, metrics.densityDpi)
+                    ?: return null
                 renderer.render(source, spec, fromIconPack = packed != null)
             } catch (_: RuntimeException) {
                 // A provider can disappear between enumeration and decode. The

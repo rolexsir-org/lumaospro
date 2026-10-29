@@ -285,7 +285,9 @@ class WidgetPicker(
         }
         loader.execute {
             if (generation != renderGeneration) return@execute
-            val d = runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull()
+            val core = (context.applicationContext as? com.lumaos.pro.launcher.core.LumaApp)?.core
+            val livingDrawable = core?.livingIcons?.drawableForPackage(pkg, dp(24f))
+            val d = livingDrawable ?: runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull()
             icon.post { if (generation == renderGeneration) icon.setImageDrawable(d) }
         }
         row.addView(icon)

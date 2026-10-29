@@ -481,6 +481,10 @@ class FolderOverlay(
         }
     }
 
+    fun refreshAll() {
+        pageAdapters.forEach { a -> a.notifyItemRangeChanged(0, a.itemCount) }
+    }
+
     fun updateMembers(members: List<AppEntry>) {
         val p = panel ?: return
         val contentContainer = (0 until p.childCount)

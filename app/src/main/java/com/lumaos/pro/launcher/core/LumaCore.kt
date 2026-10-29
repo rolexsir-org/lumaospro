@@ -21,6 +21,7 @@ import com.lumaos.pro.launcher.core.apps.ShortcutRepository
 import com.lumaos.pro.launcher.core.usage.LaunchHistoryStore
 import com.lumaos.pro.launcher.effects.EffectsController
 import com.lumaos.pro.launcher.icons.IconPackManager
+import com.lumaos.pro.launcher.icons.LivingIconManager
 import com.lumaos.pro.launcher.launcher.home.WallpaperBitmaps
 import com.lumaos.pro.launcher.ui.theme.LumaThemeManager
 import com.lumaos.pro.launcher.ui.theme.ThemeRepository
@@ -82,6 +83,7 @@ class LumaCore(private val application: Application) {
 
     val shortcuts: ShortcutRepository = ShortcutRepository(application)
     val iconPacks: IconPackManager = IconPackManager(application)
+    val livingIcons: LivingIconManager = LivingIconManager(application)
 
     fun start() {
         LumaLog.i(
@@ -93,6 +95,14 @@ class LumaCore(private val application: Application) {
         themes.start()
         themeManager.start()
         effects.start()
+
+        coreScope.launch {
+            combine(prefs.livingIconsEnabled, prefs.livingIconOverrides) { enabled, overrides ->
+                enabled to overrides
+            }.distinctUntilChanged().collect { (enabled, overrides) ->
+                livingIcons.updateConfiguration(enabled, overrides)
+            }
+        }
 
         // One-shot wall-clock alarms drive context changes; there is no periodic poll.
         coreScope.launch {
@@ -155,6 +165,7 @@ class LumaCore(private val application: Application) {
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
                 LumaLog.w("Severe memory pressure (level $level): clearing icon & wallpaper caches")
                 iconCache.clear()
+                livingIcons.trimMemory(clearAll = true)
                 WallpaperImageStore.clearCache()
                 WallpaperBitmaps.clear()
                 themeManager.trimMemory()
@@ -165,6 +176,7 @@ class LumaCore(private val application: Application) {
             ComponentCallbacks2.TRIM_MEMORY_MODERATE -> {
                 LumaLog.i("Memory pressure (level $level): trimming icon & wallpaper caches")
                 iconCache.trim(fraction = 0.5f, keep = Optimizer.ICON_CACHE_KEEP)
+                livingIcons.trimMemory(clearAll = false)
                 WallpaperImageStore.trimCache(0.5f)
                 WallpaperBitmaps.trim(0.5f)
                 themeManager.trimMemory()
@@ -175,6 +187,7 @@ class LumaCore(private val application: Application) {
     fun onLowMemory() {
         LumaLog.w("onLowMemory: clearing icon & wallpaper caches")
         iconCache.clear()
+        livingIcons.trimMemory(clearAll = true)
         WallpaperImageStore.clearCache()
         WallpaperBitmaps.clear()
         themeManager.trimMemory()
@@ -194,6 +207,7 @@ class LumaCore(private val application: Application) {
             kotlinx.coroutines.delay(delayMs)
             LumaLog.i("30s background idle: releasing transient caches to stay well under <150MB budget")
             iconCache.trim(fraction = 0.35f, keep = Optimizer.ICON_CACHE_KEEP)
+            livingIcons.trimMemory(clearAll = false)
             WallpaperImageStore.trimCache(0.25f)
             WallpaperBitmaps.trim(0.25f)
             themeManager.trimMemory()

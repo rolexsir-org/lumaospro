@@ -101,7 +101,7 @@ class HomeLayoutPagesTest {
 
     @Test
     fun `reordering cannot create grid overflow by fragmenting full width widget rows`() {
-        val grid = HomeGridSpec(columns = 4, rows = 4)
+        val grid = HomeGridSpec(columns = 4, rows = 3)
         val first = widget(31)
         val second = widget(32)
         val original = HomeLayout(pages = listOf(listOf(first, app("a"), app("b"), app("c"), second)))

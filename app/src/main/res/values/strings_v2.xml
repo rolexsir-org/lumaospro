@@ -277,4 +277,22 @@
     <string name="backup_confirm_title">Replace current setup?</string>
     <string name="backup_confirm_body">Your current settings and home layouts will be replaced by the backup from %1$s.</string>
     <string name="backup_confirm_restore">Restore</string>
+
+    <!-- Living Icons -->
+    <string name="pref_living_icons">Living Icons</string>
+    <string name="pref_living_icons_desc">Optical-glass icons for verified system and popular apps, with native fallback for everything else.</string>
+    <string name="action_choose_icon">Choose icon</string>
+    <string name="icon_override_title">Icon for %1$s</string>
+    <string name="icon_override_auto">Automatic (recommended)</string>
+    <string name="icon_override_auto_living_desc">Verified match: %1$s Living Icon</string>
+    <string name="icon_override_auto_system_desc">Uses the app\'s native Android icon</string>
+    <string name="icon_override_system">App\'s original icon</string>
+    <string name="icon_override_system_desc">Bypass Living Icons and external icon packs for this app</string>
+    <string name="icon_override_section_core">System &amp; core Living Icons</string>
+    <string name="icon_override_section_popular">Popular app Living Icons</string>
+    <string name="icon_override_reset_all">Reset custom icon overrides (%1$d)</string>
+    <string name="toast_icon_updated">Icon updated for %1$s</string>
+    <string name="toast_icon_overrides_cleared">Custom icon overrides reset</string>
+    <string name="onboarding_enter_home">Enter LumaOS Pro</string>
+    <string name="onboarding_living_icons_caption">30 optical-glass Living Icons ready out of the box</string>
 </resources>

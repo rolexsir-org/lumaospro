@@ -1,0 +1,227 @@
+{
+  "collection": "LumaOS Pro — Living Icons",
+  "release": "complete-30",
+  "format": {
+    "type": "PNG",
+    "width_px": 1024,
+    "height_px": 1024,
+    "mode": "RGBA",
+    "color_profile": "sRGB",
+    "outside_silhouette": "transparent",
+    "approximate_max_icon_bounds_px": 824
+  },
+  "zip_asset_directory": "png/",
+  "drive_asset_location": "same folder as manifest",
+  "assets": [
+    {
+      "name": "Phone",
+      "category": "core",
+      "filename": "phone.png",
+      "size_bytes": 860961,
+      "sha256": "5ebbb0861d1916161f9680e108076e849d56bd2da6213246b4987710f53d350d"
+    },
+    {
+      "name": "Messages",
+      "category": "core",
+      "filename": "messages.png",
+      "size_bytes": 901268,
+      "sha256": "30aeb177d295952f9b4e4470b6f57cc77c51724ee27ecc970306d54370f4a786"
+    },
+    {
+      "name": "Camera",
+      "category": "core",
+      "filename": "camera.png",
+      "size_bytes": 1115412,
+      "sha256": "ccd983a4192418dbad8d507a5a86b64a1b7c7c5462f41572e4a0efd0bbfcc6e5"
+    },
+    {
+      "name": "Photos / Gallery",
+      "category": "core",
+      "filename": "photos.png",
+      "size_bytes": 981285,
+      "sha256": "be1e12415ba64f7625579ecd3927419e66ac2a84516bb72a1272526317cf7caa"
+    },
+    {
+      "name": "Browser",
+      "category": "core",
+      "filename": "browser.png",
+      "size_bytes": 1096151,
+      "sha256": "88ff3c5f46436b7b9837e9692fc1adb56b86aed61430d0ee77de0971565a4d8d"
+    },
+    {
+      "name": "Settings",
+      "category": "core",
+      "filename": "settings.png",
+      "size_bytes": 1058540,
+      "sha256": "8b2d271cf4f75ef2a066dea1d80f7c349892e7975e3d89a30d02df6828fcdbbb"
+    },
+    {
+      "name": "Music",
+      "category": "core",
+      "filename": "music.png",
+      "size_bytes": 899492,
+      "sha256": "be3b05dec0babc89900e3e3dcefcff341b502ce406a1686eaeefe8617cb591bb"
+    },
+    {
+      "name": "Calendar",
+      "category": "core",
+      "filename": "calendar.png",
+      "size_bytes": 923303,
+      "sha256": "9442887ab3106ea6d15208ef649ceeb30acc35aef599180d3a248abf656bbd9b"
+    },
+    {
+      "name": "Clock",
+      "category": "core",
+      "filename": "clock.png",
+      "size_bytes": 1042882,
+      "sha256": "fc1f2be2d9aa0f7b8c4d46d537e8450b3bfe95b21a8c3b1db22e04fc1d30773e"
+    },
+    {
+      "name": "Files",
+      "category": "core",
+      "filename": "files.png",
+      "size_bytes": 877706,
+      "sha256": "b687ab2edc5b32108df6472a2ee6979ce47637b1607c3cd21d9f330cab50561d"
+    },
+    {
+      "name": "Calculator",
+      "category": "core",
+      "filename": "calculator.png",
+      "size_bytes": 1001290,
+      "sha256": "1744cd1dda6862fab6f727e8e3963b073421f2289eb3ccf777317a5723e7607b"
+    },
+    {
+      "name": "Contacts",
+      "category": "core",
+      "filename": "contacts.png",
+      "size_bytes": 893779,
+      "sha256": "df9c81b43a336ebe7f0a82e06ba8048aa2d43f313c5887acaf4d996e2f6b1f4c"
+    },
+    {
+      "name": "Maps",
+      "category": "core",
+      "filename": "maps.png",
+      "size_bytes": 932461,
+      "sha256": "740775de11eaea357a28018fe9a007d6def49eeb87af84361942f3113aafe878"
+    },
+    {
+      "name": "Weather",
+      "category": "core",
+      "filename": "weather.png",
+      "size_bytes": 879700,
+      "sha256": "f59058745206653841fcbdb046e8fb38e96049ef16717e013ab2eab5e9277197"
+    },
+    {
+      "name": "Recorder",
+      "category": "core",
+      "filename": "recorder.png",
+      "size_bytes": 934622,
+      "sha256": "ebe00d558930efddcb9c9798281e5fcce64eceedfe906bf31ab0db6b03f765f8"
+    },
+    {
+      "name": "Notes",
+      "category": "core",
+      "filename": "notes.png",
+      "size_bytes": 876276,
+      "sha256": "9dfd7b56d1d59ff7b29aad8670e868927ffd3e31b0cfc9ad7af685505e951d07"
+    },
+    {
+      "name": "Mail",
+      "category": "core",
+      "filename": "mail.png",
+      "size_bytes": 946779,
+      "sha256": "c4b1dee67a14f3b4afa72aff8eeb16bbe504bc11797dad4fa6f10696b2085a70"
+    },
+    {
+      "name": "Downloads",
+      "category": "core",
+      "filename": "downloads.png",
+      "size_bytes": 880422,
+      "sha256": "8108fbd4ae1217d920b4b8f37d69a78d76a31c70b9bf454d9ce48907aefa126c"
+    },
+    {
+      "name": "App Store / Play Store",
+      "category": "core",
+      "filename": "app_store.png",
+      "size_bytes": 943949,
+      "sha256": "227d65a035fb9ed4c2bbcf0e7e9d4e2af083f03d117c60d7ff0f7eb56b85c718"
+    },
+    {
+      "name": "Battery",
+      "category": "core",
+      "filename": "battery.png",
+      "size_bytes": 858637,
+      "sha256": "b596c7e3456a55f61750f564ed31c09361909d38b1b1077ec70bdfa08c56d73a"
+    },
+    {
+      "name": "WhatsApp",
+      "category": "popular",
+      "filename": "whatsapp.png",
+      "size_bytes": 937114,
+      "sha256": "c31478d61c07e56b4977cfc9291731a43863a40fb4af18906945633d461c5de4"
+    },
+    {
+      "name": "Instagram",
+      "category": "popular",
+      "filename": "instagram.png",
+      "size_bytes": 884085,
+      "sha256": "9d981fe12c0e4b16d2d065fb41a1f31eb4993ea3a990d28855bd85ace7d41be7"
+    },
+    {
+      "name": "YouTube",
+      "category": "popular",
+      "filename": "youtube.png",
+      "size_bytes": 891265,
+      "sha256": "069f65bcebcb9154c949cc506b3a665f27236db4625efdba5bbfd90151a50ed5"
+    },
+    {
+      "name": "Spotify",
+      "category": "popular",
+      "filename": "spotify.png",
+      "size_bytes": 925501,
+      "sha256": "cc1b97e8e908c3b3629691a3748ab996fabe438ded4fe0bf6698237fbecc2df3"
+    },
+    {
+      "name": "Telegram",
+      "category": "popular",
+      "filename": "telegram.png",
+      "size_bytes": 919118,
+      "sha256": "ef82927ac0a68c6e8341b953161871aeb2ca05eb507317db580c8ea4db254849"
+    },
+    {
+      "name": "Discord",
+      "category": "popular",
+      "filename": "discord.png",
+      "size_bytes": 876873,
+      "sha256": "305ba9109ef1cd99f739bbd72870573cf459168bf0f52bfeb8799e8ef248ed3b"
+    },
+    {
+      "name": "Gmail",
+      "category": "popular",
+      "filename": "gmail.png",
+      "size_bytes": 1017479,
+      "sha256": "f892110986e9cbcd1ac83d672ab128fe29b6157cac16dbe9c42d7ba890e1bc2e"
+    },
+    {
+      "name": "Google Drive",
+      "category": "popular",
+      "filename": "google_drive.png",
+      "size_bytes": 913063,
+      "sha256": "4a1409d91261e616a713edf6c3ea0b2a80f31f6d3bb7081f1632ea77b81a4dce"
+    },
+    {
+      "name": "Google Chrome",
+      "category": "popular",
+      "filename": "google_chrome.png",
+      "size_bytes": 1000124,
+      "sha256": "6a569e58a0b5bd4f75a4cd213a5e0cb3c552381271e717bb566e52e0c2fab114"
+    },
+    {
+      "name": "Google Photos",
+      "category": "popular",
+      "filename": "google_photos.png",
+      "size_bytes": 978847,
+      "sha256": "8f39b6c5ea28ac86bc2d2ee6b12d38291317c53f20bfb28ea1a6bfe43664e0df"
+    }
+  ]
+}
