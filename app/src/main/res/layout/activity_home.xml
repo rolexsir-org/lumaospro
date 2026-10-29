@@ -215,60 +215,91 @@
             android:importantForAccessibility="yes"
             android:visibility="gone" />
 
-        <!-- Primary search pill: 44dp visual capsule (minTouchTarget 48dp), 24dp universal margins -->
-        <LinearLayout
-            android:id="@+id/home_search_pill"
+        <!--
+            Contextual slot: one row, one height, two states. At rest it is the
+            search pill; while the home screen is being edited it is the action
+            capsule (Widgets, Layout, Studio, Wallpaper, Settings, Done). Both are
+            the same size, so starting or ending an editing session never
+            re-measures the desktop - nothing is reserved for chrome that is not
+            there, and nothing shifts when it appears.
+        -->
+        <FrameLayout
+            android:id="@+id/home_action_slot"
             android:layout_width="match_parent"
             android:layout_height="@dimen/luma_min_touch_target"
             android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
             android:layout_marginTop="@dimen/luma_space_xs"
             android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
-            android:layout_marginBottom="@dimen/luma_space_sm"
-            android:background="@drawable/bg_search_pill"
-            android:clickable="true"
-            android:contentDescription="@string/home_search_description"
-            android:focusable="true"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="@dimen/luma_space_md"
-            android:paddingEnd="@dimen/luma_space_xxs">
+            android:layout_marginBottom="@dimen/luma_space_sm">
 
-            <ImageView
-                android:id="@+id/search_pill_icon"
-                android:layout_width="@dimen/luma_icon_inline"
-                android:layout_height="@dimen/luma_icon_inline"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_rx_search" />
+            <!-- Primary search pill: 44dp visual capsule (minTouchTarget 48dp) -->
+            <LinearLayout
+                android:id="@+id/home_search_pill"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_search_pill"
+                android:clickable="true"
+                android:contentDescription="@string/home_search_description"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/luma_space_md"
+                android:paddingEnd="@dimen/luma_space_xxs">
 
-            <TextView
-                android:id="@+id/search_pill_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/luma_space_sm"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:importantForAccessibility="no"
-                android:maxLines="1"
-                android:text="@string/search_pill_hint"
-                android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
-                android:textSize="@dimen/luma_type_body" />
+                <ImageView
+                    android:id="@+id/search_pill_icon"
+                    android:layout_width="@dimen/luma_icon_inline"
+                    android:layout_height="@dimen/luma_icon_inline"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_rx_search" />
 
-            <ImageButton
-                android:id="@+id/search_pill_voice"
-                android:layout_width="@dimen/luma_min_touch_target"
-                android:layout_height="@dimen/luma_min_touch_target"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/voice_command_description"
-                android:padding="@dimen/luma_space_sm"
-                android:src="@drawable/ic_rx_voice" />
+                <TextView
+                    android:id="@+id/search_pill_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/luma_space_sm"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/search_pill_hint"
+                    android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
+                    android:textSize="@dimen/luma_type_body" />
 
-            <ImageButton
-                android:id="@+id/search_pill_settings"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:importantForAccessibility="no"
+                <ImageButton
+                    android:id="@+id/search_pill_voice"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/voice_command_description"
+                    android:padding="@dimen/luma_space_sm"
+                    android:src="@drawable/ic_rx_voice" />
+
+                <ImageButton
+                    android:id="@+id/search_pill_settings"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!--
+                Edit-mode action capsule. Buttons are built in EditModeController
+                (icon-only, 48dp targets, equal weight); the background here is the
+                pre-theme fallback and is replaced by the glass material.
+            -->
+            <LinearLayout
+                android:id="@+id/edit_action_bar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_edit_action_bar"
+                android:elevation="@dimen/luma_edit_action_elevation"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/luma_edit_action_inset"
+                android:paddingEnd="@dimen/luma_edit_action_inset"
                 android:visibility="gone" />
-        </LinearLayout>
+        </FrameLayout>
 
         <!-- Floating Dock: 88dp height, 28dp corner radius, 24dp left/right margins, 12dp bottom margin -->
         <FrameLayout
@@ -295,99 +326,30 @@
         </FrameLayout>
     </com.lumaos.pro.launcher.launcher.home.DesktopLayout>
 
+
     <!--
-        ============================ EDIT MODE CHROME ============================
-        Two floating glass cards, nothing else: the desktop reserves their height
-        (HomeActivity.applyChromeInsets) so the header can never cover the clock
-        and the toolbar can never cover the dock.
-        Margins/padding below are the pre-theme fallbacks; EditModeController
-        re-applies them from the glass palette and EditModeDesign.
+        Remove target: the only surface editing adds on top of the desktop, and
+        it exists only while an item is in the air. It fades in at 45% when a
+        drag starts and saturates with the theme's danger colour once releasing
+        would actually remove the item. Nothing is reserved for it: it floats over
+        the clock's band, which is never a drop target for icon placement.
     -->
-
-    <!-- 1. HEADER: full-width glass card, 24dp corners, 18dp padding -->
-    <LinearLayout
-        android:id="@+id/edit_top_bar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top"
-        android:layout_marginStart="@dimen/luma_edit_screen_margin"
-        android:layout_marginTop="@dimen/luma_edit_header_top_margin"
-        android:layout_marginEnd="@dimen/luma_edit_screen_margin"
-        android:background="@drawable/bg_edit_card"
-        android:elevation="@dimen/luma_edit_header_elevation"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:padding="@dimen/luma_edit_header_padding"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/edit_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="@font/inter_semibold"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:text="@string/edit_title"
-                android:textColor="#FFFFFFFF"
-                android:textSize="@dimen/luma_edit_header_title" />
-
-            <!-- Auto-shrink 13sp→10sp: two lines maximum, never truncated. -->
-            <TextView
-                android:id="@+id/edit_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/luma_space_xxs"
-                android:autoSizeMaxTextSize="@dimen/luma_edit_header_subtitle"
-                android:autoSizeMinTextSize="@dimen/luma_edit_header_subtitle_min"
-                android:autoSizeStepGranularity="0.5sp"
-                android:autoSizeTextType="uniform"
-                android:fontFamily="@font/inter_regular"
-                android:maxLines="2"
-                android:text="@string/edit_hint"
-                android:textColor="#A6FFFFFF"
-                android:textSize="@dimen/luma_edit_header_subtitle" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/edit_done"
-            android:layout_width="wrap_content"
-            android:layout_height="@dimen/luma_edit_done_height"
-            android:layout_marginStart="@dimen/luma_space_sm"
-            android:background="@drawable/bg_edit_pill"
-            android:clickable="true"
-            android:focusable="true"
-            android:fontFamily="@font/inter_medium"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:minWidth="@dimen/luma_edit_done_min_width"
-            android:paddingStart="@dimen/luma_space_lg"
-            android:paddingEnd="@dimen/luma_space_lg"
-            android:text="@string/edit_done"
-            android:textColor="#FFFFFFFF"
-            android:textSize="@dimen/luma_edit_done_text" />
-    </LinearLayout>
-
-    <!-- 6. BOTTOM EDIT TOOLBAR: one glass container, five equal buttons -->
-    <LinearLayout
-        android:id="@+id/edit_toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginStart="@dimen/luma_edit_screen_margin"
-        android:layout_marginEnd="@dimen/luma_edit_screen_margin"
-        android:background="@drawable/bg_edit_toolbar"
-        android:elevation="@dimen/luma_edit_toolbar_elevation"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:padding="@dimen/luma_edit_toolbar_padding"
+    <ImageView
+        android:id="@+id/edit_remove_target"
+        android:layout_width="@dimen/luma_edit_remove_size"
+        android:layout_height="@dimen/luma_edit_remove_size"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="@dimen/luma_edit_remove_top_margin"
+        android:alpha="0"
+        android:clickable="false"
+        android:contentDescription="@string/edit_remove_description"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        android:padding="@dimen/luma_edit_remove_padding"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_rx_remove"
         android:visibility="gone" />
+
 
     <FrameLayout
         android:id="@+id/drawer_container"

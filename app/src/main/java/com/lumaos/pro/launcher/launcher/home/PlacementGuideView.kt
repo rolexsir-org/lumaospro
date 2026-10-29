@@ -2,11 +2,13 @@ package com.lumaos.pro.launcher.launcher.home
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import com.lumaos.pro.launcher.ui.theme.ColorMath
 
 /**
  * Edit-mode placement guides drawn over the home grid.
@@ -56,11 +58,11 @@ class PlacementGuideView @JvmOverloads constructor(
     /** Corner radius of a drop zone. */
     var cornerPx = EditModeDesign.slotRadiusPx(density)
 
-    /** Dash colour: white at 15%. */
-    var guideColor = 0x26FFFFFF
+    /** Dash colour: theme content at 12% (white until a theme is applied). */
+    var guideColor = ColorMath.withAlpha(Color.WHITE, EditModeDesign.slotBorderAlpha)
 
-    /** Zone fill: white at 3%. */
-    var fillColor = 0x08FFFFFF
+    /** Zone fill: theme content at 2% (white until a theme is applied). */
+    var fillColor = ColorMath.withAlpha(Color.WHITE, EditModeDesign.slotFillAlpha)
 
     /** Unset until the theme applies a semantic accent; 0 means transparent. */
     var accentColor = 0

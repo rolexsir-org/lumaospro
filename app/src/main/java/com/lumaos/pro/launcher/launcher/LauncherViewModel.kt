@@ -465,6 +465,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         HomeLayoutOps.removeFromDock(layout, stored)
     }
 
+    /**
+     * Drag-reorder inside the dock. Display positions are mapped through the
+     * projection so hidden apps cannot shift the indices that get persisted.
+     */
+    fun moveDockItem(fromDisplay: Int, toDisplay: Int) = mutateStored { layout, d ->
+        val from = d.dockMap.getOrNull(fromDisplay) ?: return@mutateStored layout
+        val to = d.dockMap.getOrNull(toDisplay) ?: return@mutateStored layout
+        HomeLayoutOps.moveInDock(layout, from, to)
+    }
+
     fun createFolder(firstPosition: Int, secondPosition: Int) = mutateStored { layout, d ->
         val a = d.pageMap.getOrNull(firstPosition) ?: return@mutateStored layout
         val b = d.pageMap.getOrNull(secondPosition) ?: return@mutateStored layout

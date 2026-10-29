@@ -106,8 +106,8 @@ Repeat for **Signature**, **Atmosphere** and **Monolith**, then for **Aurora**,
       the `#06070B → #0F1219` transition.
 - [ ] Atmosphere draws the user's wallpaper, tints to it, and keeps text legible on
       both a light and a dark wall.
-- [ ] Monolith draws **no blur** anywhere — drawer, folders and edit mode included —
-      even on an Android 12+ device with blur available.
+- [ ] Monolith draws **no blur** anywhere — drawer, folders and the editing
+      backdrop included — even on an Android 12+ device with blur available.
 - [ ] Monolith's mono labels and 84 sp clock do not clip at 1.3× text scale.
 - [ ] Radius differences are visible between themes (34 vs 38 vs 8 dp on a sheet).
 - [ ] Switching theme cross-fades colours over the theme's own duration (420 ms
@@ -120,7 +120,7 @@ Repeat for **Signature**, **Atmosphere** and **Monolith**, then for **Aurora**,
 ### D1. Colour and surfaces
 - [ ] Text is legible over both the bundled artwork and the system wallpaper.
 - [ ] No hard-coded colour is visible on any screen (spot-check Settings, Studio,
-      drawer, menus, widget frames, edit mode).
+      drawer, menus, widget frames, the editing capsule and its drop zones).
 - [ ] Surfaces, borders and ripples change with the theme; nothing stays "Aurora
       blue" after switching to Zen.
 - [ ] Status, disabled and selected states are distinguishable with colour vision
@@ -177,11 +177,46 @@ Repeat for **Signature**, **Atmosphere** and **Monolith**, then for **Aurora**,
 - [ ] Drawer sheet corners, top padding and scrim look correct under the status bar
       and above the navigation bar (gesture and 3-button).
 
+### D6b. Home editing (device required — the core of this release)
+
+Resting state, nothing to touch:
+- [ ] The home screen shows **no** banner, title, hint card, tutorial strip or
+      permanent editing toolbar, and none of that space is reserved: the clock,
+      grid, search row and dock sit exactly where they do with editing off.
+- [ ] The only thing that appears while editing is one capsule inside the search
+      row (Widgets, Layout, Studio, Wallpaper, Settings, Done) — icon-only, no
+      labels, no paragraph, one row tall.
+
+Starting and ending:
+- [ ] Long-press empty workspace opens editing; the capsule cross-fades into the
+      search row over ~140 ms and the wallpaper is the only thing that dims.
+- [ ] Long-press an app icon lifts it **immediately** and it follows the finger.
+      No menu, no sheet, no second gesture handler firing at the same time.
+- [ ] Releasing a lifted icon without moving opens that item's contextual menu;
+      dragging past the slop never opens the menu.
+- [ ] Tapping an icon while editing opens its contextual menu.
+- [ ] Tapping outside the capsule and the grid ends the session.
+- [ ] Back and Home end the session; the app does not exit and no work is lost.
+- [ ] Rotating or recreating the activity mid-session restores the layout and the
+      committed order.
+
+While editing:
+- [ ] Drop zones appear only while an icon is in the air and land exactly on the
+      grid cells (no offset, no zone over an occupied slot).
+- [ ] The remove target appears only during a drag, sits under the status bar,
+      swells when armed, and nothing is removed unless the release is on it.
+- [ ] Page dots keep the same height and visibility as at rest; add/remove page
+      is in the Layout menu and never re-flows the workspace.
+- [ ] All five features still work: Widgets picker, Layout menu (presets, smart
+      folders, pages), Studio, Wallpaper picker, Settings.
+- [ ] Nothing on the desktop shifts, scales or re-measures at any point of the
+      session (watch the first and last frame).
+
 ### D7. Widgets
 - [ ] Every hosted widget sits inside the themed frame with matching radius.
 - [ ] Widget content is not recoloured.
 - [ ] An unavailable widget shows the themed message, not a crash or blank frame.
-- [ ] Resize handle works in edit mode and snaps to rows.
+- [ ] Resize handle works while an item is lifted and snaps to rows.
 
 ### D8. Motion
 - [ ] Press feedback is subtle and immediate; it never delays launch.
@@ -208,7 +243,8 @@ Repeat for **Signature**, **Atmosphere** and **Monolith**, then for **Aurora**,
 - [ ] TalkBack: each cell announces one label; folders announce member count.
 - [ ] TalkBack: drawer section headers are announced as headings.
 - [ ] TalkBack: every icon-only button has a description.
-- [ ] Every control is at least 48 dp, including the context chip and edit "Done".
+- [ ] Every control is at least 48 dp, including the context chip and each of the
+      six editing actions.
 - [ ] All text meets AA in both dark and light themes (use an on-device contrast
       checker on the rendered screenshot).
 - [ ] Large font + display size maximum: no clipped labels, no overlapping chrome.

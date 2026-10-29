@@ -5,92 +5,93 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Guards the Edit Home geometry contract.
+ * Guards the home-editing geometry contract.
  *
- * The redesign's whole premise is one aligned column with no overlaps, so these
- * tests assert the *relationships* between the tokens rather than any single
- * number: if someone tweaks a value into breaking the rhythm (an off-grid
- * gutter, a label size above its auto-shrink floor, a toolbar taller than the
- * space reserved for it), the build fails instead of the layout.
+ * The redesign's premise is that editing adds *no* layout of its own: one
+ * floating capsule inside the existing search row, plus affordances that only
+ * exist while an item is in the air. These tests assert the relationships
+ * between the tokens rather than single numbers, so a change that would make the
+ * capsule taller than the row it borrows, or make a target smaller than a
+ * finger, fails the build instead of the phone.
  */
 class EditModeDesignTest {
 
     @Test
-    fun `spacing follows the 4dp grid with documented optical steps`() {
-        val onGrid = listOf(
-            EditModeDesign.screenMarginDp,
-            EditModeDesign.sectionGapDp,
-            EditModeDesign.headerTopMarginDp,
-            EditModeDesign.headerToClockGapDp,
-            EditModeDesign.toolbarBottomMarginDp,
-            EditModeDesign.gridGutterDp,
-            EditModeDesign.hintPaddingHorizontalDp,
-            EditModeDesign.dockToToolbarGapDp,
-            EditModeDesign.toolbarIconLabelGapDp
-        )
-        onGrid.forEach { assertEquals("$it is off the 4dp grid", 0f, it % 4f, 0.001f) }
+    fun `the action capsule is exactly one search row tall`() {
+        // The capsule and the search pill share one slot, so their heights must
+        // match the 48dp row the desktop already lays out. If this drifts the
+        // slot re-measures every time a session starts.
+        assertEquals(48f, EditModeDesign.actionBarHeightDp, 0.001f)
+        assertEquals(48f, EditModeDesign.actionBarHeightPx(1f).toFloat(), 0.001f)
+        assertEquals(96f, EditModeDesign.actionBarHeightPx(2f).toFloat(), 0.001f)
+    }
 
-        // The spec asks for four optical values that are 2dp off the 4dp grid:
-        // 18dp card padding, 14dp pill and dock padding, 10dp toolbar padding.
-        // They are asserted explicitly so a change is a deliberate decision
-        // rather than drift, and every one still sits on the 2dp half-step.
-        assertEquals(18f, EditModeDesign.headerPaddingDp, 0.001f)
-        assertEquals(14f, EditModeDesign.hintPaddingVerticalDp, 0.001f)
-        assertEquals(14f, EditModeDesign.dockPaddingDp, 0.001f)
-        assertEquals(10f, EditModeDesign.toolbarPaddingDp, 0.001f)
-        listOf(
-            EditModeDesign.headerPaddingDp,
-            EditModeDesign.hintPaddingVerticalDp,
-            EditModeDesign.dockPaddingDp,
-            EditModeDesign.toolbarPaddingDp
-        ).forEach { assertEquals("$it is off the 2dp half-step", 0f, it % 2f, 0.001f) }
+    @Test
+    fun `the capsule is a pill and its targets fit inside it`() {
+        // Fully rounded: half the capsule height.
+        assertEquals(EditModeDesign.actionBarHeightDp / 2f, EditModeDesign.actionBarRadiusDp, 0.001f)
+        // The target owns the capsule's full height, so it is a 48dp tap target
+        // even though the inset eats into the width instead.
+        assertEquals(EditModeDesign.actionBarHeightDp, EditModeDesign.actionButtonSizeDp, 0.001f)
+        assertTrue(EditModeDesign.actionButtonSizeDp >= 48f)
+        // Press feedback is a rounded square inside the target, never a pill
+        // larger than the target or a second capsule.
+        assertTrue(EditModeDesign.actionButtonRadiusDp <= EditModeDesign.actionButtonSizeDp / 2f)
+        assertTrue(EditModeDesign.actionButtonRadiusDp < EditModeDesign.actionBarRadiusDp)
+        // The glyph keeps clear space inside the target on both axes.
+        assertTrue(EditModeDesign.actionIconDp <= EditModeDesign.actionButtonSizeDp - 16f)
+    }
+
+    @Test
+    fun `six actions fit a 360dp phone without shrinking a target`() {
+        // Screen 360dp - the desktop's two 16dp margins = 328dp of capsule;
+        // minus the two insets and the divider, six equal targets must each
+        // stay at or above a 48dp touch target.
+        val available = 360f - EditModeDesign.screenMarginDp * 2 -
+            EditModeDesign.actionBarInsetDp * 2 - EditModeDesign.actionDividerWidthDp
+        val perTarget = available / 6f
+        assertTrue("per-target width $perTarget", perTarget >= 48f)
+    }
+
+    @Test
+    fun `the remove target is a circular finger-sized affordance`() {
+        assertTrue(EditModeDesign.removeTargetSizeDp >= 48f)
+        assertTrue(EditModeDesign.removeTargetIconDp <= EditModeDesign.removeTargetSizeDp - 16f)
+        // Quiet until it matters, then slightly larger: state is legible without
+        // a label anywhere on screen.
+        assertTrue(EditModeDesign.removeTargetRestAlpha in 0.2f..0.7f)
+        assertTrue(EditModeDesign.removeTargetArmedScale > 1f)
+        assertTrue(EditModeDesign.draggedAlphaWhenRemoving < 1f)
+    }
+
+    @Test
+    fun `drop zones are quieter than the icons they frame`() {
+        assertTrue(EditModeDesign.slotBorderAlpha <= 0.15f)
+        assertTrue(EditModeDesign.slotFillAlpha < EditModeDesign.slotBorderAlpha)
+        assertEquals(20f, EditModeDesign.slotRadiusDp, 0.001f)
+        assertEquals(12f, EditModeDesign.gridGutterDp, 0.001f)
+        assertEquals(EditModeDesign.slotBorderDp, 1f, 0.001f)
+    }
+
+    @Test
+    fun `the capsule rises less than it is tall`() {
+        assertTrue(EditModeDesign.actionBarRiseDp < EditModeDesign.actionBarHeightDp)
     }
 
     @Test
     fun `one screen margin is shared by every surface`() {
-        // The dock/toolbar gap must never exceed the section rhythm, or the dock
-        // would visibly drift away from the toolbar it is paired with.
-        assertTrue(EditModeDesign.dockToToolbarGapDp <= EditModeDesign.sectionGapDp)
-        assertTrue(EditModeDesign.headerToClockGapDp >= EditModeDesign.sectionGapDp)
-    }
-
-    @Test
-    fun `radius ladder is cards 24, dock 28, buttons 16, slots 20`() {
-        assertEquals(24f, EditModeDesign.headerRadiusDp, 0.001f)
-        assertEquals(24f, EditModeDesign.toolbarRadiusDp, 0.001f)
+        // The drop zones align to the desktop's own margin, at rest and while
+        // editing: one value, never a second editing layout.
+        assertEquals(24f, EditModeDesign.screenMarginDp, 0.001f)
         assertEquals(28f, EditModeDesign.dockRadiusDp, 0.001f)
-        assertEquals(16f, EditModeDesign.toolbarButtonRadiusDp, 0.001f)
-        assertEquals(20f, EditModeDesign.slotRadiusDp, 0.001f)
         assertTrue(EditModeDesign.pillRadiusDp > EditModeDesign.dockRadiusDp)
     }
 
     @Test
-    fun `type ladder is 20 title, 14 body, 13 subtitle, 12 label`() {
-        assertEquals(20f, EditModeDesign.headerTitleSp, 0.001f)
-        assertEquals(14f, EditModeDesign.doneTextSp, 0.001f)
-        assertEquals(14f, EditModeDesign.hintTextSp, 0.001f)
+    fun `the type ladder keeps the clock as the focal point`() {
         assertEquals(14f, EditModeDesign.dateSp, 0.001f)
-        assertEquals(13f, EditModeDesign.headerSubtitleSp, 0.001f)
-        assertEquals(12f, EditModeDesign.toolbarLabelSp, 0.001f)
-        assertTrue(EditModeDesign.toolbarLabelMinSp < EditModeDesign.toolbarLabelSp)
-        assertTrue(EditModeDesign.headerSubtitleMinSp < EditModeDesign.headerSubtitleSp)
-    }
-
-    @Test
-    fun `done pill and toolbar buttons are at least a 40dp touch target`() {
-        assertTrue(EditModeDesign.doneMinWidthDp >= 76f)
-        assertTrue(EditModeDesign.doneHeightDp >= 40f)
-        assertTrue(EditModeDesign.toolbarButtonHeightDp >= 48f)
-    }
-
-    @Test
-    fun `reserved toolbar height matches what the layout draws`() {
-        // 64dp buttons inside a container with 10dp padding on both sides.
-        assertEquals(84f, EditModeDesign.toolbarButtonHeightDp + EditModeDesign.toolbarPaddingDp * 2, 0.001f)
-        assertEquals(
-            ((EditModeDesign.toolbarButtonHeightDp + EditModeDesign.toolbarPaddingDp * 2) * 2).toInt(),
-            EditModeDesign.toolbarHeightPx(2f)
-        )
+        assertEquals(14f, EditModeDesign.hintTextSp, 0.001f)
+        assertTrue(EditModeDesign.dateAlpha in 0.7f..0.9f)
     }
 
     @Test
@@ -109,5 +110,6 @@ class EditModeDesignTest {
         assertEquals(EditModeDesign.gridGutterDp * density, EditModeDesign.gutterPx(density), 0.001f)
         assertEquals(EditModeDesign.slotRadiusDp * density, EditModeDesign.slotRadiusPx(density), 0.001f)
         assertEquals(EditModeDesign.screenMarginDp * density, EditModeDesign.screenMarginPx(density).toFloat(), 0.001f)
+        assertEquals(EditModeDesign.removeTargetSizeDp * density, EditModeDesign.removeTargetSizePx(density).toFloat(), 0.001f)
     }
 }

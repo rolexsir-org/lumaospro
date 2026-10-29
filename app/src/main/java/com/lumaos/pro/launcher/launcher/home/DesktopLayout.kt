@@ -31,9 +31,13 @@ class DesktopLayout @JvmOverloads constructor(
     var headerFraction: Float = 0.40f
 
     private val header: View? get() = findViewById(R.id.home_header)
+    /**
+     * The action slot, not the search pill: the pill and the edit capsule are
+     * two states of the same row and must be laid out as one.
+     */
     private val right: List<View> get() = listOfNotNull(
         findViewById(R.id.home_grid_frame), findViewById(R.id.home_page_indicator),
-        findViewById(R.id.home_search_pill), findViewById(R.id.dock_surface)
+        findViewById(R.id.home_action_slot), findViewById(R.id.dock_surface)
     )
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

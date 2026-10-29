@@ -230,10 +230,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var searchPill: LinearLayout
     private lateinit var dockSurface: FrameLayout
     private lateinit var dockRow: RecyclerView
-    // Edit-mode chrome (see EditModeController / EditModeDesign).
+    // Contextual editing chrome (see EditModeController / EditModeDesign).
+    // Neither of these reserves layout space: the capsule shares the search row
+    // and the remove target floats over the clock band while a drag is in flight.
     private lateinit var editScrim: View
-    private lateinit var editTopBar: LinearLayout
-    private lateinit var editToolbar: LinearLayout
+    private lateinit var editActionBar: LinearLayout
+    private lateinit var editRemoveTarget: ImageView
     private lateinit var drawerContainer: FrameLayout
     private lateinit var drawerSheet: LinearLayout
     private lateinit var drawerGrid: RecyclerView
@@ -288,8 +290,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Window insets are stored once and re-used by every margin calculation. */
     private var safeInsets: Insets = Insets.NONE
-    /** The header block's resting top margin, restored when edit mode ends. */
-    private var headerTopMarginPx = -1
     private var editBackdropBlurred = false
 
     private var drawerProgress = 0f
@@ -455,6 +455,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     override fun onStop() {
+        // Leaving for Settings, Studio, Wallpaper or another app ends editing.
+        // Coming back to a desktop that is still dimmed with a lifted capsule
+        // would be a stale state, and no edit flag is persisted.
+        if (::edit.isInitialized && edit.isActive) edit.exitImmediately()
         core.appRepository.unregisterCallback(packageCallback)
         widgets.stopListening()
         readouts.stop()
@@ -647,8 +651,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         dockSurface = findViewById(R.id.dock_surface)
         dockRow = findViewById(R.id.dock_row)
         editScrim = findViewById(R.id.edit_scrim)
-        editTopBar = findViewById(R.id.edit_top_bar)
-        editToolbar = findViewById(R.id.edit_toolbar)
+        editActionBar = findViewById(R.id.edit_action_bar)
+        editRemoveTarget = findViewById(R.id.edit_remove_target)
         drawerContainer = findViewById(R.id.drawer_container)
         drawerSheet = findViewById(R.id.drawer_sheet)
         drawerGrid = findViewById(R.id.drawer_grid)
@@ -687,15 +691,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun setupAdapters() {
         val gridListener = object : HomeGridAdapter.Listener {
             override fun onItemClick(item: HomeItem, position: Int, view: View) = onHomeItemClick(item, position, view, isDock = false)
-            override fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean {
-                if (edit.isActive) return false // ItemTouchHelper takes the long press to drag
-                if (item is HomeItem.Widget) {
-                    edit.enter()
-                    return true
-                }
-                showHomeMenu(item, position, view, isDock = false)
-                return true
-            }
+
+            /**
+             * A long press lifts the item and hands the gesture to the drag
+             * handler in the same event. No menu is shown here: the menu is the
+             * *release* action for a hold that never moved (EditModeController
+             * reports it), so one gesture can never be handled twice.
+             */
+            override fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean =
+                edit.beginItemDrag(position, view)
             override fun onWidgetRemove(item: HomeItem.Widget, position: Int, view: View) {
                 removeWidgetWithUndo(item)
             }
@@ -768,11 +772,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             smartMembers = { viewModel.smartMembers(it) },
             widgetHost = null,
             listener = object : HomeGridAdapter.Listener {
-                override fun onItemClick(item: HomeItem, position: Int, view: View) = onHomeItemClick(item, position, view, isDock = true)
-                override fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean {
-                    showHomeMenu(item, position, view, isDock = true)
-                    return true
-                }
+                override fun onItemClick(item: HomeItem, position: Int, view: View) =
+                    onHomeItemClick(item, position, view, isDock = true)
+
+                /** Same contract as the grid: hold to pick up, release to keep it still for actions. */
+                override fun onItemLongClick(item: HomeItem, position: Int, view: View): Boolean =
+                    edit.beginDockDrag(position, view)
             }
         )
         dockRow.adapter = dockAdapter
@@ -888,10 +893,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             context = this,
             grid = homeGrid,
             adapter = homeAdapter,
+            dockRow = dockRow,
+            dockAdapter = dockAdapter,
             guide = guide,
-            topBar = findViewById(R.id.edit_top_bar),
-            toolbar = findViewById(R.id.edit_toolbar),
-            doneButton = findViewById(R.id.edit_done),
+            actionBar = editActionBar,
+            removeTarget = editRemoveTarget,
             host = this
         )
         folders = FolderOverlay(this, homeRoot, iconLoader, density, this)
@@ -953,40 +959,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /**
      * Single source of truth for the home composition's insets.
-     * Clean, intact layout: desktop never overlaps status/gesture bars,
-     * edit chrome reserves exact space, margins align to 24dp/16dp grid.
+     *
+     * Editing deliberately does not appear here. Nothing is reserved for chrome:
+     * the action capsule lives inside the search row, the remove target floats
+     * over the clock band, and the workspace keeps one resting geometry, so
+     * starting or ending an editing session never moves a single icon.
      */
     private fun applyChromeInsets() {
         if (!::desktop.isInitialized) return
         val safe = safeInsets
-        val editing = ::edit.isInitialized && edit.isActive
         val marginPx = currentScreenMarginPx()
 
-        val headerHeight = if (::edit.isInitialized) edit.headerHeightPx() else 0
-        val toolbarHeight = if (::edit.isInitialized) edit.toolbarHeightPx() else 0
-        val top = if (editing) {
-            safe.top + dp(EditModeDesign.headerTopMarginDp.toInt()) + headerHeight +
-                dp(EditModeDesign.headerToClockGapDp.toInt())
-        } else {
-            safe.top + dp(2)
-        }
-        val bottom = if (editing) {
-            safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt()) + toolbarHeight + dp(4)
-        } else {
-            safe.bottom + dp(2)
-        }
-        desktop.setPadding(safe.left, top, safe.right, bottom)
-
-        // The clock/date keeps its own resting breath; in edit mode the header
-        // block owns the gap above it, so its margin drops to keep the reserved
-        // 16dp exact instead of stacking two gaps.
-        val headerLp = homeHeader.layoutParams as LinearLayout.LayoutParams
-        if (headerTopMarginPx < 0) headerTopMarginPx = headerLp.topMargin
-        val headerTop = if (editing) 0 else headerTopMarginPx
-        if (headerLp.topMargin != headerTop) {
-            headerLp.topMargin = headerTop
-            homeHeader.layoutParams = headerLp
-        }
+        desktop.setPadding(safe.left, safe.top + dp(2), safe.right, safe.bottom + dp(2))
 
         // Grid and drop zones share one content box, so a dashed slot sits
         // exactly on its cell.
@@ -1000,28 +984,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         setHorizontalMargins(guide, marginPx)
         setHorizontalMargins(dockSurface, marginPx)
 
-        // Chrome: horizontal margins match the grid, vertical margins clear the
-        // status bar and the gesture bar.
-        (editTopBar.layoutParams as FrameLayout.LayoutParams).apply {
-            val start = marginPx + safe.left
-            val end = marginPx + safe.right
-            val topMarginWanted = safe.top + dp(EditModeDesign.headerTopMarginDp.toInt())
-            if (marginStart != start || marginEnd != end || topMargin != topMarginWanted) {
-                marginStart = start
-                marginEnd = end
+        // The remove target floats under the status bar, over the clock band it
+        // shares with the drop zone that arms removal.
+        (editRemoveTarget.layoutParams as FrameLayout.LayoutParams).apply {
+            val topMarginWanted = safe.top + dp(EditModeDesign.removeTargetTopMarginDp.toInt())
+            if (topMargin != topMarginWanted) {
                 topMargin = topMarginWanted
-                editTopBar.layoutParams = this
-            }
-        }
-        (editToolbar.layoutParams as FrameLayout.LayoutParams).apply {
-            val start = marginPx + safe.left
-            val end = marginPx + safe.right
-            val bottomMarginWanted = safe.bottom + dp(EditModeDesign.toolbarBottomMarginDp.toInt())
-            if (marginStart != start || marginEnd != end || bottomMargin != bottomMarginWanted) {
-                marginStart = start
-                marginEnd = end
-                bottomMargin = bottomMarginWanted
-                editToolbar.layoutParams = this
+                editRemoveTarget.layoutParams = this
             }
         }
     }
@@ -1035,13 +1004,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     /**
-     * The edit screen's own 16dp margin while editing; the design system's
-     * 24dp everywhere else. The dock reads this too, so it never disagrees
-     * with the toolbar above it.
+     * One margin for the whole composition, at rest and while editing. Keeping
+     * it constant is what stops the grid, the dock and the drop zones from
+     * reflowing the moment a session starts.
      */
-    private fun currentScreenMarginPx(): Int =
-        if (::edit.isInitialized && edit.isActive) dp(EditModeDesign.screenMarginDp.toInt())
-        else dp(LumaTokens.screenMarginHorizontal.roundToInt())
+    private fun currentScreenMarginPx(): Int = dp(LumaTokens.screenMarginHorizontal.roundToInt())
 
     private var bottomInset = 0
 
@@ -1139,7 +1106,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      * 1:1 finger tracking back without any jump.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (overlayBlocksGestures()) return super.dispatchTouchEvent(ev)
+        if (overlayBlocksGestures()) {
+            // While editing, a tap on empty workspace (not on an icon, a page dot
+            // or the action capsule) leaves the session — the conventional
+            // Android "tap outside to dismiss", with no Done hunting required.
+            if (::edit.isInitialized && edit.isActive) trackEditDismissTap(ev)
+            return super.dispatchTouchEvent(ev)
+        }
         val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
         tracker.addMovement(ev)
         when (ev.actionMasked) {
@@ -1237,9 +1210,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** True when the point is over an actual cell or control rather than empty space. */
     private fun isOverItem(rawX: Float, rawY: Float): Boolean {
-        for (control in arrayOf(headerActions, homeEmpty, searchPill, homeContext, dial)) {
+        for (control in arrayOf(headerActions, homeEmpty, searchPill, homeContext, dial, pageIndicator)) {
             if (isInside(control, rawX, rawY)) return true
         }
+        // The contextual capsule only exists while editing; it is not a control
+        // before that, so it must not be treated as an "item" either.
+        if (::editActionBar.isInitialized && isInside(editActionBar, rawX, rawY)) return true
         for (recycler in arrayOf(homeGrid, dockRow)) {
             if (!isInside(recycler, rawX, rawY)) continue
             val loc = IntArray(2)
@@ -1247,6 +1223,33 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             if (recycler.findChildViewUnder(rawX - loc[0], rawY - loc[1]) != null) return true
         }
         return false
+    }
+
+    private var editTapDownX = 0f
+    private var editTapDownY = 0f
+    private var editTapTime = 0L
+
+    /**
+     * One tap, on empty workspace, while editing, with no item in the air.
+     *
+     * Deliberately narrow: a tap on an icon, the capsule or a page control is
+     * left to that control, and a drag never reaches here because the drag
+     * handler owns the touch stream.
+     */
+    private fun trackEditDismissTap(ev: MotionEvent) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                editTapDownX = ev.rawX
+                editTapDownY = ev.rawY
+                editTapTime = android.os.SystemClock.uptimeMillis()
+            }
+            MotionEvent.ACTION_UP -> {
+                val moved = abs(ev.rawX - editTapDownX) > touchSlop || abs(ev.rawY - editTapDownY) > touchSlop
+                val quick = android.os.SystemClock.uptimeMillis() - editTapTime <
+                    ViewConfiguration.getLongPressTimeout().toLong()
+                if (!moved && quick && !edit.dragInProgress && !isOverItem(ev.rawX, ev.rawY)) edit.exit()
+            }
+        }
     }
 
     private fun performGesture(kind: GestureKind) {
@@ -1445,11 +1448,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val enabled: Boolean
     )
 
+    /**
+     * Page dots.
+     *
+     * The row is shown for the same condition at rest and while editing - more
+     * than one page - so entering a session never adds or removes height in the
+     * desktop column. Page management (add / remove) lives in the Layout menu
+     * instead of two extra buttons in this row.
+     */
     private fun updatePageIndicator(pageCount: Int, pageIndex: Int) {
         if (!::pageIndicator.isInitialized) return
-        val editing = ::edit.isInitialized && edit.isActive
         pageIndicator.removeAllViews()
-        pageIndicator.visibility = if (pageCount > 1 || editing) View.VISIBLE else View.GONE
+        pageIndicator.visibility = if (pageCount > 1) View.VISIBLE else View.GONE
         if (pageIndicator.visibility != View.VISIBLE) return
         for (index in 0 until pageCount) {
             val selected = index == pageIndex
@@ -1471,39 +1481,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             dot.minimumHeight = dp(34)
             dot.setPadding(dp(14), dp(13), dp(14), dp(13))
         }
-        if (editing) {
-            val add = pageControl("+", R.string.home_add_page) {
-                if (pageCount >= HomeLayout.MAX_PAGES) {
-                    toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
-                } else viewModel.addPage { added ->
-                    if (!added) toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
-                }
-            }
-            pageIndicator.addView(add, LinearLayout.LayoutParams(dp(48), dp(40)))
-            if (pageCount > 1) {
-                val remove = pageControl("−", R.string.home_remove_page) {
-                    viewModel.removePage(pageIndex) { removed ->
-                        if (!removed) toast(getString(R.string.home_page_remove_empty))
-                    }
-                }
-                pageIndicator.addView(remove, LinearLayout.LayoutParams(dp(48), dp(40)))
-            }
-        }
-    }
-
-    private fun pageControl(label: String, description: Int, action: () -> Unit): TextView = TextView(this).apply {
-        text = label
-        contentDescription = getString(description)
-        gravity = Gravity.CENTER
-        textSize = 20f
-        setTextColor(theme.colors.onSurface)
-        isFocusable = true
-        isClickable = true
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(theme.colors.surface1)
-        }
-        setOnClickListener { action() }
     }
 
     private fun currentPagerPage(): Int {
@@ -1783,9 +1760,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             typeface = Typefaces.body(style)
             textSize = LumaTokens.typeBodySp
         }
-        findViewById<TextView>(R.id.edit_title).typeface = Typefaces.title(style)
-        findViewById<TextView>(R.id.edit_hint).typeface = Typefaces.body(style)
-        findViewById<TextView>(R.id.edit_done).typeface = Typefaces.label(style)
         drawer.setSearchTypeface(Typefaces.body(style))
         // App labels: 11sp Regular (400), 0.85 alpha, single-line centered.
         val label = Typefaces.body(style)
@@ -2257,15 +2231,46 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     /**
-     * [EditModeController.Host]: the chrome appeared, disappeared or changed
-     * height. Re-reserve the desktop's space and re-anchor the drop zones.
+     * [EditModeController.Host]: editing started or ended.
+     *
+     * The contextual capsule and the search pill share one slot, so this is a
+     * cross-fade inside an existing row — nothing is reserved, nothing moves. The
+     * page indicator is re-rendered only because its dots must stop being
+     * drop targets; its height and visibility rule are the same as at rest.
      */
-    override fun onEditChromeChanged() {
-        applyChromeInsets()
-        if (::edit.isInitialized && edit.isActive) edit.updateGuideMetrics()
+    override fun onEditStateChanged(active: Boolean) {
+        if (!::searchPill.isInitialized) return
+        searchPill.animate().cancel()
+        if (active) {
+            searchPill.isClickable = false
+            searchPill.animate()
+                .alpha(0f)
+                .setDuration(EDIT_SLOT_FADE_MS)
+                .withEndAction {
+                    if (::edit.isInitialized && edit.isActive) searchPill.visibility = View.INVISIBLE
+                }
+                .start()
+        } else {
+            searchPill.visibility = View.VISIBLE
+            searchPill.isClickable = true
+            // The end action is replaced, not cleared: the animator instance is
+            // cached per view, and a stale end action would re-hide the pill.
+            searchPill.animate().alpha(1f).setDuration(EDIT_SLOT_FADE_MS).withEndAction { }.start()
+        }
+        if (::homePagesAdapter.isInitialized) {
+            updatePageIndicator(homePagesAdapter.itemCount, viewModel.activePageIndex.value)
+        }
     }
 
     override fun commitOrder(arranged: List<HomeItem>) = viewModel.reorderHome(arranged, homeGridSpec())
+
+    override fun commitDockOrder(fromDisplay: Int, toDisplay: Int) =
+        viewModel.moveDockItem(fromDisplay, toDisplay)
+
+    /** Secondary actions for a held item: the contextual menu, never the long press itself. */
+    override fun onItemMenu(item: HomeItem, position: Int, anchor: View, inDock: Boolean) {
+        showHomeMenu(item, position, anchor, isDock = inDock)
+    }
 
     override fun dropOnto(source: HomeItem, target: HomeItem) {
         val page = homeAdapter.items
@@ -2287,13 +2292,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         if (index >= 0) viewModel.removeFromHome(index)
     }
 
-    override fun onToolbarAction(action: EditModeController.ToolbarAction, anchor: View) {
+    /** The contextual capsule: five features plus Done, all icon-only. */
+    override fun onEditAction(action: EditModeController.Action, anchor: View) {
         when (action) {
-            EditModeController.ToolbarAction.WIDGETS -> showWidgetPicker()
-            EditModeController.ToolbarAction.LAYOUT -> showLayoutMenu(anchor)
-            EditModeController.ToolbarAction.STUDIO -> openStudio()
-            EditModeController.ToolbarAction.WALLPAPER -> openWallpaperPicker()
-            EditModeController.ToolbarAction.SETTINGS -> openSettings()
+            EditModeController.Action.WIDGETS -> showWidgetPicker()
+            EditModeController.Action.LAYOUT -> showLayoutMenu(anchor)
+            EditModeController.Action.STUDIO -> openStudio()
+            EditModeController.Action.WALLPAPER -> openWallpaperPicker()
+            EditModeController.Action.SETTINGS -> openSettings()
+            EditModeController.Action.DONE -> edit.exit()
         }
     }
 
@@ -2657,8 +2664,24 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         entries += MenuEntry(M_SMART_BASE + SmartKind.FREQUENT.ordinal, getString(R.string.smart_add_frequent), R.drawable.ic_rx_spark, group = 1)
         entries += MenuEntry(M_SMART_BASE + SmartKind.RECENT.ordinal, getString(R.string.smart_add_recent), R.drawable.ic_rx_spark, group = 1)
         entries += MenuEntry(M_SMART_BASE + SmartKind.NEW_APPS.ordinal, getString(R.string.smart_add_new), R.drawable.ic_rx_spark, group = 1)
+        // Page management lives here rather than in the dot row: the row keeps
+        // its resting height, so a session never re-flows the workspace.
+        entries += MenuEntry(M_PAGE_ADD, getString(R.string.home_add_page), R.drawable.ic_rx_home_add, group = 2)
+        if (viewModel.layout.value.pageCount > 1) {
+            entries += MenuEntry(M_PAGE_REMOVE, getString(R.string.home_remove_page), R.drawable.ic_rx_remove, group = 2)
+        }
         menu().show(anchor, getString(R.string.edit_layout), entries) { e ->
             when {
+                e.id == M_PAGE_ADD -> {
+                    if (viewModel.layout.value.pageCount >= HomeLayout.MAX_PAGES) {
+                        toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
+                    } else viewModel.addPage { added ->
+                        if (!added) toast(getString(R.string.home_page_limit, HomeLayout.MAX_PAGES))
+                    }
+                }
+                e.id == M_PAGE_REMOVE -> viewModel.removePage(viewModel.activePageIndex.value) { removed ->
+                    if (!removed) toast(getString(R.string.home_page_remove_empty))
+                }
                 e.id >= M_SMART_BASE -> {
                     val kind = SmartKind.entries[e.id - M_SMART_BASE]
                     val name = when (kind) {
@@ -3103,6 +3126,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val STATE_ACTIVE_PAGE_INDEX = "active_page_index"
 
         private const val SWIPE_MIN_DISTANCE_DP = 60
+
+        /** Cross-fade between the search pill and the edit action capsule. */
+        private const val EDIT_SLOT_FADE_MS = 140L
         private const val REQUEST_CONFIGURE_WIDGET = 4101
         private const val REQUEST_RECONFIGURE_WIDGET = 4102
         private const val WIDGET_UNDO_WINDOW_MS = 6000L
@@ -3126,6 +3152,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val M_PRESET_BASE = 200
         private const val M_SMART_BASE = 300
         private const val M_MOVE_TO_PAGE_BASE = 400
+        private const val M_PAGE_ADD = 500
+        private const val M_PAGE_REMOVE = 501
         private const val M_SHORTCUT_BASE = 1000
     }
 }

@@ -91,13 +91,17 @@ class HomeGridAdapter(
     var dragging = false
         private set
 
+    /** True when an edit-mode rebind was deferred because an item is being dragged. */
+    private var pendingEditModeRebind = false
+
     var editMode = false
         @SuppressLint("NotifyDataSetChanged")
         set(value) {
-            if (field != value) {
-                field = value
-                notifyDataSetChanged()
-            }
+            if (field == value) return
+            field = value
+            // Never rebind the row a finger is holding: the drag owns that view
+            // holder until the release, so the chrome update waits for it.
+            if (dragging) pendingEditModeRebind = true else notifyDataSetChanged()
         }
 
     init {
@@ -126,11 +130,16 @@ class HomeGridAdapter(
     }
 
     /** Ends a drag; returns the order the user arranged, then applies any held-back data. */
+    @SuppressLint("NotifyDataSetChanged")
     fun endDrag(): List<HomeItem> {
         dragging = false
         val arranged = ArrayList(items)
         pending?.let { submit(it) }
         pending = null
+        if (pendingEditModeRebind) {
+            pendingEditModeRebind = false
+            notifyDataSetChanged()
+        }
         return arranged
     }
 
