@@ -18,12 +18,16 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.effects.EffectsDecision
+import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
 import com.lumaos.pro.launcher.launcher.home.Typefaces
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.GlassRole
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import java.util.concurrent.Executors
@@ -43,6 +47,7 @@ class WidgetPicker(
     private val effects: EffectsDecision,
     private val motion: MotionPolicy,
     private val bottomInset: Int,
+    private val onDepthProgress: ((Float) -> Unit)? = null,
     /** Fresh provider capabilities, evaluated per row against the live grid. */
     private val capabilities: (AppWidgetProviderInfo) -> WidgetCapabilities?
 ) {
@@ -50,6 +55,8 @@ class WidgetPicker(
     private val glassPalette = GlassViews.palette(theme, effects)
     private fun dp(v: Float) = (v * density).toInt()
     private var overlay: FrameLayout? = null
+    private var sheetSpring: SpringAnimator? = null
+    private var openState: Boolean = false
     private var listContainer: LinearLayout? = null
     private var emptyView: TextView? = null
     private var retryButton: TextView? = null
@@ -62,16 +69,17 @@ class WidgetPicker(
         Thread(r, "luma-widget-preview").apply { isDaemon = true }
     }
 
-    val isShowing: Boolean get() = overlay != null
+    val isShowing: Boolean get() = openState
 
     fun show(
         state: ProviderLoad,
         onPick: (AppWidgetProviderInfo) -> Unit,
         onRetry: () -> Unit
     ) {
-        dismiss()
+        dismissImmediately()
         this.onPick = onPick
         this.onRetry = onRetry
+        openState = true
         val providers = (state as? ProviderLoad.Loaded)?.providers.orEmpty()
         val pm = context.packageManager
         val appLabels = HashMap<String, String>()
@@ -86,7 +94,13 @@ class WidgetPicker(
         val c = theme.colors
         val sheetSpec = glassPalette[GlassRole.SHEET]
         val sheetColors = sheetSpec.rest
-        val ov = FrameLayout(context)
+        val ov = overlay ?: FrameLayout(context).apply {
+            LumaDepthStack.bindLayerElevation(this, LumaTokens.depthModal, density)
+            root.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            this@WidgetPicker.overlay = this
+        }
+        ov.removeAllViews()
+        ov.visibility = View.VISIBLE
         val scrim = View(context).apply {
             setBackgroundColor(c.scrim)
             setOnClickListener { dismiss() }
@@ -96,10 +110,15 @@ class WidgetPicker(
 
         val sheet = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20f), dp(14f), dp(20f), bottomInset + dp(12f))
+            setPadding(
+                dp(LumaTokens.screenMarginHorizontal),
+                dp(LumaTokens.spaceMD),
+                dp(LumaTokens.screenMarginHorizontal),
+                bottomInset + dp(LumaTokens.dockBottomMargin)
+            )
             isClickable = true
         }
-        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false)
+        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthModal)
         sheet.addView(TextView(context).apply {
             text = context.getString(R.string.widgets_title)
             setTextColor(sheetColors.content)
@@ -161,14 +180,17 @@ class WidgetPicker(
             .coerceAtMost(availableHeight)
         val sheetParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, sheetHeight, Gravity.BOTTOM)
         ov.addView(sheet, sheetParams)
-        root.addView(ov, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        overlay = ov
 
         val travel = sheetParams.height.toFloat()
-        SpringAnimator(0f) { p ->
+        LumaHaptics.snap(sheet)
+        val s = SpringAnimator(0f) { p ->
+            val clamped = p.coerceIn(0f, 1f)
             sheet.translationY = (1f - p) * travel
-            scrim.alpha = p.coerceIn(0f, 1f)
-        }.animateTo(1f, MotionTokens.SNAPPY, motion)
+            scrim.alpha = clamped
+            onDepthProgress?.invoke(clamped)
+        }
+        sheetSpring = s
+        s.animateTo(1f, MotionTokens.LUMA, motion)
     }
 
     private fun buildSearchField(colors: com.lumaos.pro.launcher.ui.theme.GlassColors): View {
@@ -348,9 +370,29 @@ class WidgetPicker(
     }
 
     fun dismiss() {
+        if (!openState) return
+        openState = false
         renderGeneration++
-        overlay?.let { root.removeView(it) }
-        overlay = null
+        val s = sheetSpring
+        if (s == null || !motion.enabled) {
+            dismissImmediately()
+            return
+        }
+        s.animateTo(0f, MotionTokens.LUMA, motion) {
+            if (!openState) dismissImmediately()
+        }
+    }
+
+    private fun dismissImmediately() {
+        openState = false
+        renderGeneration++
+        sheetSpring?.cancel()
+        sheetSpring = null
+        overlay?.let { ov ->
+            ov.removeAllViews()
+            ov.visibility = View.GONE
+        }
+        onDepthProgress?.invoke(0f)
         listContainer = null
         emptyView = null
         retryButton = null
@@ -358,6 +400,9 @@ class WidgetPicker(
 
     /** Releases the preview executor. Called once when the home activity is destroyed. */
     fun shutdown() {
+        dismissImmediately()
+        overlay?.let { root.removeView(it) }
+        overlay = null
         loader.shutdownNow()
     }
 }

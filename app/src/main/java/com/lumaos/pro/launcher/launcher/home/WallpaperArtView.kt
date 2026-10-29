@@ -17,6 +17,9 @@ import android.util.AttributeSet
 import android.util.LruCache
 import android.view.View
 import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.motion.MotionPolicy
+import com.lumaos.pro.launcher.motion.MotionTokens
+import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.ui.theme.WallpaperArtResources
 import com.lumaos.pro.launcher.wallpaper.WallpaperCatalog
@@ -69,8 +72,13 @@ class WallpaperArtView @JvmOverloads constructor(
     private var prevFocalX: Float = 0.5f
     private var prevFocalY: Float = 0.5f
     private var fallbackColor: Int = Color.BLACK
-    private var fadeStart = 0L
+    private var fadeProgress = 1f
     private var fadeMs = 0L
+    private val fadeSpring = SpringAnimator(1f, valueThreshold = 0.005f) { p ->
+        fadeProgress = p.coerceIn(0f, 1f)
+        if (fadeProgress >= 0.995f) previous = null
+        invalidate()
+    }
     private var generation = 0
     private var decodePending = false
 
@@ -121,10 +129,11 @@ class WallpaperArtView @JvmOverloads constructor(
             prevFocalY = prior?.focalY ?: 0.5f
             current = null
             fadeMs = crossfadeMs.coerceAtLeast(0L)
-            fadeStart = SystemClock.uptimeMillis()
+            fadeProgress = 0f
         } else {
             previous = null
             fadeMs = 0L
+            fadeProgress = 1f
         }
         requestDecode()
         invalidate()
@@ -148,6 +157,7 @@ class WallpaperArtView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         generation++
         decodePending = false
+        fadeSpring.cancel()
         super.onDetachedFromWindow()
     }
 
@@ -164,13 +174,20 @@ class WallpaperArtView @JvmOverloads constructor(
                 onUnavailable?.invoke()
                 return@load
             }
-            if (previous == null) {
+            if (previous == null || fadeMs <= 0L) {
+                fadeSpring.cancel()
                 current = bitmap
+                previous = null
+                fadeProgress = 1f
+                invalidate()
             } else {
                 current = bitmap
-                fadeStart = SystemClock.uptimeMillis()
+                fadeSpring.snapTo(0f)
+                fadeSpring.animateTo(1f, MotionTokens.LUMA, MotionPolicy.DEFAULT) {
+                    previous = null
+                    invalidate()
+                }
             }
-            invalidate()
         }
     }
 
@@ -188,11 +205,8 @@ class WallpaperArtView @JvmOverloads constructor(
             val req = activeRequest
             val fx = req?.focalX ?: 0.5f
             val fy = req?.focalY ?: 0.5f
-            val fade = if (fadeMs <= 0L || prev == null) 1f
-            else ((SystemClock.uptimeMillis() - fadeStart) / fadeMs.toFloat()).coerceIn(0f, 1f)
+            val fade = if (fadeMs <= 0L || prev == null) 1f else fadeProgress
             drawBitmap(canvas, now, fx, fy, w, h, fade)
-            if (fade < 1f) postInvalidateOnAnimation()
-            else previous = null
         }
     }
 

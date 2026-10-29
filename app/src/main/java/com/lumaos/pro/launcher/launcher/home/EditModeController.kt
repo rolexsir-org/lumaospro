@@ -16,6 +16,8 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.model.HomeItem
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.ui.glass.GlassViews
@@ -107,7 +109,7 @@ class EditModeController(
             if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
             adapter.move(from, to)
             orderChanged = true
-            rv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            LumaHaptics.tick(rv)
             return true
         }
 
@@ -120,8 +122,9 @@ class EditModeController(
                 draggedItem = adapter.itemAt(vh.bindingAdapterPosition)
                 adapter.beginDrag()
                 orderChanged = false
-                vh.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                vh.itemView.animate().scaleX(1.1f).scaleY(1.1f).alpha(0.94f).setDuration(120).start()
+                LumaHaptics.longPress(vh.itemView)
+                LumaSpring.animate(vh.itemView, LumaSpring.Property.SCALE, 1.08f, motion = host.motion())
+                LumaSpring.animate(vh.itemView, LumaSpring.Property.ALPHA, 0.94f, motion = host.motion())
                 vh.itemView.translationZ = dp(12f).toFloat()
             }
         }
@@ -137,7 +140,8 @@ class EditModeController(
 
         override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
             super.clearView(rv, vh)
-            vh.itemView.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(160).start()
+            LumaSpring.animate(vh.itemView, LumaSpring.Property.SCALE, 1f, motion = host.motion())
+            LumaSpring.animate(vh.itemView, LumaSpring.Property.ALPHA, 1f, motion = host.motion())
             vh.itemView.translationZ = 0f
             val source = draggedItem
             val target = adapter.itemAt(mergeCandidate)
@@ -246,8 +250,8 @@ class EditModeController(
         guide.visibility = View.VISIBLE
         adapter.editMode = true
         updateGuideMetrics()
-        grid.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        spring.animateTo(1f, MotionTokens.STANDARD, host.motion())
+        LumaHaptics.longPress(grid)
+        spring.animateTo(1f, MotionTokens.LUMA, host.motion())
         topBar.announceForAccessibility(context.getString(R.string.edit_announce))
     }
 
@@ -255,7 +259,8 @@ class EditModeController(
         if (!isActive) return
         isActive = false
         adapter.editMode = false
-        spring.animateTo(0f, MotionTokens.STANDARD, host.motion()) {
+        LumaHaptics.tap(doneButton)
+        spring.animateTo(0f, MotionTokens.LUMA, host.motion()) {
             topBar.visibility = View.GONE
             toolbar.visibility = View.GONE
             guide.visibility = View.GONE

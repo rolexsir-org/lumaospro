@@ -89,12 +89,14 @@ class SettingsActivity : ComponentActivity() {
         window.statusBarColor = Color.TRANSPARENT
 
         val themes = (application as LumaApp).core.themes
+        val themeManager = (application as LumaApp).core.themeManager
         setContent {
-            // The same resolved theme the home screen draws with.
+            // The same resolved theme and adaptive wallpaper palette the home screen draws with.
             val theme by themes.theme.collectAsState()
+            val palette by themeManager.palette.collectAsState()
             val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
 
-            LumaOSTheme(theme = theme, textScale = textScale) {
+            LumaOSTheme(theme = theme, textScale = textScale, palette = palette) {
                 // Keep the status-bar icons legible against our own background.
                 DisposableEffect(theme.isDark) {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -119,7 +121,10 @@ class SettingsActivity : ComponentActivity() {
                             LumaGlassTopBar(
                                 theme = theme,
                                 title = "LumaOS Pro",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(
+                                    horizontal = com.lumaos.pro.launcher.ui.LumaSpacing.screenHorizontal,
+                                    vertical = com.lumaos.pro.launcher.ui.LumaSpacing.xs
+                                )
                             )
                             PrimaryTabRow(
                                 selectedTabIndex = tab,

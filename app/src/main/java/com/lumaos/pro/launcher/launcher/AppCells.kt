@@ -14,6 +14,10 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.icons.MonogramDrawable
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
+import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 
 /**
  * Visual parameters shared by the home grid, dock, drawer and folders.
@@ -41,24 +45,25 @@ data class CellConfig(
     val labelSizeSp: Float? = null,
     /** Theme ripple colour; 0 keeps the platform default background. */
     val rippleColor: Int = 0,
-    val cornerPx: Float = 16f,
+    val cornerPx: Float = LumaTokens.radiusMedium,
     /** Monogram plate colour for an app whose icon could not be resolved. */
     val placeholderFill: Int = 0,
     /** Monogram letter colour. */
     val placeholderText: Int = 0,
     /**
-     * Pressed-state scale. 1 disables the effect (reduced motion, or a theme
-     * whose character does not scale cells). Values below 0.94 read as a glitch,
-     * so the theme tokens never go further.
+     * Pressed-state scale (`LumaTokens.pressScale = 0.92f`). 1 disables the effect
+     * when reduced motion is active.
      */
-    val pressScale: Float = 1f,
+    val pressScale: Float = LumaTokens.pressScale,
     val pressMs: Int = 90,
+    val labelAlpha: Float = LumaTokens.typeAppLabelAlpha,
     /** Icon geometry for the monogram fallback, so it matches the theme's icons. */
     val iconShape: com.lumaos.pro.launcher.ui.theme.IconShape =
         com.lumaos.pro.launcher.ui.theme.IconShape.SQUIRCLE
 )
 
 class AppCellViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    val iconWrap: View? = view.findViewById(R.id.app_icon_wrap)
     val icon: ImageView = view.findViewById(R.id.app_icon)
     val label: TextView = view.findViewById(R.id.app_label)
     var boundRipple: Int = 0
@@ -93,7 +98,11 @@ class AppEntryAdapter(
         val entry = getItem(position)
         bindCell(holder, config(), iconLoader.get(entry.key, density), entry.label)
         holder.itemView.setOnClickListener { onClick(entry, holder.icon) }
-        holder.itemView.setOnLongClickListener { onLongClick(entry, it); true }
+        holder.itemView.setOnLongClickListener {
+            LumaHaptics.longPress(it)
+            onLongClick(entry, it)
+            true
+        }
     }
 
     companion object {
@@ -104,6 +113,14 @@ class AppEntryAdapter(
             label: String,
             description: String = label
         ) {
+            holder.iconWrap?.let { wrap ->
+                val wrapParams = wrap.layoutParams
+                if (wrapParams.width != config.iconSizePx || wrapParams.height != config.iconSizePx) {
+                    wrapParams.width = config.iconSizePx
+                    wrapParams.height = config.iconSizePx
+                    wrap.layoutParams = wrapParams
+                }
+            }
             val iconParams = holder.icon.layoutParams
             if (iconParams.width != config.iconSizePx || iconParams.height != config.iconSizePx) {
                 iconParams.width = config.iconSizePx
@@ -138,10 +155,12 @@ class AppEntryAdapter(
             }
 
             holder.label.text = label
-            holder.label.setTextColor(config.labelColor)
+            val effectiveAlpha = ((ColorMath.alpha(config.labelColor) / 255f) * config.labelAlpha).coerceIn(0f, 1f)
+            holder.label.setTextColor(ColorMath.withAlpha(config.labelColor, effectiveAlpha))
             holder.label.textSize = (config.labelSizeSp ?: BASE_LABEL_SP) * config.textScale
             config.typeface?.let { holder.label.typeface = it }
             holder.label.letterSpacing = config.labelTracking
+            holder.label.maxLines = 1
             holder.label.visibility = if (config.showLabels) View.VISIBLE else View.GONE
             attachPressFeedback(holder.itemView, config.pressScale, config.pressMs)
             if (config.labelShadow) {
@@ -157,7 +176,7 @@ class AppEntryAdapter(
             holder.itemView.contentDescription = description
         }
 
-        const val BASE_LABEL_SP = com.lumaos.pro.launcher.ui.theme.LumaTypeScale.appLabelSp
+        const val BASE_LABEL_SP = LumaTokens.typeAppLabelSp
         const val SHADOW_COLOR = 0xB3000000.toInt()
     }
 }
@@ -179,19 +198,25 @@ private object AppEntryDiff : DiffUtil.ItemCallback<AppEntry>() {
  * or the effects policy asks for reduced motion, and it never delays input.
  */
 private fun attachPressFeedback(view: View, scale: Float, durationMs: Int) {
+    LumaSpring.cancelAll(view)
     view.scaleX = 1f
     view.scaleY = 1f
-    if (scale >= 1f || scale < 0.94f) {
+    view.alpha = 1f
+    if (scale >= 1f || scale < 0.85f || durationMs <= 0) {
         view.setOnTouchListener(null)
         return
     }
     view.setOnTouchListener { v, event ->
         when (event.actionMasked) {
-            android.view.MotionEvent.ACTION_DOWN ->
-                v.animate().scaleX(scale).scaleY(scale).setDuration(durationMs.toLong()).start()
+            android.view.MotionEvent.ACTION_DOWN -> {
+                LumaSpring.animate(v, LumaSpring.Property.SCALE, scale)
+                LumaSpring.animate(v, LumaSpring.Property.ALPHA, LumaTokens.pressAlpha)
+            }
             android.view.MotionEvent.ACTION_UP,
-            android.view.MotionEvent.ACTION_CANCEL ->
-                v.animate().scaleX(1f).scaleY(1f).setDuration(durationMs.toLong()).start()
+            android.view.MotionEvent.ACTION_CANCEL -> {
+                LumaSpring.animate(v, LumaSpring.Property.SCALE, 1f)
+                LumaSpring.animate(v, LumaSpring.Property.ALPHA, 1f)
+            }
         }
         false
     }

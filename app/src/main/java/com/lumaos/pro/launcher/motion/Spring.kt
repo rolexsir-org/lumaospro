@@ -1,5 +1,6 @@
 package com.lumaos.pro.launcher.motion
 
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
@@ -36,6 +37,8 @@ data class SpringSpec(val stiffness: Float, val dampingRatio: Float) {
 
 /** The shared motion vocabulary. */
 object MotionTokens {
+    /** Single unified OS spring model (`damping = 0.78f`, `stiffness = 280f`). */
+    val LUMA = SpringSpec(stiffness = LumaTokens.springStiffness, dampingRatio = LumaTokens.springDamping)
     /** Drawer settle, menus, chips: quick and firm, barely any overshoot. */
     val SNAPPY = SpringSpec(stiffness = 1100f, dampingRatio = 0.86f)
     /** General UI repositioning. */

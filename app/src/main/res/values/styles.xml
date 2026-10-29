@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    LumaOS Pro text appearances.
-
-    Sizes and line heights come from the shared ladder in `LumaTypeScale`
-    (display / heading / title / body / label / caption). Families, weights and
-    tracking are replaced at runtime by the active typographic voice, so these
-    styles provide the correct *initial* look and a consistent fallback when the
-    theme engine has not rendered yet. Nothing here uses a hard-coded typeface
-    beyond the bundled Inter defaults.
+    LumaOS Pro text appearances backed by LumaTokens (@dimen/luma_type_*).
 -->
 <resources>
 
@@ -15,13 +8,13 @@
         <item name="android:fontFamily">@font/inter_regular</item>
         <item name="android:textColor">#FFFFFFFF</item>
         <item name="android:includeFontPadding">false</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:textSize">@dimen/luma_type_body</item>
     </style>
 
-    <!-- Home clock. The theme sets the final size; this is the largest default. -->
+    <!-- Home & Lock clock: 72sp Thin/Light display typography. -->
     <style name="TextAppearance.Luma.Clock">
         <item name="android:fontFamily">@font/inter_light</item>
-        <item name="android:textSize">64sp</item>
+        <item name="android:textSize">@dimen/luma_type_display_clock</item>
         <item name="android:letterSpacing">-0.035</item>
         <item name="android:includeFontPadding">false</item>
         <item name="android:textColor">#FFFFFFFF</item>
@@ -30,7 +23,7 @@
 
     <style name="TextAppearance.Luma.Display">
         <item name="android:fontFamily">@font/inter_semibold</item>
-        <item name="android:textSize">30sp</item>
+        <item name="android:textSize">@dimen/luma_type_display_hero</item>
         <item name="android:letterSpacing">-0.02</item>
         <item name="android:lineSpacingMultiplier">1.08</item>
         <item name="android:textColor">#FFFFFFFF</item>
@@ -38,7 +31,7 @@
 
     <style name="TextAppearance.Luma.TitleLarge">
         <item name="android:fontFamily">@font/inter_semibold</item>
-        <item name="android:textSize">21sp</item>
+        <item name="android:textSize">@dimen/luma_type_title</item>
         <item name="android:letterSpacing">-0.012</item>
         <item name="android:lineSpacingMultiplier">1.15</item>
         <item name="android:textColor">#FFFFFFFF</item>
@@ -46,7 +39,7 @@
 
     <style name="TextAppearance.Luma.Title">
         <item name="android:fontFamily">@font/inter_semibold</item>
-        <item name="android:textSize">18sp</item>
+        <item name="android:textSize">@dimen/luma_type_heading</item>
         <item name="android:letterSpacing">-0.012</item>
         <item name="android:lineSpacingMultiplier">1.2</item>
         <item name="android:textColor">#FFFFFFFF</item>
@@ -54,44 +47,43 @@
 
     <style name="TextAppearance.Luma.BodyLarge">
         <item name="android:fontFamily">@font/inter_regular</item>
-        <item name="android:textSize">16sp</item>
+        <item name="android:textSize">@dimen/luma_type_body</item>
         <item name="android:lineSpacingMultiplier">1.4</item>
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 
     <style name="TextAppearance.Luma.Body">
         <item name="android:fontFamily">@font/inter_regular</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:textSize">@dimen/luma_type_body</item>
         <item name="android:lineSpacingMultiplier">1.35</item>
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 
     <style name="TextAppearance.Luma.Caption">
         <item name="android:fontFamily">@font/inter_regular</item>
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">@dimen/luma_type_caption</item>
         <item name="android:lineSpacingMultiplier">1.3</item>
         <item name="android:textColor">#B3FFFFFF</item>
     </style>
 
     <style name="TextAppearance.Luma.Label">
         <item name="android:fontFamily">@font/inter_medium</item>
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">@dimen/luma_type_section_header</item>
         <item name="android:letterSpacing">0.01</item>
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 
-    <!-- Caps readout for date, context and instrument labels; tracking is runtime. -->
     <style name="TextAppearance.Luma.Overline">
         <item name="android:fontFamily">@font/inter_medium</item>
-        <item name="android:textSize">11sp</item>
+        <item name="android:textSize">@dimen/luma_type_micro</item>
         <item name="android:letterSpacing">0.14</item>
         <item name="android:includeFontPadding">false</item>
-        <item name="android:textColor">#B3FFFFFF</item>
+        <item name="android:textColor">#99FFFFFF</item>
     </style>
 
     <style name="TextAppearance.Luma.MenuRow">
         <item name="android:fontFamily">@font/inter_regular</item>
-        <item name="android:textSize">15sp</item>
+        <item name="android:textSize">@dimen/luma_type_body</item>
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 

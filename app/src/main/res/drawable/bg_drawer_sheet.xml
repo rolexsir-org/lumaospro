@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- App drawer sheet: rounded top, opaque body so the grid stays readable. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#FFFFFFFF" />
+    <solid android:color="#380E121B" />
     <corners
-        android:topLeftRadius="20dp"
-        android:topRightRadius="20dp" />
+        android:topLeftRadius="@dimen/luma_radius_xlarge"
+        android:topRightRadius="@dimen/luma_radius_xlarge" />
+    <stroke android:width="@dimen/luma_glass_border_width" android:color="#2EFFFFFF" />
 </shape>

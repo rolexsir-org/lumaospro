@@ -27,7 +27,7 @@ class SpringAnimator(
     var isRunning: Boolean = false
         private set
 
-    private var spec: SpringSpec = MotionTokens.STANDARD
+    private var spec: SpringSpec = MotionTokens.LUMA
     private var policy: MotionPolicy = MotionPolicy.DEFAULT
     private var lastFrameNanos = 0L
     private var onEnd: (() -> Unit)? = null

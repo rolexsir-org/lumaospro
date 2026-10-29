@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A local search can be empty even when web/store search is available. -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="48dp"
+    android:minHeight="@dimen/luma_min_touch_target"
     android:gravity="center_vertical"
-    android:paddingStart="12dp"
-    android:paddingTop="12dp"
-    android:paddingEnd="12dp"
-    android:paddingBottom="12dp"
+    android:paddingStart="@dimen/luma_space_sm"
+    android:paddingTop="@dimen/luma_space_sm"
+    android:paddingEnd="@dimen/luma_space_sm"
+    android:paddingBottom="@dimen/luma_space_sm"
     android:textAppearance="@style/TextAppearance.Luma.Body"
-    android:textSize="14sp" />
+    android:textSize="@dimen/luma_type_body" />

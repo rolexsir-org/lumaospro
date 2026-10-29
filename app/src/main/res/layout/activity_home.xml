@@ -1,19 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    LumaOS Pro home — Liquid Glass composition, back to front.
-
-      wallpaper art   kept for legacy LUMA themes; the default is the real wallpaper
-      backdrop        existing atmosphere and wallpaper-derived colour
-      glass_scrim     one quiet vertical veil for light/dark legibility
-      desktop         one clock/date, aligned grid, one search, one floating dock
-      edit chrome     edit-mode top bar + toolbar (gone until edit mode)
-      drawer          scrim + top-rounded glass sheet with search and A-Z
-      overlays        folders, menus and the widget picker are added at runtime
-
-    Geometry uses the shared GlassGeometry scale: 20dp gutters, 26dp search
-    radius, 34dp dock radius, 48dp control targets. Runtime applies semantic
-    material recipes; XML colours are only inflation fallbacks. Every view id
-    and type used by HomeActivityRuntimeTest is preserved.
+    LumaOS Pro home — unified LumaTokens geometry (24dp universal margins,
+    72sp thin clock, 56dp app icons, 44dp search capsule, 88dp floating dock).
+    Preserves every View ID and type contract across HomeActivity & tests.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/home_root"
@@ -52,10 +41,10 @@
             android:id="@+id/home_header"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:layout_marginTop="20dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginTop="@dimen/luma_space_lg"
+            android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginBottom="@dimen/luma_space_xs"
             android:gravity="center_horizontal"
             android:orientation="vertical">
 
@@ -66,7 +55,6 @@
                 android:gravity="center"
                 android:orientation="horizontal">
 
-                <!-- Compatibility id: the decorative chronometer is no longer shown. -->
                 <com.lumaos.pro.launcher.launcher.home.ChronoDialView
                     android:id="@+id/home_dial"
                     android:layout_width="0dp"
@@ -96,27 +84,25 @@
                         android:longClickable="true"
                         android:maxLines="1"
                         android:textColor="#FFFFFFFF"
-                        android:textSize="56sp"
+                        android:textSize="@dimen/luma_type_display_clock"
                         android:textStyle="normal" />
 
                     <TextClock
                         android:id="@+id/home_date"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:format12Hour="EEEE, MMM d"
-                        android:format24Hour="EEEE, d MMM"
+                        android:layout_marginTop="@dimen/luma_space_xxs"
+                        android:format12Hour="EEEE, MMMM d"
+                        android:format24Hour="EEEE, d MMMM"
                         android:gravity="center"
                         android:includeFontPadding="false"
-                        android:letterSpacing="0.1"
+                        android:letterSpacing="0.02"
                         android:longClickable="true"
-                        android:textAppearance="@style/TextAppearance.Luma.Overline"
-                        android:textColor="#E6FFFFFF"
-                        android:textSize="12sp" />
+                        android:textAppearance="@style/TextAppearance.Luma.Caption"
+                        android:textColor="#B3FFFFFF"
+                        android:textSize="@dimen/luma_type_caption" />
                 </LinearLayout>
 
-                <!-- Compatibility controls: search and settings are reached through
-                     the primary search and clock/date long-press. -->
                 <LinearLayout
                     android:id="@+id/header_actions"
                     android:layout_width="0dp"
@@ -140,7 +126,6 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Compatibility readout: context selection is a long-press on the clock. -->
             <TextView
                 android:id="@+id/home_context"
                 android:layout_width="wrap_content"
@@ -166,17 +151,17 @@
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:paddingBottom="8dp"
+                android:paddingStart="@dimen/luma_screen_margin_horizontal"
+                android:paddingEnd="@dimen/luma_screen_margin_horizontal"
+                android:paddingBottom="@dimen/luma_space_xs"
                 android:scrollbars="none" />
 
             <com.lumaos.pro.launcher.launcher.home.PlacementGuideView
                 android:id="@+id/placement_guide"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_marginStart="20dp"
-                android:layout_marginEnd="20dp"
+                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
                 android:visibility="gone" />
 
             <TextView
@@ -186,43 +171,43 @@
                 android:layout_gravity="center"
                 android:background="@drawable/bg_home_empty"
                 android:clickable="true"
-                android:drawablePadding="12dp"
+                android:drawablePadding="@dimen/luma_space_sm"
                 android:focusable="true"
                 android:gravity="center"
                 android:maxWidth="300dp"
-                android:paddingStart="24dp"
-                android:paddingTop="20dp"
-                android:paddingEnd="24dp"
-                android:paddingBottom="20dp"
+                android:paddingStart="@dimen/luma_space_xl"
+                android:paddingTop="@dimen/luma_space_lg"
+                android:paddingEnd="@dimen/luma_space_xl"
+                android:paddingBottom="@dimen/luma_space_lg"
                 android:text="@string/home_empty_hint"
                 android:textAppearance="@style/TextAppearance.Luma.Body"
                 android:textColor="#E6FFFFFF"
-                android:textSize="14sp"
+                android:textSize="@dimen/luma_type_body"
                 android:visibility="gone" />
         </FrameLayout>
 
-        <!-- The single primary search entry. -->
+        <!-- Primary search pill: 44dp visual capsule (minTouchTarget 48dp), 24dp universal margins -->
         <LinearLayout
             android:id="@+id/home_search_pill"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginStart="20dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="12dp"
+            android:layout_height="@dimen/luma_min_touch_target"
+            android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginTop="@dimen/luma_space_xs"
+            android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginBottom="@dimen/luma_space_sm"
             android:background="@drawable/bg_search_pill"
             android:clickable="true"
             android:contentDescription="@string/home_search_description"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="18dp"
-            android:paddingEnd="4dp">
+            android:paddingStart="@dimen/luma_space_md"
+            android:paddingEnd="@dimen/luma_space_xxs">
 
             <ImageView
                 android:id="@+id/search_pill_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="@dimen/luma_icon_inline"
+                android:layout_height="@dimen/luma_icon_inline"
                 android:importantForAccessibility="no"
                 android:src="@drawable/ic_rx_search" />
 
@@ -230,22 +215,22 @@
                 android:id="@+id/search_pill_text"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="@dimen/luma_space_sm"
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:importantForAccessibility="no"
                 android:maxLines="1"
                 android:text="@string/search_pill_hint"
                 android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
-                android:textSize="15sp" />
+                android:textSize="@dimen/luma_type_body" />
 
             <ImageButton
                 android:id="@+id/search_pill_voice"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="@dimen/luma_min_touch_target"
+                android:layout_height="@dimen/luma_min_touch_target"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/voice_command_description"
-                android:padding="12dp"
+                android:padding="@dimen/luma_space_sm"
                 android:src="@drawable/ic_rx_voice" />
 
             <ImageButton
@@ -256,18 +241,20 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Floating Dock: 88dp height, 28dp corner radius, 24dp left/right margins, 12dp bottom margin -->
         <FrameLayout
             android:id="@+id/dock_surface"
             android:layout_width="match_parent"
-            android:layout_height="76dp"
-            android:layout_marginStart="20dp"
-            android:layout_marginEnd="20dp"
-            android:layout_marginBottom="16dp"
+            android:layout_height="@dimen/luma_dock_height"
+            android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+            android:layout_marginBottom="@dimen/luma_dock_bottom_margin"
+            android:background="@drawable/bg_dock_surface"
             android:clipChildren="false"
-            android:paddingStart="6dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="6dp"
-            android:paddingBottom="6dp">
+            android:paddingStart="@dimen/luma_space_md"
+            android:paddingTop="@dimen/luma_space_md"
+            android:paddingEnd="@dimen/luma_space_md"
+            android:paddingBottom="@dimen/luma_space_md">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/dock_row"
@@ -287,10 +274,10 @@
         android:layout_gravity="top"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="20dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp"
+        android:paddingStart="@dimen/luma_screen_margin_horizontal"
+        android:paddingTop="@dimen/luma_space_xs"
+        android:paddingEnd="@dimen/luma_space_md"
+        android:paddingBottom="@dimen/luma_space_xs"
         android:visibility="gone">
 
         <LinearLayout
@@ -306,32 +293,32 @@
                 android:fontFamily="@font/inter_semibold"
                 android:text="@string/edit_title"
                 android:textAppearance="@style/TextAppearance.Luma.Title"
-                android:textSize="18sp" />
+                android:textSize="@dimen/luma_type_heading" />
 
             <TextView
                 android:id="@+id/edit_hint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="@dimen/luma_space_xxs"
                 android:text="@string/edit_hint"
                 android:textAppearance="@style/TextAppearance.Luma.Caption"
-                android:textSize="12sp" />
+                android:textSize="@dimen/luma_type_caption" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/edit_done"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="@dimen/luma_min_touch_target"
             android:clickable="true"
             android:focusable="true"
             android:fontFamily="@font/inter_medium"
             android:gravity="center"
-            android:minWidth="88dp"
-            android:paddingStart="18dp"
-            android:paddingEnd="18dp"
+            android:minWidth="@dimen/luma_dock_height"
+            android:paddingStart="@dimen/luma_space_md"
+            android:paddingEnd="@dimen/luma_space_md"
             android:text="@string/edit_done"
             android:textAppearance="@style/TextAppearance.Luma.Label"
-            android:textSize="14sp" />
+            android:textSize="@dimen/luma_type_body" />
     </LinearLayout>
 
     <LinearLayout
@@ -339,12 +326,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
+        android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+        android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="@dimen/luma_space_xs"
+        android:paddingBottom="@dimen/luma_space_xs"
         android:visibility="gone" />
 
     <FrameLayout
@@ -374,18 +361,18 @@
 
             <View
                 android:id="@+id/drawer_handle"
-                android:layout_width="36dp"
-                android:layout_height="4dp"
+                android:layout_width="@dimen/luma_drawer_handle_width"
+                android:layout_height="@dimen/luma_drawer_handle_height"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="@dimen/luma_space_xs"
                 android:importantForAccessibility="no" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="20dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginEnd="20dp"
+                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginTop="@dimen/luma_space_xs"
+                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
@@ -402,52 +389,53 @@
                         android:fontFamily="@font/inter_semibold"
                         android:text="@string/drawer_title"
                         android:textAppearance="@style/TextAppearance.Luma.TitleLarge"
-                        android:textSize="22sp" />
+                        android:textSize="@dimen/luma_type_title" />
 
                     <TextView
                         android:id="@+id/drawer_subtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
+                        android:layout_marginTop="@dimen/luma_space_xxs"
                         android:textAppearance="@style/TextAppearance.Luma.Caption"
-                        android:textSize="12sp" />
+                        android:textSize="@dimen/luma_type_caption" />
                 </LinearLayout>
 
                 <ImageButton
                     android:id="@+id/drawer_sort"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/drawer_sort_description"
-                    android:padding="12dp"
+                    android:padding="@dimen/luma_space_sm"
                     android:src="@drawable/ic_rx_sort" />
 
                 <ImageButton
                     android:id="@+id/drawer_voice"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/voice_command_description"
-                    android:padding="12dp"
+                    android:padding="@dimen/luma_space_sm"
                     android:src="@drawable/ic_rx_voice" />
 
                 <ImageButton
                     android:id="@+id/drawer_close"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/drawer_close_description"
-                    android:padding="12dp"
+                    android:padding="@dimen/luma_space_sm"
                     android:src="@drawable/ic_rx_close" />
             </LinearLayout>
 
+            <!-- Drawer search capsule: 44dp height, 16dp horizontal padding, 24dp screen margins -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginStart="20dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginEnd="20dp"
-                android:layout_marginBottom="8dp">
+                android:layout_height="@dimen/luma_search_bar_height"
+                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginTop="@dimen/luma_space_xs"
+                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginBottom="@dimen/luma_space_xs">
 
                 <EditText
                     android:id="@+id/search_field"
@@ -455,27 +443,26 @@
                     android:layout_height="match_parent"
                     android:autofillHints="false"
                     android:background="@drawable/bg_search_field"
-                    android:drawablePadding="12dp"
+                    android:drawablePadding="@dimen/luma_space_sm"
                     android:hint="@string/search_hint"
                     android:imeOptions="actionGo|flagNoFullscreen"
                     android:importantForAutofill="no"
                     android:inputType="text|textNoSuggestions"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="54dp"
+                    android:paddingStart="@dimen/luma_space_md"
+                    android:paddingEnd="@dimen/luma_space_hero"
                     android:singleLine="true"
                     android:textAppearance="@style/TextAppearance.Luma.BodyLarge"
-                    android:textColorHint="#FF6E6E73"
-                    android:textSize="16sp" />
+                    android:textColorHint="#FF8E8E93"
+                    android:textSize="@dimen/luma_type_body" />
 
                 <ImageButton
                     android:id="@+id/search_clear"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
                     android:layout_gravity="end|center_vertical"
-                    android:layout_marginEnd="2dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/search_clear_description"
-                    android:padding="12dp"
+                    android:padding="@dimen/luma_space_sm"
                     android:src="@drawable/ic_rx_close"
                     android:visibility="gone" />
             </FrameLayout>
@@ -486,8 +473,8 @@
                 android:layout_height="wrap_content"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
+                android:paddingStart="@dimen/luma_screen_margin_horizontal"
+                android:paddingEnd="@dimen/luma_screen_margin_horizontal"
                 android:scrollbars="none">
 
                 <LinearLayout
@@ -495,7 +482,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:paddingBottom="6dp" />
+                    android:paddingBottom="@dimen/luma_space_xs" />
             </HorizontalScrollView>
 
             <FrameLayout
@@ -509,15 +496,15 @@
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
                     android:overScrollMode="never"
-                    android:paddingStart="20dp"
-                    android:paddingTop="4dp"
-                    android:paddingEnd="28dp"
-                    android:paddingBottom="12dp"
+                    android:paddingStart="@dimen/luma_screen_margin_horizontal"
+                    android:paddingTop="@dimen/luma_space_xxs"
+                    android:paddingEnd="@dimen/luma_space_xxl"
+                    android:paddingBottom="@dimen/luma_space_md"
                     android:scrollbars="none" />
 
                 <com.lumaos.pro.launcher.launcher.view.AlphaIndexView
                     android:id="@+id/alpha_index"
-                    android:layout_width="48dp"
+                    android:layout_width="@dimen/luma_min_touch_target"
                     android:layout_height="match_parent"
                     android:layout_gravity="end|center_vertical"
                     android:contentDescription="@string/drawer_alphabet_index_description" />
@@ -529,10 +516,10 @@
                     android:layout_gravity="center"
                     android:gravity="center"
                     android:maxWidth="300dp"
-                    android:padding="24dp"
+                    android:padding="@dimen/luma_space_xl"
                     android:text="@string/empty_no_apps"
                     android:textAppearance="@style/TextAppearance.Luma.Body"
-                    android:textSize="14sp"
+                    android:textSize="@dimen/luma_type_body"
                     android:visibility="gone" />
             </FrameLayout>
 

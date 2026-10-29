@@ -106,7 +106,7 @@ enum class TypeStyle(
     PRECISION(
         storageKey = "precision",
         clock = FontFace(FontFamilyId.INTER, FontWeightToken.LIGHT),
-        clockSizeSp = 66f,
+        clockSizeSp = LumaTokens.typeDisplayClockSp,
         clockTracking = -0.035f,
         title = FontFace(FontFamilyId.INTER, FontWeightToken.SEMIBOLD),
         titleTracking = -0.02f,
@@ -238,32 +238,32 @@ enum class TypeStyle(
 object LumaTypeScale {
 
     // Display - the home clock and large numerals.
-    const val displayLargeSp = 72f
+    const val displayLargeSp = LumaTokens.typeDisplayClockSp
     const val displayMediumSp = 64f
     const val displaySmallSp = 52f
 
     // Headings - screen titles and section leads.
-    const val headlineLargeSp = 30f
+    const val headlineLargeSp = LumaTokens.typeDisplayHeroSp
     const val headlineMediumSp = 26f
     const val headlineSmallSp = 23f
 
     // Titles - dialogs, sheets, folders, row titles.
-    const val titleLargeSp = 21f
-    const val titleMediumSp = 18f
-    const val titleSmallSp = 17f
+    const val titleLargeSp = LumaTokens.typeTitleSp
+    const val titleMediumSp = 18.5f
+    const val titleSmallSp = LumaTokens.typeHeadingSp
 
     // Body - settings copy, descriptions, menus.
-    const val bodyLargeSp = 16f
+    const val bodyLargeSp = LumaTokens.typeBodySp
     const val bodyMediumSp = 14f
-    const val bodySmallSp = 12.5f
+    const val bodySmallSp = LumaTokens.typeCaptionSp
 
     // Labels and captions - controls, readouts, metadata.
     const val labelLargeSp = 13.5f
     const val labelMediumSp = 12f
-    const val labelSmallSp = 11f
+    const val labelSmallSp = LumaTokens.typeMicroSp
 
-    /** Application labels on the home screen and in the drawer. */
-    const val appLabelSp = 12f
+    /** Application labels on the home screen, folders, and drawer. */
+    const val appLabelSp = LumaTokens.typeAppLabelSp
 
     const val displayLineHeight = 1.02f
     const val headingLineHeight = 1.18f

@@ -119,6 +119,20 @@ object HomeLayoutOps {
         return keys.fold(layout) { current, key -> addToDock(current, key) }
     }
 
+    /**
+     * Seeds both the 4-icon Dock and a breathing initial Home Grid on first run
+     * when no user or restored layout exists yet. Existing layouts are never touched.
+     */
+    fun seedFirstRunIfEmpty(
+        layout: HomeLayout,
+        dockKeys: List<ComponentKey>,
+        homeKeys: List<ComponentKey>
+    ): HomeLayout {
+        if (layout.dock.isNotEmpty() || layout.pages.any { it.isNotEmpty() }) return layout
+        val withDock = dockKeys.take(4).fold(layout) { current, key -> addToDock(current, key) }
+        return homeKeys.fold(withDock) { current, key -> addToHome(current, key) }
+    }
+
     fun containsKey(layout: HomeLayout, key: ComponentKey): Boolean =
         layout.dock.any { matches(it, key) } || layout.pages.any { page -> page.any { matches(it, key) } }
 

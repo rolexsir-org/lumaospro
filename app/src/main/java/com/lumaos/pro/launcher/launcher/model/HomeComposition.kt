@@ -1,5 +1,7 @@
 package com.lumaos.pro.launcher.launcher.model
 
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
+
 /**
  * Home-screen composition presets.
  *
@@ -58,7 +60,7 @@ enum class HomePreset(
     ZEN(
         "zen", "Zen",
         "Clock, date and dock only. Everything else lives in the drawer.",
-        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = true
+        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false
     );
 
     companion object {
@@ -77,8 +79,8 @@ object GridRules {
     fun defaultColumns(widthDp: Int): Int = when {
         widthDp >= 840 -> 7
         widthDp >= 600 -> 6
-        widthDp >= 412 -> 5
-        else -> 4
+        widthDp >= LumaTokens.gridWideBreakpointDp -> LumaTokens.gridColumnsWide
+        else -> LumaTokens.gridColumnsNarrow
     }
 
     /**

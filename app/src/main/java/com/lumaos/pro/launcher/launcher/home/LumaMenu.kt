@@ -15,6 +15,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.effects.EffectsDecision
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
@@ -84,6 +86,7 @@ class LumaMenu(
             })
         }
         var lastGroup: Int? = null
+        val rowViews = ArrayList<View>(entries.size)
         for (entry in entries) {
             if (lastGroup != null && entry.group != lastGroup) {
                 content.addView(View(context).apply {
@@ -94,10 +97,13 @@ class LumaMenu(
                 })
             }
             lastGroup = entry.group
-            content.addView(row(entry) {
+            val r = row(entry) {
+                if (entry.destructive) LumaHaptics.confirm(anchor) else LumaHaptics.tap(anchor)
                 popup.dismiss()
                 onSelect(entry)
-            })
+            }
+            rowViews += r
+            content.addView(r)
         }
 
         // Measure against the visible frame before placing the popup. Long
@@ -132,8 +138,6 @@ class LumaMenu(
         popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
 
         if (motion.enabled && !motion.reduced) {
-            // Enters from the theme's own popup scale; Void opens a little larger
-            // than Aurora, and both honour reduced motion by skipping this block.
             val from = theme.motionProfile.popupScaleFrom
             scroll.alpha = 0f
             scroll.scaleX = from
@@ -143,7 +147,9 @@ class LumaMenu(
                 val s = from + (1f - from) * p
                 scroll.scaleX = s
                 scroll.scaleY = s
-            }.animateTo(1f, MotionTokens.SNAPPY, motion)
+            }.animateTo(1f, MotionTokens.LUMA, motion)
+            val cancelStagger = LumaSpring.staggerReveal(rowViews, motion)
+            popup.setOnDismissListener { cancelStagger.run() }
         }
         content.getChildAt(if (title.isNullOrBlank()) 0 else 1)?.requestFocus()
         return popup

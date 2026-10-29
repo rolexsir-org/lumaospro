@@ -25,6 +25,7 @@ import com.lumaos.pro.launcher.ui.theme.DarkWindow
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
@@ -98,6 +99,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val ACTIVE_WALLPAPER_ID = stringPreferencesKey("active_wallpaper_id")
         val ACTIVE_WALLPAPER_SYSTEM_ID = intPreferencesKey("active_wallpaper_system_id")
         val CACHED_WALLPAPER_SEEDS = stringPreferencesKey("cached_wallpaper_seeds")
+        val CACHED_LUMA_PALETTE = stringPreferencesKey("cached_luma_palette")
+        val NOTIFICATION_PROMPT_SHOWN = booleanPreferencesKey("notification_prompt_shown")
         val WALLPAPER_FAVORITES = stringSetPreferencesKey("wallpaper_favorites")
         val EFFECTS_PREF = stringPreferencesKey("effects_pref")
         val MOTION_PREF = stringPreferencesKey("motion_pref")
@@ -246,6 +249,20 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun setCachedWallpaperSeedsRaw(encoded: String?) {
         dataStore.edit { p -> putOrRemove(p, Keys.CACHED_WALLPAPER_SEEDS, encoded?.takeIf { it.isNotBlank() }) }
     }
+
+    /** Cached [com.lumaos.pro.launcher.ui.theme.LumaWallpaperPalette] string for zero-flash cold starts. */
+    val cachedLumaPaletteRaw: Flow<String?> = readNullable(Keys.CACHED_LUMA_PALETTE)
+
+    suspend fun setCachedLumaPaletteRaw(encoded: String?) {
+        dataStore.edit { p -> putOrRemove(p, Keys.CACHED_LUMA_PALETTE, encoded?.takeIf { it.isNotBlank() }) }
+    }
+
+    /** Tracks whether the single optional notification-access bottom sheet has been shown once. */
+    val notificationPromptShown: Flow<Boolean> = read(Keys.NOTIFICATION_PROMPT_SHOWN) { false }
+
+    suspend fun isNotificationPromptShownOnce(): Boolean = notificationPromptShown.first()
+
+    suspend fun setNotificationPromptShown(shown: Boolean) = write(Keys.NOTIFICATION_PROMPT_SHOWN, shown)
 
     /**
      * Records an applied Wallpaper Studio selection and optionally switches the
@@ -729,10 +746,10 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     companion object {
         private const val BACKDROP_THEME_DEFAULT = "theme_default"
 
-        const val DEFAULT_GRID_COLUMNS = 4
+        const val DEFAULT_GRID_COLUMNS = LumaTokens.gridColumnsNarrow
         const val DEFAULT_GRID_ROWS = 5
-        const val DEFAULT_DRAWER_COLUMNS = 4
-        const val DEFAULT_ICON_SIZE_DP = 48
+        const val DEFAULT_DRAWER_COLUMNS = LumaTokens.gridColumnsNarrow
+        const val DEFAULT_ICON_SIZE_DP = LumaTokens.iconAppInt
 
         fun create(context: Context): LumaPrefs = LumaPrefs(context.lumaosDataStore)
     }

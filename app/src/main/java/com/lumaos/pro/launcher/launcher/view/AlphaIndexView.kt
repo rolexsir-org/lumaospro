@@ -12,6 +12,8 @@ import android.util.TypedValue
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import kotlin.math.max
 
 /**
@@ -69,9 +71,11 @@ class AlphaIndexView @JvmOverloads constructor(
         if (naturalHeight > slot && naturalHeight > 0f) paint.textSize *= slot / naturalHeight
         val fontMetrics = paint.fontMetrics
         val baselineOffset = (slot - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent
+        val visualStripPx = LumaTokens.dpPx(resources.displayMetrics.density, LumaTokens.alphaScrubberVisualWidth)
+        val drawCenterX = (width - visualStripPx / 2f).coerceAtLeast(width / 2f)
 
         items.forEachIndexed { index, letter ->
-            canvas.drawText(letter.toString(), width / 2f, index * slot + baselineOffset, paint)
+            canvas.drawText(letter.toString(), drawCenterX, index * slot + baselineOffset, paint)
         }
     }
 
@@ -87,7 +91,7 @@ class AlphaIndexView @JvmOverloads constructor(
     )
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredWidth = (48 * resources.displayMetrics.density).toInt()
+        val desiredWidth = LumaTokens.dpInt(resources.displayMetrics.density, LumaTokens.alphaScrubberTouchWidth)
         val width = resolveSize(max(desiredWidth, suggestedMinimumWidth), widthMeasureSpec)
         val height = resolveSize(suggestedMinimumHeight, heightMeasureSpec)
         setMeasuredDimension(width, height)
@@ -123,8 +127,11 @@ class AlphaIndexView @JvmOverloads constructor(
         if (items.isEmpty() || height <= 0) return
         val slot = height.toFloat() / items.size
         val index = (y / slot).toInt().coerceIn(0, items.lastIndex)
-        selectedIndex = index
-        onLetterTouched?.invoke(items[index])
+        if (index != selectedIndex) {
+            selectedIndex = index
+            LumaHaptics.tick(this)
+            onLetterTouched?.invoke(items[index])
+        }
     }
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
@@ -170,6 +177,6 @@ class AlphaIndexView @JvmOverloads constructor(
     }
 
     companion object {
-        private const val LETTER_SP = 11f
+        private const val LETTER_SP = LumaTokens.typeMicroSp
     }
 }

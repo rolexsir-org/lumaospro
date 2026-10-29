@@ -72,6 +72,7 @@ import com.lumaos.pro.launcher.intelligence.Profile
 import com.lumaos.pro.launcher.intelligence.Profiles
 import com.lumaos.pro.launcher.launcher.home.AmbientBackdropView
 import com.lumaos.pro.launcher.launcher.home.ChronoDialView
+import com.lumaos.pro.launcher.launcher.home.AppLaunchPortalView
 import com.lumaos.pro.launcher.launcher.home.DesktopLayout
 import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
 import com.lumaos.pro.launcher.launcher.home.DrawerController
@@ -80,7 +81,9 @@ import com.lumaos.pro.launcher.launcher.home.EditModeController
 import com.lumaos.pro.launcher.launcher.home.FolderOverlay
 import com.lumaos.pro.launcher.launcher.home.FolderStyle
 import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
+import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
 import com.lumaos.pro.launcher.launcher.home.MenuEntry
+import com.lumaos.pro.launcher.launcher.home.NotificationPromptSheet
 import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
 import com.lumaos.pro.launcher.launcher.home.ReadoutSources
 import com.lumaos.pro.launcher.launcher.home.LumaMenu
@@ -101,12 +104,15 @@ import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.HomePreset
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
+import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
 import com.lumaos.pro.launcher.settings.SettingsActivity
 import com.lumaos.pro.launcher.ui.glass.GlassViews
+import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.LumaComponents
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.Backdrop
@@ -222,6 +228,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var edit: EditModeController
     private lateinit var folders: FolderOverlay
     private var widgetPicker: WidgetPicker? = null
+    private var notificationPromptSheet: NotificationPromptSheet? = null
 
     private lateinit var gestureDetector: GestureDetector
     private lateinit var scaleDetector: ScaleGestureDetector
@@ -238,9 +245,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var profile: Profile = Profiles.BALANCED
     private var appearance = Appearance()
     private var gestureActions: Map<GestureKind, GestureAction> = emptyMap()
-    private var homeCellConfig = CellConfig(48, true, 1f, ColorMath.WHITE, true)
-    private var dockCellConfig = homeCellConfig
-    private var drawerCellConfig = CellConfig(48, true, 1f, ColorMath.WHITE, false)
+    private var homeCellConfig = CellConfig(LumaTokens.iconAppInt, true, 1f, ColorMath.WHITE, true)
+    private var dockCellConfig = homeCellConfig.copy(showLabels = false)
+    private var drawerCellConfig = CellConfig(LumaTokens.iconAppInt, true, 1f, ColorMath.WHITE, false)
     private var folderCellConfig = drawerCellConfig
     private var widgetsEnabled = true
     private var hiddenLock = false
@@ -252,8 +259,52 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var drawerProgress = 0f
     private var folderProgress = 0f
     private var editProgress = 0f
+    private var modalProgress = 0f
+    private var launchProgress = 0f
     private var settleProgress = 1f
+    private var parallaxX = 0f
+    private val parallaxSpring = SpringAnimator(0f, valueThreshold = 0.002f) { p ->
+        parallaxX = p
+        applyDepth()
+    }
+    private lateinit var launchPortal: AppLaunchPortalView
     private var lastBlurRadius = -1f
+    private var hardwareLayersPromoted = false
+    private var screenInteractive = true
+    private var systemGuardsRegistered = false
+    private val wallpaperRefreshDebounced = Runnable {
+        core.themeManager.refreshFromSystemWallpaper()
+        core.themes.refresh()
+    }
+    private val powerAndWallpaperReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenInteractive = false
+                    parallaxSpring.cancel()
+                    if (::launchPortal.isInitialized) launchPortal.cancelImmediately()
+                    backdrop.setEffects(false, effects.ambientFps, effects.atmosphereDetail)
+                    if (Build.VERSION.SDK_INT >= 31 && lastBlurRadius != 0f) {
+                        lastBlurRadius = 0f
+                        desktop.setRenderEffect(null)
+                    }
+                    setHardwareTransitionLayers(false)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    screenInteractive = true
+                    backdrop.setEffects(effects.ambientMotion, effects.ambientFps, effects.atmosphereDetail)
+                    applyDepth()
+                }
+                Intent.ACTION_WALLPAPER_CHANGED -> {
+                    undoHandler.removeCallbacks(wallpaperRefreshDebounced)
+                    undoHandler.postDelayed(
+                        wallpaperRefreshDebounced,
+                        LumaTokens.wallpaperChangeDebounceMs
+                    )
+                }
+            }
+        }
+    }
     private var returningFromApp = false
     private var startupMeasured = false
     private var appsLoadedOnce = false
@@ -276,7 +327,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Appearance inputs from preferences. */
     private data class Appearance(
-        val iconSizeDp: Int = 48,
+        val iconSizeDp: Int = LumaTokens.iconAppInt,
         val showLabels: Boolean = true,
         val textScale: Float = 1f,
         val gridColumns: Int = 4,
@@ -309,12 +360,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         setupControllers()
         setupGestures()
         setupInsets()
+        registerPowerAndWallpaperGuards()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 // As the home screen, back must not finish the activity: doing
                 // so would leave the device with no home at all.
                 when {
+                    notificationPromptSheet?.isShowing == true -> notificationPromptSheet?.dismiss()
                     widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
                     folders.isOpen -> folders.close()
                     drawer.isOpen -> drawer.close()
@@ -349,6 +402,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onStart() {
         super.onStart()
+        core.cancelBackgroundCacheRelease()
         core.appRepository.registerCallback(packageCallback)
         widgets.startListening()
         readouts.start()
@@ -358,6 +412,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         core.appRepository.unregisterCallback(packageCallback)
         widgets.stopListening()
         readouts.stop()
+        setHardwareTransitionLayers(false)
+        core.scheduleBackgroundCacheRelease()
         super.onStop()
     }
 
@@ -367,6 +423,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // must appear without waiting for a broadcast round-trip.
         viewModel.refreshApps()
         core.themes.refresh()
+        core.themeManager.refreshFromSystemWallpaper()
         core.effects.refresh()
         readouts.refresh()
         maybeLaunchOnboarding()
@@ -378,19 +435,53 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onDestroy() {
         undoHandler.removeCallbacks(widgetRemovalTimeout)
+        undoHandler.removeCallbacks(wallpaperRefreshDebounced)
+        if (systemGuardsRegistered) {
+            runCatching { unregisterReceiver(powerAndWallpaperReceiver) }
+            systemGuardsRegistered = false
+        }
         // The pending layout write may still be in progress. Retaining an id is
         // safer than deleting a widget that a saved layout still references.
         pendingWidgetRemoval = null
+        notificationPromptSheet?.shutdown()
+        notificationPromptSheet = null
         widgetPicker?.shutdown()
         iconLoader.shutdown()
         widgets.clearViews()
         super.onDestroy()
     }
 
+    private fun registerPowerAndWallpaperGuards() {
+        if (systemGuardsRegistered) return
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_WALLPAPER_CHANGED)
+        }
+        runCatching {
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
+                powerAndWallpaperReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            systemGuardsRegistered = true
+        }
+    }
+
+    private fun setHardwareTransitionLayers(active: Boolean) {
+        if (hardwareLayersPromoted == active) return
+        hardwareLayersPromoted = active
+        val layerType = if (active) View.LAYER_TYPE_HARDWARE else View.LAYER_TYPE_NONE
+        desktop.setLayerType(layerType, null)
+        drawerSheet.setLayerType(layerType, null)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Pressing Home on the home screen returns to a clean desktop.
         when {
+            notificationPromptSheet?.isShowing == true -> notificationPromptSheet?.dismiss()
             widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
             folders.isOpen -> folders.close()
             drawer.isOpen -> drawer.close()
@@ -427,10 +518,45 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun maybeLaunchOnboarding() {
         lifecycleScope.launch {
-            if (!viewModel.prefs.isOnboardingDoneOnce() && !RoleHelper.isDefaultLauncher(this@HomeActivity)) {
-                startActivity(Intent(this@HomeActivity, OnboardingActivity::class.java))
+            runCatching { viewModel.prefs.initializeDefaultExperienceIfUnconfigured() }
+            val isDefaultHome = RoleHelper.isDefaultLauncher(this@HomeActivity)
+            if (!isDefaultHome) {
+                if (!viewModel.prefs.isOnboardingDoneOnce()) {
+                    startActivity(Intent(this@HomeActivity, OnboardingActivity::class.java))
+                }
+                return@launch
+            }
+            if (!viewModel.prefs.isOnboardingDoneOnce()) {
+                viewModel.prefs.setOnboardingDone(true)
+            }
+            if (!com.lumaos.pro.launcher.widgets.music.MusicBridge.hasAccess(this@HomeActivity)) {
+                val alreadyPrompted = viewModel.prefs.isNotificationPromptShownOnce()
+                if (!alreadyPrompted) {
+                    viewModel.prefs.setNotificationPromptShown(true)
+                    showOptionalNotificationSheet()
+                }
             }
         }
+    }
+
+    private fun showOptionalNotificationSheet() {
+        if (isFinishing || isDestroyed) return
+        val sheet = notificationPromptSheet ?: NotificationPromptSheet(
+            context = this,
+            root = homeRoot,
+            onDepthProgress = { p ->
+                modalProgress = p
+                applyDepth()
+            }
+        ).also { notificationPromptSheet = it }
+        sheet.show(
+            theme = theme,
+            effects = effects,
+            motion = motion,
+            bottomInset = bottomInset,
+            onSetUp = {},
+            onSkip = {}
+        )
     }
 
     // ------------------------------------------------------------------- setup
@@ -472,7 +598,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     if (::homeAdapter.isInitialized && homeAdapter.isWidget(position)) spanCount else 1
             }
         }
-        homeGrid.itemAnimator?.changeDuration = 120
+        homeGrid.itemAnimator = LumaSpring.ItemAnimator { motion }
         homeGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             refreshResponsiveIcons()
             updateHomeCellSizing()
@@ -483,7 +609,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
         })
         dockRow.layoutManager = GridLayoutManager(this, gridColumns)
+        dockRow.itemAnimator = LumaSpring.ItemAnimator { motion }
         drawerGrid.layoutManager = createDrawerLayoutManager(DrawerPresentation.GRID)
+        drawerGrid.setHasFixedSize(true)
+        drawerGrid.setItemViewCacheSize(LumaTokens.drawerItemViewCacheSize)
+        drawerGrid.recycledViewPool.setMaxRecycledViews(0, LumaTokens.drawerRecycledPoolMax)
+        drawerGrid.itemAnimator = null
         drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshResponsiveIcons() }
     }
 
@@ -602,6 +733,22 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             host = this
         )
         folders = FolderOverlay(this, homeRoot, iconLoader, density, this)
+        launchPortal = AppLaunchPortalView(this).apply {
+            onLaunchProgress = { p ->
+                launchProgress = p
+                applyDepth()
+            }
+        }
+        val dScale = resources.displayMetrics.density
+        LumaDepthStack.bindLayerElevation(wallpaperArt, LumaTokens.depthWallpaper, dScale)
+        LumaDepthStack.bindLayerElevation(backdrop, LumaTokens.depthWallpaper, dScale)
+        LumaDepthStack.bindLayerElevation(desktop, LumaTokens.depthHome, dScale)
+        LumaDepthStack.bindLayerElevation(drawerContainer, LumaTokens.depthDrawer, dScale)
+        LumaDepthStack.bindLayerElevation(launchPortal, LumaTokens.depthLaunchPortal, dScale)
+        homeRoot.addView(
+            launchPortal,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
 
         findViewById<View>(R.id.drawer_close).setOnClickListener { drawer.close() }
         findViewById<View>(R.id.drawer_voice).setOnClickListener { launchVoiceCommand() }
@@ -654,7 +801,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     // --------------------------------------------------------------- gestures
 
-    private enum class DragMode { NONE, DRAWER }
+    private enum class DragMode { NONE, DRAWER, SEARCH_PULL }
 
     private var dragMode = DragMode.NONE
     private var downX = 0f
@@ -678,7 +825,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         // bound to it; any other binding fires here.
                         if (swipeUpAction() !is GestureAction.OpenDrawer) performGesture(GestureKind.SWIPE_UP)
                     } else if (!homeGrid.canScrollVertically(-1) || !downOnScrollableGrid) {
-                        performGesture(GestureKind.SWIPE_DOWN)
+                        if (swipeDownAction() !is GestureAction.OpenSearch) performGesture(GestureKind.SWIPE_DOWN)
                     }
                     return true
                 }
@@ -698,6 +845,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
             override fun onLongPress(e: MotionEvent) {
                 if (isOverItem(e.rawX, e.rawY)) return
+                LumaHaptics.longPress(desktop)
                 performGesture(GestureKind.LONG_PRESS)
             }
         })
@@ -717,14 +865,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     }
 
     private fun swipeUpAction(): GestureAction = gestureActions[GestureKind.SWIPE_UP] ?: GestureKind.SWIPE_UP.default
+    private fun swipeDownAction(): GestureAction = gestureActions[GestureKind.SWIPE_DOWN] ?: GestureKind.SWIPE_DOWN.default
 
     private fun overlayBlocksGestures(): Boolean =
-        folders.isOpen || widgetPicker?.isShowing == true || edit.isActive
+        folders.isOpen || widgetPicker?.isShowing == true || notificationPromptSheet?.isShowing == true || edit.isActive
 
     /**
      * Events are seen at the activity level so a swipe anywhere is recognised
      * while children still receive taps. A vertical drag that should move the
      * drawer is claimed after the touch slop; children then get CANCEL.
+     * Catching the drawer mid-spring immediately stops the spring and hands
+     * 1:1 finger tracking back without any jump.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (overlayBlocksGestures()) return super.dispatchTouchEvent(ev)
@@ -738,6 +889,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 dragMode = DragMode.NONE
                 downOnScrollableGrid = isInside(homeGrid, ev.rawX, ev.rawY) &&
                     (homeGrid.canScrollVertically(1) || homeGrid.canScrollVertically(-1))
+                if (drawer.isAnimating && drawer.progress > 0.04f && drawer.progress < 0.96f) {
+                    dragMode = DragMode.DRAWER
+                    drawer.startTracking()
+                    return true
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (dragMode == DragMode.NONE && ev.pointerCount == 1) {
@@ -748,8 +904,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             !(downOnScrollableGrid && homeGrid.canScrollVertically(1))
                         val closing = drawer.isOpen && dy > 0 && drawer.canDragClose() &&
                             !isInside(findViewById(R.id.alpha_index), downX, downY)
-                        if (opening || closing) {
-                            dragMode = DragMode.DRAWER
+                        val searchPull = !drawer.isOpen && dy > 0 && swipeDownAction() is GestureAction.OpenSearch &&
+                            !(downOnScrollableGrid && homeGrid.canScrollVertically(-1))
+                        if (opening || closing || searchPull) {
+                            dragMode = if (searchPull) DragMode.SEARCH_PULL else DragMode.DRAWER
                             lastY = ev.rawY
                             drawer.startTracking()
                             if (closing) drawer.hideKeyboard()
@@ -757,6 +915,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             super.dispatchTouchEvent(cancel)
                             cancel.recycle()
                         }
+                    } else if (!drawer.isOpen && abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.4f && homeRoot.width > 0) {
+                        val normalized = (dx / homeRoot.width.toFloat()).coerceIn(-0.35f, 0.35f)
+                        parallaxSpring.track(normalized)
                     }
                 }
                 if (dragMode == DragMode.DRAWER) {
@@ -764,11 +925,29 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     lastY = ev.rawY
                     return true
                 }
+                if (dragMode == DragMode.SEARCH_PULL) {
+                    drawer.trackBy(-(ev.rawY - lastY))
+                    lastY = ev.rawY
+                    return true
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (abs(parallaxX) > 0.002f) {
+                    tracker.computeCurrentVelocity(1000)
+                    val vx = if (homeRoot.width > 0) tracker.xVelocity / homeRoot.width else 0f
+                    parallaxSpring.setVelocity(vx * 0.25f)
+                    parallaxSpring.animateTo(0f, MotionTokens.LUMA, motion)
+                }
                 if (dragMode == DragMode.DRAWER) {
                     tracker.computeCurrentVelocity(1000)
                     drawer.release(tracker.yVelocity)
+                    dragMode = DragMode.NONE
+                    recycleTracker()
+                    return true
+                }
+                if (dragMode == DragMode.SEARCH_PULL) {
+                    tracker.computeCurrentVelocity(1000)
+                    drawer.release(-tracker.yVelocity, focusSearchWhenOpened = true)
                     dragMode = DragMode.NONE
                     recycleTracker()
                     return true
@@ -835,8 +1014,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         if (!loading && !viewModel.appRefreshFailed.value && !appsLoadedOnce) {
                             appsLoadedOnce = true
                             val apps = viewModel.apps.value
-                            if (profile.preloadIcons && apps.isNotEmpty()) {
-                                iconLoader.preload(apps.map { it.key }, density)
+                            if (apps.isNotEmpty() && profile.preloadIcons) {
+                                iconLoader.preload(apps.map { it.key }, density, maxCount = profile.maxCachedIcons)
                             }
                             // Empty/cold launches are real starts too; measuring
                             // only non-empty app lists hid the slowest edge case.
@@ -917,6 +1096,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     core.themes.activeWallpaper.collect {
                         if (appliedTheme != null) {
                             renderWallpaper(theme)
+                        }
+                    }
+                }
+
+                launch {
+                    core.themeManager.palette.collect {
+                        if (appliedTheme != null && !themeAnimating) {
+                            applyTheme(theme, animate = false)
                         }
                     }
                 }
@@ -1019,7 +1206,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 applyColors(target.copy(colors = ThemeColors.lerp(from.colors, target.colors, t.coerceIn(0f, 1f))))
             }
             themeAnimator = animator
-            animator.animateTo(1f, MotionTokens.GENTLE, motion) {
+            animator.animateTo(1f, MotionTokens.LUMA, motion) {
                 themeAnimating = false
                 finishTheme(target)
             }
@@ -1126,20 +1313,22 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(sheetColors.content)
 
         val cellCorner = t.corner(shapes.cellDp) * d
-        // Press feedback follows the theme's motion character, and disappears
-        // entirely under reduced-motion; it never gates the click itself.
-        val pressScale = if (motion.enabled && !motion.reduced) t.motionProfile.pressScale else 1f
+        // Press feedback uses LumaTokens.pressScale (0.92f) and disappears under reduced motion.
+        val pressScale = if (motion.enabled && !motion.reduced) LumaTokens.pressScale else 1f
         val pressMs = t.motionProfile.pressMs
         homeCellConfig = homeCellConfig.copy(
             labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow,
             rippleColor = c.ripple, cornerPx = cellCorner,
             placeholderFill = ColorMath.withAlpha(c.homeForeground, 0.10f),
-            placeholderText = ColorMath.withAlpha(c.homeForeground, 0.82f),
-            pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
+            placeholderText = ColorMath.withAlpha(c.homeForeground, 0.85f),
+            pressScale = pressScale, pressMs = pressMs,
+            labelAlpha = LumaTokens.typeAppLabelAlpha,
+            iconShape = t.iconShape
         )
         dockCellConfig = dockCellConfig.copy(
+            showLabels = false,
             labelColor = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else glass[GlassRole.DOCK].rest.content,
-            labelShadow = appearance.effectiveDock == DockStyle.MINIMAL, labelShadowColor = c.homeShadow,
+            labelShadow = false, labelShadowColor = c.homeShadow,
             rippleColor = c.ripple, cornerPx = cellCorner,
             placeholderFill = if (appearance.effectiveDock == DockStyle.MINIMAL) ColorMath.withAlpha(c.homeForeground, 0.10f) else s.disabledSurface,
             placeholderText = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else glass[GlassRole.DOCK].rest.content,
@@ -1148,12 +1337,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerCellConfig = drawerCellConfig.copy(
             labelColor = sheetColors.content, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
             placeholderFill = s.disabledSurface, placeholderText = sheetColors.muted,
-            pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
+            pressScale = pressScale, pressMs = pressMs,
+            labelAlpha = LumaTokens.typeAppLabelAlpha,
+            iconShape = t.iconShape
         )
         val folderColors = glass[GlassRole.FOLDER].rest
         folderCellConfig = drawerCellConfig.copy(
             labelColor = folderColors.content,
-            placeholderText = folderColors.muted
+            placeholderText = folderColors.muted,
+            labelAlpha = LumaTokens.typeAppLabelAlpha
         )
         undoBar?.let { styleUndoBar(it, t) }
         if (::homeAdapter.isInitialized && !themeAnimating) {
@@ -1209,41 +1401,41 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val style = t.typography
         homeClock.typeface = Typefaces.clock(style)
         homeClock.letterSpacing = style.clockTracking
-        homeDate.typeface = Typefaces.readout(style)
-        homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.62f else style.readoutTracking
-        homeDate.isAllCaps = style.readoutCaps
-        homeDate.textSize = if (style.readoutCaps) 11.5f else 12.5f
+        homeDate.typeface = Typefaces.body(style)
+        homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.50f else 0.01f
+        homeDate.isAllCaps = false
+        homeDate.textSize = LumaTokens.typeCaptionSp
         homeContext.typeface = Typefaces.readout(style)
         homeContext.letterSpacing = style.readoutTracking
         homeContext.isAllCaps = style.readoutCaps
-        homeContext.textSize = if (style.readoutCaps) 11f else 12.5f
+        homeContext.textSize = LumaTokens.typeMicroSp
         homeEmpty.typeface = Typefaces.body(style)
-        homeEmpty.textSize = LumaTypeScale.bodyMediumSp
+        homeEmpty.textSize = LumaTokens.typeBodySp
         findViewById<TextView>(R.id.search_pill_text).apply {
             typeface = Typefaces.body(style)
-            textSize = 15f
+            textSize = LumaTokens.typeBodySp
         }
         findViewById<TextView>(R.id.edit_title).typeface = Typefaces.title(style)
         findViewById<TextView>(R.id.edit_hint).typeface = Typefaces.body(style)
         findViewById<TextView>(R.id.edit_done).typeface = Typefaces.label(style)
         drawer.setSearchTypeface(Typefaces.body(style))
-        val label = Typefaces.label(style)
-        // Label size comes from the theme's token, so Monolith's 9 sp engraved
-        // labels and Atmosphere's 11 sp labels are data, not per-screen constants.
-        val labelSize = t.appLabelSp
+        // App labels: 11sp Regular (400), 0.85 alpha, single-line centered.
+        val label = Typefaces.body(style)
+        val labelSize = LumaTokens.typeAppLabelSp
         homeCellConfig = homeCellConfig.copy(
-            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+            typeface = label, labelTracking = 0f, labelSizeSp = labelSize, labelAlpha = LumaTokens.typeAppLabelAlpha
         )
         dockCellConfig = dockCellConfig.copy(
-            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+            showLabels = false, typeface = label, labelTracking = 0f, labelSizeSp = labelSize
         )
         drawerCellConfig = drawerCellConfig.copy(
-            typeface = label, labelTracking = style.labelTracking, labelSizeSp = labelSize
+            typeface = label, labelTracking = 0f, labelSizeSp = labelSize, labelAlpha = LumaTokens.typeAppLabelAlpha
         )
         val folderColors = glassPalette[GlassRole.FOLDER].rest
         folderCellConfig = drawerCellConfig.copy(
             labelColor = folderColors.content,
-            placeholderText = folderColors.muted
+            placeholderText = folderColors.muted,
+            labelAlpha = LumaTokens.typeAppLabelAlpha
         )
         applyPreset(appearance.preset)
     }
@@ -1252,33 +1444,38 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val c = t.colors
         val s = t.semantics
         val d = resources.displayMetrics.density
-        val spec = glassPalette[GlassRole.DOCK]
+        val spec = glassPalette[GlassRole.DOCK].copy(radiusDp = LumaTokens.radiusXLarge)
         val lp = dockSurface.layoutParams as ViewGroup.MarginLayoutParams
+        val marginPx = dp(LumaTokens.screenMarginHorizontal.roundToInt())
+        lp.marginStart = marginPx
+        lp.marginEnd = marginPx
+        lp.height = dp(LumaTokens.dockHeight.roundToInt())
         when (appearance.effectiveDock) {
             DockStyle.MINIMAL -> {
-                lp.marginStart = dp(20); lp.marginEnd = dp(20)
                 dockSurface.background = null
                 dockSurface.elevation = 0f
                 dockSurface.clipToOutline = false
             }
             else -> {
-                lp.marginStart = dp(20); lp.marginEnd = dp(20)
-                GlassViews.apply(dockSurface, spec, d, ripple = false)
+                GlassViews.apply(
+                    view = dockSurface,
+                    spec = spec,
+                    density = d,
+                    ripple = false,
+                    depth = LumaTokens.depthHome,
+                    radiusOverrideDp = LumaTokens.radiusXLarge
+                )
             }
         }
         dockSurface.layoutParams = lp
         dockSurface.contentDescription = null
-        // Keep the dock rows' own text legible against whatever plate is used.
-        if (appearance.effectiveDock == DockStyle.MINIMAL) {
-            dockCellConfig = dockCellConfig.copy(labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow)
-        } else {
-            dockCellConfig = dockCellConfig.copy(
-                labelColor = spec.rest.content,
-                labelShadow = false,
-                placeholderFill = s.disabledSurface,
-                placeholderText = spec.rest.content
-            )
-        }
+        dockCellConfig = dockCellConfig.copy(
+            showLabels = false,
+            labelColor = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else spec.rest.content,
+            labelShadow = false,
+            placeholderFill = if (appearance.effectiveDock == DockStyle.MINIMAL) ColorMath.withAlpha(c.homeForeground, 0.10f) else s.disabledSurface,
+            placeholderText = if (appearance.effectiveDock == DockStyle.MINIMAL) c.homeForeground else spec.rest.content
+        )
     }
 
     /** Hides the system wallpaper when LumaOS Pro paints its own backdrop (saves GPU and power). */
@@ -1311,17 +1508,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun drawerRowStyle(): DrawerRowStyle {
         val colors = glassPalette[GlassRole.SHEET].rest
         return DrawerRowStyle(
-            headerColor = colors.muted,
-            headerTypeface = Typefaces.readout(theme.typography),
-            headerCaps = true,
-            headerTracking = 0.12f,
+            headerColor = ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
+            headerTypeface = Typefaces.title(theme.typography),
+            headerCaps = false,
+            headerTracking = 0.01f,
             titleColor = colors.content,
             titleTypeface = Typefaces.body(theme.typography),
             subtitleColor = colors.muted,
             subtitleTypeface = Typefaces.body(theme.typography),
             iconTint = colors.content,
             rippleColor = colors.ripple,
-            cornerPx = glassPalette[GlassRole.SETTINGS_CONTROL].radiusDp * resources.displayMetrics.density
+            cornerPx = LumaTokens.radiusSmall * resources.displayMetrics.density
         )
     }
 
@@ -1351,9 +1548,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             (drawerGrid.layoutManager as GridLayoutManager).spanCount = drawerColumns
         }
         homeCellConfig = homeCellConfig.copy(showLabels = a.showLabels, textScale = a.textScale)
-        dockCellConfig = dockCellConfig.copy(showLabels = a.showLabels && a.preset.dockLabels, textScale = a.textScale, cellHeightPx = null)
+        // Floating dock never shows text labels (Apple-precision Phase 2 B2).
+        dockCellConfig = dockCellConfig.copy(showLabels = false, textScale = a.textScale, cellHeightPx = null)
         drawerCellConfig = drawerCellConfig.copy(showLabels = true, textScale = a.textScale)
-        folderCellConfig = drawerCellConfig
+        folderCellConfig = drawerCellConfig.copy(
+            labelColor = glassPalette[GlassRole.FOLDER].rest.content,
+            placeholderText = glassPalette[GlassRole.FOLDER].rest.muted
+        )
         applyPreset(a.preset)
         applyDockStyle(theme)
         updateIconSpec()
@@ -1365,8 +1566,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Spatial arrangement for the chosen composition preset. */
     private fun applyPreset(preset: HomePreset) {
-        val voiceClock = theme.clockSp
-        val clockSp = if (preset.clock == ClockStyle.COMPACT) voiceClock * 0.70f else voiceClock * 1.12f
+        val voiceClock = theme.clockSp.coerceAtLeast(LumaTokens.typeDisplayClockSp)
+        val clockSp = if (preset.clock == ClockStyle.COMPACT) LumaTokens.typeDisplayClockSp * 0.72f else voiceClock
 
         // Luma Glass has one clock/date focal point. The decorative chronometer,
         // header action cluster and context chip are compatibility-only views.
@@ -1407,17 +1608,23 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         if (!::homeAdapter.isInitialized) return
         val requested = dp(appearance.iconSizeDp)
         val homeSize = iconSizeForGrid(requested, homeGrid, gridColumns, homeGrid.paddingLeft + homeGrid.paddingRight)
-        if (homeCellConfig.iconSizePx != homeSize) {
+        val dockSize = iconSizeForGrid(requested, dockRow, LumaTokens.dockIconCount, 0)
+        if (homeCellConfig.iconSizePx != homeSize || dockCellConfig.iconSizePx != dockSize) {
             homeCellConfig = homeCellConfig.copy(iconSizePx = homeSize)
-            dockCellConfig = dockCellConfig.copy(iconSizePx = homeSize)
+            dockCellConfig = dockCellConfig.copy(iconSizePx = dockSize, showLabels = false)
             homeAdapter.notifyItemRangeChanged(0, homeAdapter.itemCount)
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         }
         val drawerSize = if (appearance.drawerPresentation == DrawerPresentation.LIST) requested else
             iconSizeForGrid(requested, drawerGrid, drawerColumns, drawerGrid.paddingLeft + drawerGrid.paddingRight)
-        if (drawerCellConfig.iconSizePx != drawerSize) {
+        val folderSize = requested.coerceAtMost(dp(LumaTokens.iconAppInt))
+        if (drawerCellConfig.iconSizePx != drawerSize || folderCellConfig.iconSizePx != folderSize) {
             drawerCellConfig = drawerCellConfig.copy(iconSizePx = drawerSize)
-            folderCellConfig = drawerCellConfig
+            folderCellConfig = drawerCellConfig.copy(
+                iconSizePx = folderSize,
+                labelColor = glassPalette[GlassRole.FOLDER].rest.content,
+                placeholderText = glassPalette[GlassRole.FOLDER].rest.muted
+            )
             drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
         }
     }
@@ -1484,22 +1691,57 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun applyDepth() {
         val allow = effects.depthTransforms && !motion.reduced
-        val scale = if (allow) 1f - 0.06f * drawerProgress - 0.04f * folderProgress - 0.08f * editProgress -
-            0.04f * (1f - settleProgress) else 1f
+        val inMotion = dragMode != DragMode.NONE ||
+            drawer.isAnimating ||
+            parallaxSpring.isRunning ||
+            (::launchPortal.isInitialized && launchPortal.isRunning) ||
+            (drawerProgress > 0.01f && drawerProgress < 0.99f) ||
+            (folderProgress > 0.01f && folderProgress < 0.99f) ||
+            (modalProgress > 0.01f && modalProgress < 0.99f)
+
+        setHardwareTransitionLayers(inMotion && screenInteractive)
+
+        val frame = LumaDepthStack.solve(
+            LumaDepthStack.Inputs(
+                drawerProgress = drawerProgress,
+                folderProgress = folderProgress,
+                editProgress = editProgress,
+                modalProgress = modalProgress,
+                launchProgress = launchProgress,
+                settleProgress = settleProgress,
+                parallaxX = parallaxX,
+                density = resources.displayMetrics.density,
+                allowDepthTransforms = allow,
+                allowBlur = screenInteractive && effects.blur && theme.usesBlur,
+                inMotion = inMotion
+            )
+        )
+
+        wallpaperArt.scaleX = frame.wallpaperScale
+        wallpaperArt.scaleY = frame.wallpaperScale
+        wallpaperArt.translationX = frame.wallpaperTranslationX
+        wallpaperArt.translationY = frame.wallpaperTranslationY
+        backdrop.scaleX = frame.wallpaperScale
+        backdrop.scaleY = frame.wallpaperScale
+        backdrop.translationX = frame.wallpaperTranslationX
+        backdrop.translationY = frame.wallpaperTranslationY
+
         desktop.pivotX = desktop.width / 2f
         desktop.pivotY = if (editProgress > 0f) desktop.height * 0.42f else desktop.height / 2f
-        desktop.scaleX = scale
-        desktop.scaleY = scale
-        desktop.alpha = (1f - 0.45f * drawerProgress) * (1f - 0.25f * folderProgress) * (0.6f + 0.4f * settleProgress)
+        desktop.scaleX = frame.desktopScale
+        desktop.scaleY = frame.desktopScale
+        desktop.translationX = frame.desktopTranslationX
+        desktop.translationY = frame.desktopTranslationY
+        desktop.alpha = frame.desktopAlpha
+
+        drawerContainer.pivotX = drawerContainer.width / 2f
+        drawerContainer.pivotY = drawerContainer.height / 2f
+        drawerContainer.scaleX = frame.drawerScale
+        drawerContainer.scaleY = frame.drawerScale
+        drawerContainer.alpha = frame.drawerAlpha
+
         if (Build.VERSION.SDK_INT >= 31) {
-            // Blur follows the shared sheet material budget, not a second
-            // per-screen constant. Monolith still resolves to zero blur.
-            val sheetBlur = glassPalette[GlassRole.SHEET].blurDp
-            val themeBlur = if (theme.blurDp > 0f) sheetBlur / theme.blurDp else 0f
-            val radius = if (effects.blur && themeBlur > 0f) {
-                maxOf(20f * drawerProgress, 14f * folderProgress) * themeBlur * resources.displayMetrics.density
-            } else 0f
-            val stepped = (radius * 2f).roundToInt() / 2f
+            val stepped = frame.desktopBlurRadiusPx
             if (stepped != lastBlurRadius) {
                 lastBlurRadius = stepped
                 desktop.setRenderEffect(if (stepped >= 1f) RenderEffect.createBlurEffect(stepped, stepped, Shader.TileMode.CLAMP) else null)
@@ -1508,13 +1750,32 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         desktop.visibility = if (drawerProgress >= 0.999f && !effects.translucency) View.INVISIBLE else View.VISIBLE
     }
 
-    /** Coming back from an app: the desktop settles forward into place. */
+    /** Coming back from an app: morphs app portal back into its icon and settles desktop forward. */
     private fun playReturnSettle() {
+        if (::launchPortal.isInitialized && launchPortal.lastLaunchedKey != null) {
+            val targetIcon = findIconViewForKey(launchPortal.lastLaunchedKey)
+            launchPortal.playReturn(homeRoot, targetIcon, theme.colors.surface1, motion)
+        }
         if (!effects.depthTransforms || !motion.enabled || motion.reduced) return
         SpringAnimator(0.4f) { p ->
             settleProgress = p.coerceIn(0f, 1.1f)
             applyDepth()
-        }.animateTo(1f, MotionTokens.SNAPPY, motion)
+        }.animateTo(1f, MotionTokens.LUMA, motion)
+    }
+
+    private fun findIconViewForKey(key: ComponentKey?): View? {
+        if (key == null) return null
+        dockAdapter.positionsFor(key).firstOrNull()?.let { pos ->
+            dockRow.findViewHolderForAdapterPosition(pos)?.itemView?.let { v ->
+                return v.findViewById(R.id.app_icon) ?: v
+            }
+        }
+        homeAdapter.positionsFor(key).firstOrNull()?.let { pos ->
+            homeGrid.findViewHolderForAdapterPosition(pos)?.itemView?.let { v ->
+                return v.findViewById(R.id.app_icon) ?: v
+            }
+        }
+        return null
     }
 
     // ------------------------------------------------------ DrawerController.Host
@@ -1651,11 +1912,23 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // ------------------------------------------------------------- launching
 
     private fun launchApp(key: ComponentKey, source: View?) {
-        val options = if (motion.enabled && !motion.reduced && source != null && source.width > 0) {
-            ActivityOptions.makeClipRevealAnimation(source, 0, 0, source.width, source.height).toBundle()
+        val iconSource = source?.findViewById<View>(R.id.app_icon) ?: source
+        val options = if (motion.enabled && !motion.reduced && iconSource != null && iconSource.width > 0) {
+            ActivityOptions.makeScaleUpAnimation(iconSource, 0, 0, iconSource.width, iconSource.height).toBundle()
         } else null
-        val bounds = source?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
+        val bounds = iconSource?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
         if (core.appRepository.launch(key, bounds, options)) {
+            LumaHaptics.tap(iconSource ?: desktop)
+            if (::launchPortal.isInitialized) {
+                launchPortal.playLaunch(
+                    root = homeRoot,
+                    key = key,
+                    sourceView = iconSource,
+                    icon = iconLoader.get(key, density),
+                    fillColor = theme.colors.surface1,
+                    motion = motion
+                )
+            }
             viewModel.recordLaunch(key)
             returningFromApp = true
         } else {
@@ -1939,6 +2212,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         widgetPicker?.shutdown()
         val picker = WidgetPicker(
             this, homeRoot, theme, effects, motion, bottomInset,
+            onDepthProgress = { p ->
+                modalProgress = p
+                applyDepth()
+            },
             capabilities = { info -> widgets.capabilities(info, cellHeightPx) }
         ).also { widgetPicker = it }
         picker.show(
@@ -2101,7 +2378,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             SpringAnimator(0f) { p ->
                 bar.alpha = p
                 bar.translationY = (1f - p) * dp(12)
-            }.animateTo(1f, MotionTokens.SNAPPY, motion)
+            }.animateTo(1f, MotionTokens.LUMA, motion)
         } else {
             bar.alpha = 1f
             bar.translationY = 0f
@@ -2115,7 +2392,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             (bar.parent as? ViewGroup)?.removeView(bar)
         }
         if (motion.enabled && !motion.reduced) {
-            SpringAnimator(1f) { p -> bar.alpha = p }.animateTo(0f, MotionTokens.SNAPPY, motion) { done() }
+            SpringAnimator(1f) { p -> bar.alpha = p }.animateTo(0f, MotionTokens.LUMA, motion) { done() }
         } else done()
     }
 
