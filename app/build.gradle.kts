@@ -144,6 +144,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     // --- Tests ---------------------------------------------------------
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)

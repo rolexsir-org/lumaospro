@@ -47,6 +47,18 @@ class WallpaperImageStoreRuntimeTest {
         assertTrue(image!!.width > 0 && image.height > 0)
     }
 
+    @Test fun `every gallery entry decodes and supports launcher only application`() = runBlocking {
+        val store = WallpaperImageStore(context)
+        val entries = store.entries()
+        assertEquals(30, entries.size)
+        for (entry in entries) {
+            val thumbnail = store.preview(entry, 240)
+            assertNotNull("Missing thumbnail for ${entry.id}", thumbnail)
+            assertTrue(thumbnail!!.width > 0 && thumbnail.height > 0)
+            assertNull(store.apply(entry, com.lumaos.pro.launcher.wallpaper.WallpaperTarget.LUMA_HOME))
+        }
+    }
+
     @Test fun `photo is copied privately survives store recreation and deletion preserves original`() = runBlocking {
         val original = File(root, "original.png")
         val source = Bitmap.createBitmap(80, 60, Bitmap.Config.ARGB_8888)

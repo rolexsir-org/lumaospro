@@ -1,5 +1,7 @@
 package com.lumaos.pro.launcher.widgets.music
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -44,6 +46,7 @@ import com.lumaos.pro.launcher.ui.glass.LumaGlassTopBar
 /** Informed, optional permission entry point; never appears over Android keyguard. */
 class MusicAccessActivity : ComponentActivity() {
     private var access by mutableStateOf(false)
+    private var widgetCount by mutableStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,7 +75,7 @@ class MusicAccessActivity : ComponentActivity() {
                     ) {
                         LumaGlassTopBar(
                             theme = theme,
-                            title = stringResource(R.string.music_access_title),
+                            title = stringResource(R.string.music_widget_name),
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                             navigationIcon = {
                                 LumaGlassChoice(
@@ -90,6 +93,19 @@ class MusicAccessActivity : ComponentActivity() {
                                 .padding(horizontal = 24.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            // This destination configures the home widget. Playback remains
+                            // in MusicBridge/RemoteViews, not a second, competing player.
+                            LumaGlassCard(
+                                theme = theme,
+                                title = stringResource(R.string.music_setup_title),
+                                subtitle = stringResource(R.string.music_setup_count, widgetCount)
+                            ) {
+                                Text(
+                                    stringResource(R.string.music_setup_steps),
+                                    color = Color(theme.colors.onSurface),
+                                    fontSize = 14.sp
+                                )
+                            }
                             LumaGlassCard(
                                 theme = theme,
                                 title = stringResource(R.string.music_widget_name),
@@ -138,6 +154,9 @@ class MusicAccessActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         access = MusicBridge.hasAccess(this)
+        widgetCount = AppWidgetManager.getInstance(this).getAppWidgetIds(
+            ComponentName(this, MusicWidgetProvider::class.java)
+        ).size
         MusicBridge.refresh(applicationContext)
     }
 }

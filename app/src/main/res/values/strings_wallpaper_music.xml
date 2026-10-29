@@ -107,4 +107,8 @@
     <string name="battery_status_not_charging">Not charging</string>
     <string name="battery_status_unknown">Charging status unavailable</string>
     <string name="battery_updated">Checked %1$s</string>
+    <string name="wallpaper_library_retry">Could not load wallpapers. Tap to retry.</string>
+    <string name="music_setup_title">Home-screen music widget</string>
+    <string name="music_setup_count">Installed widgets: %1$d</string>
+    <string name="music_setup_steps">1. Enable optional notification access below.\n2. Return Home, open the widget picker, and add Luma Glass Music.\n3. Start playback in a compatible player.\n\nThe widget displays available track information and only the controls supported by that player. With no active session it shows a message instead. This screen configures access; playback controls live on the home widget.</string>
 </resources>
