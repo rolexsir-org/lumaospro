@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.launcher
 import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.app.KeyguardManager
+import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
 import android.content.Intent

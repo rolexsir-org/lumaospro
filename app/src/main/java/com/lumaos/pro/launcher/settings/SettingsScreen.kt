@@ -803,6 +803,9 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
 @Composable
 private fun PerformanceSection(viewModel: SettingsViewModel) {
     val override by viewModel.prefs.profileOverride.collectAsState(null)
+    // Delegated property reads have a custom getter, so they cannot be smart-cast
+    // inside a `when` branch. Keep one snapshot of the current value instead.
+    val overrideId: ProfileId? = override
     val autoOptimize by viewModel.prefs.autoOptimize.collectAsState(true)
     val scope = rememberCoroutineScope()
     val capability = viewModel.capability
@@ -811,12 +814,12 @@ private fun PerformanceSection(viewModel: SettingsViewModel) {
         CleanSectionHeader(R.string.section_performance)
         ChoiceRowCompact(
             label = stringResource(R.string.pref_profile),
-            selected = when (override) {
+            selected = when (overrideId) {
                 null -> stringResource(R.string.pref_profile_auto)
                 ProfileId.LIGHTWEIGHT -> stringResource(R.string.profile_lightweight)
                 ProfileId.BALANCED -> stringResource(R.string.profile_balanced)
                 ProfileId.VISUAL_QUALITY -> stringResource(R.string.profile_visual)
-                else -> override.name
+                else -> overrideId.name
             },
             options = listOf(
                 null to stringResource(R.string.pref_profile_auto),
@@ -828,7 +831,7 @@ private fun PerformanceSection(viewModel: SettingsViewModel) {
         )
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
             Text(
-                text = when (override) {
+                text = when (overrideId) {
                     ProfileId.LIGHTWEIGHT -> stringResource(R.string.profile_lightweight_desc)
                     ProfileId.BALANCED -> stringResource(R.string.profile_balanced_desc)
                     ProfileId.VISUAL_QUALITY -> stringResource(R.string.profile_visual_desc)
@@ -870,7 +873,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         Text("Contexts", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
         ChoiceRowCompact(label = "Current context", selected = active.title, options = choices.map { it as Pair<Any,String> }, onSelected = { viewModel.selectContextProfile(it as ContextProfile) })
         CleanDivider()
-        CompactSwitchRow(label = "Automatic schedule", subtitle = "Switch at local-time boundaries", checked = schedule.enabled, onCheckedChange = { viewModel.setSchedule(active, schedule.copy(enabled = it)) })
+        CompactSwitchRow(title = "Automatic schedule", subtitle = "Switch at local-time boundaries", checked = schedule.enabled, onCheckedChange = { viewModel.setSchedule(active, schedule.copy(enabled = it)) })
         if (schedule.enabled) {
             CleanDivider()
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -901,8 +904,8 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             }
         }
         CleanDivider()
-        CompactSwitchRow(label = "Context alerts", subtitle = "Notify when entering ${active.title}", checked = active in alertProfiles, onCheckedChange = { scope.launch { viewModel.prefs.setContextNotificationEnabled(active, it) } })
-        CompactSwitchRow(label = "Do Not Disturb in ${active.title}", checked = active in dndProfiles, onCheckedChange = {
+        CompactSwitchRow(title = "Context alerts", subtitle = "Notify when entering ${active.title}", checked = active in alertProfiles, onCheckedChange = { scope.launch { viewModel.prefs.setContextNotificationEnabled(active, it) } })
+        CompactSwitchRow(title = "Do Not Disturb in ${active.title}", checked = active in dndProfiles, onCheckedChange = {
             scope.launch { viewModel.prefs.setContextDndEnabled(active, it) }
             if (it && !hasDndAccess) openDnd()
         })
@@ -917,7 +920,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
                     .onFailure { Toast.makeText(context, R.string.notification_settings_unavailable, Toast.LENGTH_LONG).show() }
             })
         }
-        CompactSwitchRow(label = "System notifications", checked = alertsEnabled, onCheckedChange = { if (it) onRequestNotifications() else scope.launch { viewModel.prefs.setContextNotificationsEnabled(false) } })
+        CompactSwitchRow(title = "System notifications", checked = alertsEnabled, onCheckedChange = { if (it) onRequestNotifications() else scope.launch { viewModel.prefs.setContextNotificationsEnabled(false) } })
     }
 }
 

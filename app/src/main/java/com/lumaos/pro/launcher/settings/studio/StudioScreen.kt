@@ -421,7 +421,10 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     }
 }
 
-@Composable private fun <T> CompactChoiceRow(label: String, selected: String, options: List<T>, labelFor: (T) -> String = { it.toString() }, onSelected: (T) -> Unit) {
+// `labelFor` runs while this row is composed (the option labels are resolved
+// during composition), and the call sites resolve them from string resources and
+// composable label helpers. It therefore has to be a composable lambda type.
+@Composable private fun <T> CompactChoiceRow(label: String, selected: String, options: List<T>, labelFor: @Composable (T) -> String = { it.toString() }, onSelected: (T) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().clickable { expanded = true }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
