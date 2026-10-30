@@ -12,6 +12,7 @@ import android.service.notification.StatusBarNotification
 import com.lumaos.pro.launcher.core.util.LumaLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.concurrent.Executors
 
 /** Everything the shade renders: access state, cards, and in-flight replies. */
 data class NotificationShadeState(
@@ -49,6 +50,21 @@ data class NotificationShadeState(
 object NotificationHub {
 
     private val main = Handler(Looper.getMainLooper())
+
+    /**
+     * Extraction runs here, not on the main thread.
+     *
+     * Android delivers listener callbacks on the main thread, and reading one
+     * notification means a `PackageManager` label lookup plus a small-icon decode.
+     * A connect or a resync can carry dozens of notifications at once, which on a
+     * launcher process is exactly the kind of work that drops frames on the home
+     * screen. One thread keeps submission order, so a post and the removal that
+     * follows it can never be applied the wrong way round.
+     */
+    private val worker = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "luma-notifications").apply { isDaemon = true }
+    }
+
     private val _state = MutableStateFlow(NotificationShadeState())
     val state: StateFlow<NotificationShadeState> = _state
 
@@ -66,15 +82,17 @@ object NotificationHub {
         application = service.applicationContext
         listener = service
         listenerConnected = true
-        val active = runCatching { service.activeNotifications }.getOrElse {
-            LumaLog.w("Active notifications could not be read")
-            null
+        worker.execute {
+            val active = runCatching { service.activeNotifications }.getOrElse {
+                LumaLog.w("Active notifications could not be read")
+                null
+            }
+            synchronized(entries) {
+                entries.clear()
+                active?.forEach { sbn -> put(sbn) }
+            }
+            publish(access = NotificationAccessState.GRANTED)
         }
-        synchronized(entries) {
-            entries.clear()
-            active?.forEach { sbn -> put(sbn) }
-        }
-        publish(access = NotificationAccessState.GRANTED)
     }
 
     /**
@@ -101,13 +119,18 @@ object NotificationHub {
     fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
         val context = application ?: return
-        val extracted = NotificationExtractor.extract(context, sbn) ?: return
-        synchronized(entries) {
-            entries[sbn.key] = extracted
-            trimLocked()
+        worker.execute {
+            // A disconnect that arrived while this task was queued wins: the entry
+            // would be stale, and the cards are hidden anyway once access is gone.
+            if (!listenerConnected) return@execute
+            val extracted = NotificationExtractor.extract(context, sbn) ?: return@execute
+            synchronized(entries) {
+                entries[sbn.key] = extracted
+                trimLocked()
+            }
+            // A re-posted notification supersedes any "reply sent" hint for it.
+            publish(replyClearedFor = sbn.key)
         }
-        // A re-posted notification supersedes any "reply sent" hint for it.
-        publish(replyClearedFor = sbn.key)
     }
 
     fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -125,15 +148,18 @@ object NotificationHub {
      */
     fun resync() {
         val service = listener ?: return
-        val active = runCatching { service.activeNotifications }.getOrElse {
-            LumaLog.w("Active notifications could not be re-read")
-            return
+        worker.execute {
+            if (!listenerConnected) return@execute
+            val active = runCatching { service.activeNotifications }.getOrElse {
+                LumaLog.w("Active notifications could not be re-read")
+                return@execute
+            }
+            synchronized(entries) {
+                entries.clear()
+                active.forEach { sbn -> put(sbn) }
+            }
+            publish(access = NotificationAccessState.GRANTED)
         }
-        synchronized(entries) {
-            entries.clear()
-            active.forEach { sbn -> put(sbn) }
-        }
-        publish(access = NotificationAccessState.GRANTED)
     }
 
     private fun put(sbn: StatusBarNotification) {
@@ -292,7 +318,11 @@ object NotificationHub {
             // A hint only survives while its notification does.
             awaiting = candidates.filter { entries.containsKey(it) }.toSet()
         }
-        val next = NotificationShadeState(effectiveAccess, cards, awaiting)
+        // Without a live grant there is nothing this launcher is allowed to show,
+        // so no queued entry can keep a card on screen after a revoke or a
+        // disconnect.
+        val visible = if (effectiveAccess == NotificationAccessState.GRANTED) cards else emptyList()
+        val next = NotificationShadeState(effectiveAccess, visible, awaiting)
         if (Looper.myLooper() == Looper.getMainLooper()) {
             _state.value = next
         } else {
