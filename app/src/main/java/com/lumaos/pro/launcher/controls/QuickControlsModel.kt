@@ -140,9 +140,9 @@ enum class TileId {
  */
 object QuickControlsPolicy {
 
-    /** Tiles that need a real reading before they may claim a position. */
-    private val CONNECTIVITY = listOf(TileId.WIFI, TileId.MOBILE_DATA, TileId.BLUETOOTH, TileId.AIRPLANE)
-    private val DEVICE = listOf(TileId.TORCH, TileId.ROTATION_LOCK, TileId.FOCUS, TileId.CAST)
+    /** Connectivity tiles, in the order Android users expect to read them. */
+    private val CONNECTIVITY =
+        listOf(TileId.WIFI, TileId.MOBILE_DATA, TileId.BLUETOOTH, TileId.AIRPLANE, TileId.HOTSPOT)
 
     /**
      * Tile columns for the available width. The panel keeps 4 columns on phones
@@ -164,7 +164,8 @@ object QuickControlsPolicy {
      * all (no flash, no cast destination, no camera app). A tile Android merely
      * refuses to let us *write* stays, because opening the real system page is a
      * legitimate, useful action - and hiding it would leave the user hunting.
-     * [QuickControlsPanel] never renders a tile whose state is invented.
+     * [com.lumaos.pro.launcher.controls.QuickControlsView] renders every one of
+     * them from a real reading, and never from an invented state.
      */
     fun tilesFor(snapshot: QuickControlsSnapshot, torchCapable: Boolean): List<TileId> {
         val tiles = ArrayList<TileId>(8)
