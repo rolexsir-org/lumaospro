@@ -3,6 +3,7 @@ package com.lumaos.pro.launcher.launcher
 import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ActivityNotFoundException
@@ -59,6 +60,7 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.VoiceCommand
 import com.lumaos.pro.launcher.context.VoiceCommandParser
+import com.lumaos.pro.launcher.controls.DndCoordination
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.apps.AppMatcher
@@ -90,6 +92,7 @@ import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
 import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.home.LivingIconPickerSheet
 import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
+import com.lumaos.pro.launcher.launcher.home.LumaShade
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.launcher.home.MenuEntry
 import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
@@ -140,10 +143,12 @@ import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetHostController
 import com.lumaos.pro.launcher.widgets.WidgetPicker
 import com.lumaos.pro.launcher.widgets.WidgetPlan
+import com.lumaos.pro.launcher.widgets.WidgetSlotGeometry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -168,7 +173,8 @@ import kotlin.math.roundToInt
  * instance-state record also keeps an in-flight widget bind/configuration
  * associated with its id if Android recreates this activity.
  */
-class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeController.Host, FolderOverlay.Host {
+class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeController.Host, FolderOverlay.Host,
+    LumaShade.Host {
 
     private val core by lazy { (application as LumaApp).core }
     private val viewModel by lazy { ViewModelProvider(this)[LauncherViewModel::class.java] }
@@ -249,6 +255,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var edit: EditModeController
     private lateinit var folders: FolderOverlay
     private var widgetPicker: WidgetPicker? = null
+
+    /**
+     * The pull-down panel: Quick Controls above, the device's real notifications
+     * below. Built lazily on first open, observing the platform only while it is
+     * up, and torn down in onDestroy.
+     */
+    private var shade: LumaShade? = null
     private var livingIconPicker: LivingIconPickerSheet? = null
     /** Synchronous lifecycle guards; the durable decision remains LumaPrefs.onboardingDone. */
     private var onboardingCheckInFlight = false
@@ -411,6 +424,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 // As the home screen, back must not finish the activity: doing
                 // so would leave the device with no home at all.
                 when {
+                    // The panel is the topmost surface while it is up, so it is the
+                    // first thing Back must close - including mid-drag.
+                    shade?.canDragClose() == true -> shade?.dismiss()
                     livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
                     widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
                     folders.isOpen -> folders.close()
@@ -459,6 +475,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // Coming back to a desktop that is still dimmed with a lifted capsule
         // would be a stale state, and no edit flag is persisted.
         if (::edit.isInitialized && edit.isActive) edit.exitImmediately()
+        // Leaving the desktop with the panel up would keep its receivers, its
+        // media-session callbacks and its keyboard alive in the background.
+        shade?.dismissImmediately()
         core.appRepository.unregisterCallback(packageCallback)
         widgets.stopListening()
         readouts.stop()
@@ -496,6 +515,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         livingIconPicker?.dismissImmediately()
         livingIconPicker = null
         widgetPicker?.shutdown()
+        shade?.shutdown()
+        shade = null
         iconLoader.shutdown()
         widgets.clearViews()
         super.onDestroy()
@@ -540,6 +561,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
         // Pressing Home on the home screen returns to a clean desktop on page 1.
         when {
+            shade?.canDragClose() == true -> shade?.dismiss()
             livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
             widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
             folders.isOpen -> folders.close()
@@ -737,6 +759,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             ?.also { reportWidgetSize(item.appWidgetId, item.rows) }
                     }
                     override fun rowHeightPx(): Int = cellHeightPx
+                    override fun gutterPx(): Int = homeGutterPx()
                     override fun editOutline() = ThemedDrawables.surface(
                         ColorMath.withAlpha(theme.colors.accent, 0.08f), theme.corner(18f) * resources.displayMetrics.density,
                         theme.colors.accent, dp(1)
@@ -824,7 +847,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         pageGrid.setPadding(margin, dp(4), margin, dp(4))
         pageGrid.itemAnimator = LumaSpring.ItemAnimator { motion }
         pageGrid.addItemDecoration(object : RecyclerView.ItemDecoration() {
-            private val gutterPx = dp(4)
+            private val gutterPx = homeGutterPx()
             override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
                 outRect.set(gutterPx, gutterPx, gutterPx, gutterPx)
             }
@@ -917,6 +940,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             launchPortal,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
+        // Elevation, not add order, decides the stack: depthControlCenter keeps the
+        // panel above the drawer and below the widget picker and the launch portal.
+        shade = LumaShade(this, homeRoot, lifecycleScope, this)
 
         findViewById<View>(R.id.drawer_close).setOnClickListener { drawer.close() }
         findViewById<View>(R.id.drawer_voice).setOnClickListener { launchVoiceCommand() }
@@ -951,6 +977,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             findViewById<View>(R.id.drawer_bottom_pad).layoutParams =
                 findViewById<View>(R.id.drawer_bottom_pad).layoutParams.apply { height = safeInsets.bottom }
             bottomInset = safeInsets.bottom
+            shade?.onInsetsChanged()
             insets
         }
         ViewCompat.requestApplyInsets(homeRoot)
@@ -1010,6 +1037,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun currentScreenMarginPx(): Int = dp(LumaTokens.screenMarginHorizontal.roundToInt())
 
+    /**
+     * One side of the home grid's gutter, exactly as the item decoration applies
+     * it. Widget slot height, the size reported to a provider and the drop-zone
+     * pitch all derive from this, so none of them can drift from the cells the
+     * RecyclerView really lays out.
+     */
+    private fun homeGutterPx(): Int = dp(WidgetSlotGeometry.GUTTER_DP.roundToInt())
+
+    /** One row of the home grid as laid out: the cell plus its decoration on both sides. */
+    private fun homeRowPitchPx(): Int = WidgetSlotGeometry.pitchPx(cellHeightPx, homeGutterPx())
+
     private var bottomInset = 0
 
     private fun updateSideBySide() {
@@ -1020,13 +1058,22 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     // --------------------------------------------------------------- gestures
 
-    private enum class DragMode { NONE, DRAWER, SEARCH_PULL }
+    /**
+     * Which overlay owns the current touch stream.
+     *
+     * [SHADE] is a pull that opens the panel; [SHADE_CLOSE] is a drag on the
+     * panel's scrim that closes it. They are separate because the first is claimed
+     * against the drawer's own gestures and the second only exists while the panel
+     * is up, where nothing else may interpret the stream at all.
+     */
+    private enum class DragMode { NONE, DRAWER, SEARCH_PULL, SHADE, SHADE_CLOSE }
 
     private var dragMode = DragMode.NONE
     private var downX = 0f
     private var downY = 0f
     private var lastY = 0f
     private var downOnScrollableGrid = false
+    private var shadeDownOnScrim = false
     private var velocityTracker: VelocityTracker? = null
     private val touchSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop }
     private var pinchScale = 1f
@@ -1096,7 +1143,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun swipeDownAction(): GestureAction = gestureActions[GestureKind.SWIPE_DOWN] ?: GestureKind.SWIPE_DOWN.default
 
     private fun overlayBlocksGestures(): Boolean =
-        folders.isOpen || widgetPicker?.isShowing == true || edit.isActive
+        folders.isOpen || widgetPicker?.isShowing == true || edit.isActive || shade?.canDragClose() == true
 
     /**
      * Events are seen at the activity level so a swipe anywhere is recognised
@@ -1106,6 +1153,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      * 1:1 finger tracking back without any jump.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        shade?.let { panel ->
+            // While the panel is up it owns the stream: nothing underneath may
+            // interpret a drag, and only a drag that began on the scrim can close
+            // it, so the notification list keeps every scroll it is entitled to.
+            if (panel.canDragClose()) {
+                if (trackShadeDrag(ev, panel)) return true
+                return super.dispatchTouchEvent(ev)
+            }
+        }
         if (overlayBlocksGestures()) {
             // While editing, a tap on empty workspace (not on an icon, a page dot
             // or the action capsule) leaves the session — the conventional
@@ -1140,10 +1196,30 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             !isInside(findViewById(R.id.alpha_index), downX, downY)
                         val searchPull = !drawer.isOpen && dy > 0 && swipeDownAction() is GestureAction.OpenSearch &&
                             !(downOnScrollableGrid && homeGrid.canScrollVertically(-1))
-                        if (opening || closing || searchPull) {
-                            dragMode = if (searchPull) DragMode.SEARCH_PULL else DragMode.DRAWER
+                        // The panel is pulled down exactly where search would be, so
+                        // the user's own binding decides which of the two it is; they
+                        // can never both be armed for one swipe-down. The 1:1 drag is
+                        // claimed only inside the band under the status bar: a
+                        // swipe-down from anywhere else still opens the panel through
+                        // the fling action, but never competes with an icon drag or a
+                        // page swipe in the middle of the screen.
+                        val shadePull = !drawer.isOpen && dy > 0 && shade != null &&
+                            swipeDownAction() is GestureAction.OpenQuickControls &&
+                            LumaShade.isShadePullZone(
+                                downY = downY,
+                                topInsetPx = safeInsets.top,
+                                density = resources.displayMetrics.density,
+                                dragSlopPx = touchSlop
+                            ) &&
+                            !(downOnScrollableGrid && homeGrid.canScrollVertically(-1))
+                        if (opening || closing || searchPull || shadePull) {
+                            dragMode = when {
+                                shadePull -> DragMode.SHADE
+                                searchPull -> DragMode.SEARCH_PULL
+                                else -> DragMode.DRAWER
+                            }
                             lastY = ev.rawY
-                            drawer.startTracking()
+                            if (dragMode == DragMode.SHADE) shade?.startTracking() else drawer.startTracking()
                             if (closing) drawer.hideKeyboard()
                             val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
                             super.dispatchTouchEvent(cancel)
@@ -1161,6 +1237,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 }
                 if (dragMode == DragMode.SEARCH_PULL) {
                     drawer.trackBy(-(ev.rawY - lastY))
+                    lastY = ev.rawY
+                    return true
+                }
+                if (dragMode == DragMode.SHADE) {
+                    shade?.trackBy(ev.rawY - lastY)
                     lastY = ev.rawY
                     return true
                 }
@@ -1186,6 +1267,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     recycleTracker()
                     return true
                 }
+                if (dragMode == DragMode.SHADE) {
+                    tracker.computeCurrentVelocity(1000)
+                    shade?.release(tracker.yVelocity)
+                    dragMode = DragMode.NONE
+                    recycleTracker()
+                    return true
+                }
                 recycleTracker()
             }
         }
@@ -1194,6 +1282,55 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             scaleDetector.onTouchEvent(ev)
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * Drag-to-close for the panel, claimed only after the touch slop and only for
+     * a drag that started on the scrim and moves upwards - the direction that
+     * closes a panel hanging from the top edge. Children are cancelled the moment
+     * the panel takes over, so no view keeps a stream the panel is now drawing.
+     *
+     * @return true when this event was consumed by the panel.
+     */
+    private fun trackShadeDrag(ev: MotionEvent, shade: LumaShade): Boolean {
+        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+        tracker.addMovement(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.rawX
+                downY = ev.rawY
+                lastY = ev.rawY
+                dragMode = DragMode.NONE
+                shadeDownOnScrim = shade.ownsDismissDrag(ev.rawX, ev.rawY)
+            }
+            MotionEvent.ACTION_MOVE -> if (shadeDownOnScrim && ev.pointerCount == 1) {
+                if (dragMode != DragMode.SHADE_CLOSE && ev.rawY - downY < -touchSlop * 1.5f) {
+                    dragMode = DragMode.SHADE_CLOSE
+                    lastY = ev.rawY
+                    shade.startTracking()
+                    val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                    super.dispatchTouchEvent(cancel)
+                    cancel.recycle()
+                }
+                if (dragMode == DragMode.SHADE_CLOSE) {
+                    shade.trackBy(ev.rawY - lastY)
+                    lastY = ev.rawY
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasClosing = dragMode == DragMode.SHADE_CLOSE
+                if (wasClosing) {
+                    tracker.computeCurrentVelocity(1000)
+                    shade.release(tracker.yVelocity)
+                }
+                dragMode = DragMode.NONE
+                shadeDownOnScrim = false
+                recycleTracker()
+                if (wasClosing) return true
+            }
+        }
+        return false
     }
 
     private fun recycleTracker() {
@@ -1257,6 +1394,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             GestureAction.None -> Unit
             GestureAction.OpenDrawer -> drawer.open(focusSearch = false)
             GestureAction.OpenSearch -> drawer.open(focusSearch = true)
+            GestureAction.OpenQuickControls -> shade?.open()
             GestureAction.OpenSettings -> openSettings()
             GestureAction.OpenWallpaperPicker -> openWallpaperPicker()
             GestureAction.EnterEditMode -> edit.enter()
@@ -1559,6 +1697,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             viewModel.suggestionsEnabled.value && core.launchHistory.size > 0, viewModel.categoriesEnabled.value)
         if (::edit.isInitialized) edit.applyTheme()
         if (::folders.isInitialized) folders.applyTheme()
+        shade?.applyTheme()
         refreshAll()
     }
 
@@ -2197,6 +2336,91 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         menu().show(anchor, getString(R.string.sort_title), entries) { viewModel.setSort(DrawerSort.entries[it.id]) }
     }
 
+    // ---------------------------------------------------------- LumaShade.Host
+
+    override fun topInsetPx(): Int = safeInsets.top
+    override fun bottomInsetPx(): Int = safeInsets.bottom
+
+    /**
+     * The width the panel's tile grid really has, in dp: the window minus the
+     * panel's own screen margin and inner padding. The column count derives from
+     * this, so a narrow phone and a wide screen each get a grid that fits instead
+     * of clipped tiles.
+     */
+    override fun availableWidthDp(): Int {
+        val d = resources.displayMetrics.density
+        if (d <= 0f) return 1
+        val chrome = 2 * dp(LumaTokens.screenMarginHorizontal.roundToInt()) +
+            2 * dp(LumaTokens.spaceSM.roundToInt())
+        val widthPx = if (homeRoot.width > 0) homeRoot.width else resources.displayMetrics.widthPixels
+        return ((widthPx - chrome) / d).toInt().coerceAtLeast(1)
+    }
+
+    override fun onDepthProgress(progress: Float) {
+        modalProgress = progress
+        applyDepth()
+    }
+
+    override fun onOpenSettings() {
+        shade?.dismiss()
+        openSettings()
+    }
+
+    override fun showMessage(message: String) = toast(message)
+
+    /**
+     * Labels and icons come from the launcher's own LauncherApps enumeration,
+     * which is exempt from Android 11+ package-visibility filtering: the app that
+     * posted a notification has no reason to be visible to this launcher, and its
+     * real name and icon are the honest thing to show. Null falls back to what the
+     * card read out of the notification itself.
+     */
+    override fun appLabel(packageName: String): String? = core.appRepository.labelForPackage(packageName)
+
+    override fun appIcon(packageName: String): android.graphics.drawable.Drawable? =
+        core.appRepository.iconForPackage(packageName, density)
+
+    override fun onNotificationLaunched() {
+        // The posting app is coming forward through its own PendingIntent. The
+        // panel must be gone before it arrives; the return settle still plays.
+        shade?.dismissImmediately()
+        returningFromApp = true
+    }
+
+    /**
+     * A Focus change made by hand, through the panel.
+     *
+     * The context-profile automation keeps its own bookkeeping about the
+     * interruption filter so it can put the device back when a profile ends. Once
+     * the user moves that filter themselves the bookkeeping is stale: still owning
+     * it would let a profile silently overwrite a choice the user just made.
+     * [DndCoordination] decides what changes, and only the two preference keys the
+     * automation already reads are written.
+     */
+    override fun onDndChangedByUser(previousFilter: Int, newFilter: Int) {
+        val controls = shade?.controls ?: return
+        val policyAccess = controls.hasNotificationPolicyAccess()
+        lifecycleScope.launch {
+            try {
+                val prefs = viewModel.prefs
+                val managed = prefs.contextDndManaged.first()
+                val decision = DndCoordination.afterUserChange(
+                    managed = managed,
+                    previousFilter = previousFilter,
+                    newFilter = newFilter,
+                    filterAll = NotificationManager.INTERRUPTION_FILTER_ALL,
+                    policyAccessGranted = policyAccess
+                )
+                if (decision.managed != managed) prefs.setContextDndManaged(decision.managed)
+                decision.restoreFilter?.let { prefs.setContextDndRestoreFilter(it) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                LumaLog.e("Focus ownership could not be reconciled", failure)
+            }
+        }
+    }
+
     // --------------------------------------------------- EditModeController.Host
 
     override fun glassPalette(): GlassPalette = glassPalette
@@ -2307,6 +2531,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun gridColumns(): Int = gridColumns
     override fun gridRows(): Int = appearance.gridRows
     override fun cellHeight(): Int = cellHeightPx
+    override fun rowPitchPx(): Int = homeRowPitchPx()
 
     // -------------------------------------------------------- FolderOverlay.Host
 
@@ -2854,11 +3079,31 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
+    /**
+     * Tells a provider the size its RemoteViews are really drawn in.
+     *
+     * Both numbers come from [WidgetSlotGeometry], and both walk the same two
+     * steps the layout does: the height starts at the item height for [rows] grid
+     * pitches and the width at the grid's content width, then each loses the
+     * padding of `item_widget.xml`'s root and of the glass frame inside it. What
+     * is left is the box a provider's RemoteViews are drawn in. Reporting the
+     * theoretical cell height instead (the previous behaviour) told providers they
+     * had roughly 16dp more room per row than that box gave them, never reported a
+     * width at all, and providers that laid out for the reported height had their
+     * content clipped.
+     */
     private fun reportWidgetSize(appWidgetId: Int, rows: Int) {
         val d = resources.displayMetrics.density
-        val w = (homeGrid.width - homeGrid.paddingLeft - homeGrid.paddingRight) / d
-        val h = (cellHeightPx * rows) / d
-        if (w > 0 && h > 0) widgets.reportSize(appWidgetId, w, h)
+        // The real padding from the real layout, so a token change cannot leave
+        // this reporting a box the provider is not drawn in.
+        val pad = resources.getDimensionPixelSize(R.dimen.luma_space_xs)
+        val itemWidthPx = homeGrid.width - homeGrid.paddingLeft - homeGrid.paddingRight
+        val itemHeightPx = WidgetSlotGeometry.itemHeightPx(rows, cellHeightPx, homeGutterPx())
+        val frameWidthPx = WidgetSlotGeometry.contentBoxPx(itemWidthPx, pad)
+        val frameHeightPx = WidgetSlotGeometry.contentBoxPx(itemHeightPx, pad)
+        val w = WidgetSlotGeometry.reportedWidthDp(WidgetSlotGeometry.contentBoxPx(frameWidthPx, pad), d)
+        val h = WidgetSlotGeometry.reportedHeightDp(WidgetSlotGeometry.contentBoxPx(frameHeightPx, pad), d)
+        if (WidgetSlotGeometry.isReportable(w, h)) widgets.reportSize(appWidgetId, w, h)
     }
 
     /** A removed widget kept alive (host id included) until the undo window closes. */

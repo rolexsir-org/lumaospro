@@ -39,7 +39,6 @@ import com.lumaos.pro.launcher.widgets.music.MusicCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 /**
  * The LumaOS Pro shade: Quick Controls above, the device's real notifications
@@ -78,8 +77,10 @@ class LumaShade(
         fun theme(): ResolvedTheme
         fun glassPalette(): GlassPalette
         fun motion(): MotionPolicy
-        fun topInset(): Int
-        fun bottomInset(): Int
+        /** Status-bar / cutout inset in px, so the panel starts below it. */
+        fun topInsetPx(): Int
+        /** Navigation-bar inset in px, so the panel ends above it. */
+        fun bottomInsetPx(): Int
         /** Usable panel width in dp, after the panel's own margins. */
         fun availableWidthDp(): Int
         fun onDepthProgress(progress: Float)
@@ -89,8 +90,11 @@ class LumaShade(
         fun appIcon(packageName: String): Drawable?
         /** A notification was opened: the host brings the target app forward. */
         fun onNotificationLaunched()
-        /** The user moved Android's interruption filter by hand. */
-        fun onDndChangedByUser(newFilter: Int)
+        /**
+         * The user moved Android's interruption filter by hand, from
+         * [previousFilter] to [newFilter] (platform constants).
+         */
+        fun onDndChangedByUser(previousFilter: Int, newFilter: Int)
     }
 
     private val density = context.resources.displayMetrics.density
@@ -209,6 +213,25 @@ class LumaShade(
     }
 
     fun canDragClose(): Boolean = openState || spring.value > 0.02f
+
+    /**
+     * True when a touch that went down at this point landed on the scrim rather
+     * than on the panel.
+     *
+     * Only those drags may close the shade. A drag that starts on the panel
+     * belongs to whatever is under the finger - above all the notification list,
+     * which must keep every scroll it is entitled to instead of fighting a
+     * container gesture for the same stream.
+     */
+    fun ownsDismissDrag(rawX: Float, rawY: Float): Boolean {
+        val panel = sheet ?: return false
+        if (panel.visibility != View.VISIBLE || panel.height <= 0) return true
+        val location = IntArray(2)
+        panel.getLocationOnScreen(location)
+        val inside = rawX >= location[0] && rawY >= location[1] &&
+            rawX <= location[0] + panel.width && rawY <= location[1] + panel.height
+        return !inside
+    }
 
     private fun travelPx(): Float {
         val measured = sheet?.height?.toFloat() ?: 0f
@@ -461,7 +484,7 @@ class LumaShade(
     }
 
     private fun maxSheetHeightPx(): Int {
-        val available = root.height - host.topInset() - host.bottomInset() - dp(PANEL_VERTICAL_MARGIN_DP)
+        val available = root.height - host.topInsetPx() - host.bottomInsetPx() - dp(PANEL_VERTICAL_MARGIN_DP)
         if (available <= 0) return 0
         // The panel is a floating surface, not the whole screen: 92% of the usable
         // height keeps the desktop visible behind it, which is what makes the
@@ -472,7 +495,7 @@ class LumaShade(
     private fun applyInsets() {
         val sh = sheet ?: return
         val lp = sh.layoutParams as? FrameLayout.LayoutParams ?: return
-        val topMargin = host.topInset() + dp(PANEL_TOP_MARGIN_DP)
+        val topMargin = host.topInsetPx() + dp(PANEL_TOP_MARGIN_DP)
         if (lp.topMargin != topMargin) {
             lp.topMargin = topMargin
             sh.layoutParams = lp
@@ -534,7 +557,7 @@ class LumaShade(
     private fun startObserving() {
         if (observeJob != null) return
         controls.start()
-        controls.onDndChangedByUser = { filter -> host.onDndChangedByUser(filter) }
+        controls.onDndChangedByUser = { before, after -> host.onDndChangedByUser(before, after) }
         observeJob = scope.launch {
             launch {
                 controls.state.collect { snapshot ->
@@ -846,8 +869,5 @@ class LumaShade(
         }
 
         private const val PULL_BAND_DP = 44f
-
-        /** True when a vertical drag is large enough to be a shade gesture. */
-        fun exceedsSlop(deltaY: Float, slopPx: Int): Boolean = abs(deltaY) > slopPx * 1.5f
     }
 }

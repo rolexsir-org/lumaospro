@@ -104,7 +104,7 @@
     <!-- Notification cards -->
     <string name="notification_age_now">now</string>
     <string name="notification_content_hidden">Content hidden by the app</string>
-    <string name="notification_dismiss_description">Dismiss notification</string>
+    <string name="notification_dismiss_description">Dismiss notification from %1$s</string>
     <string name="notification_dismiss_failed">Android refused to dismiss that notification.</string>
     <string name="notification_dismiss_all_failed">Android refused to clear the notifications.</string>
     <string name="notification_open_failed">Could not open the notification from %1$s.</string>

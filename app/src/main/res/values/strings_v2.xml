@@ -126,6 +126,7 @@
     <string name="gesture_swipe_left">Swipe left</string>
     <string name="gesture_swipe_right">Swipe right</string>
     <string name="gesture_pinch_in">Pinch in</string>
+    <string name="gesture_open_quick_controls">Open controls panel</string>
     <string name="gesture_edit_mode">Edit home</string>
     <string name="gesture_open_studio">Open Studio</string>
     <string name="gesture_next_context">Next context</string>

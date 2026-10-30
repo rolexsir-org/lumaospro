@@ -114,12 +114,15 @@ class QuickControlsController(context: Context) {
 
     /** Performs a tile's real action and re-reads the device afterwards. */
     fun onTileTap(id: TileId): TileTapOutcome {
+        // Read *before* the write: the context-profile automation needs to know
+        // what the filter was in order to decide whether it still owns it.
+        val filterBefore = if (id == TileId.FOCUS) devices.currentInterruptionFilter() else 0
         val outcome = runCatching { devices.onTileTap(id) }.getOrElse {
             LumaLog.e("A Quick Controls tile action failed", it)
             TileTapOutcome.Unavailable(com.lumaos.pro.launcher.R.string.qc_action_failed)
         }
         if (id == TileId.FOCUS && outcome is TileTapOutcome.Toggled) {
-            onFocusChangedByUser()
+            onDndChangedByUser?.invoke(filterBefore, devices.currentInterruptionFilter())
         }
         coalesce()
         return outcome
@@ -165,17 +168,11 @@ class QuickControlsController(context: Context) {
     }
 
     /**
-     * Reports a user-driven Focus change so the existing context-profile DND
-     * automation stops claiming ownership of the filter.
+     * Installed by the host, which owns preferences: reports a user-driven Focus
+     * change (previous filter, new filter) so the existing context-profile DND
+     * automation can stop claiming ownership of a filter the user chose.
      */
-    private fun onFocusChangedByUser() {
-        onDndChangedByUser?.invoke(devices.currentInterruptionFilter())
-    }
-
-    /** Installed by the host, which owns preferences. */
-    var onDndChangedByUser: ((newFilter: Int) -> Unit)? = null
-
-    fun previousInterruptionFilter(): Int = devices.currentInterruptionFilter()
+    var onDndChangedByUser: ((previousFilter: Int, newFilter: Int) -> Unit)? = null
 
     fun mediaCommand(command: MusicCommand): Boolean {
         val ok = media.command(command)
