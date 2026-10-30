@@ -1,5 +1,16 @@
 # LumaOS Pro build and release-readiness report
 
+> **2026-10-30 update:** The notification shade, Quick Controls panel, widget
+> slot geometry, saved-layout duplicate repair and Studio artwork decode are
+> reported in [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md),
+> including the per-control capability table and the outstanding device matrix.
+> For that work, **no build, unit test, lint run or device test was executed**:
+> this workspace has no JDK, no Gradle, no Android SDK, no `adb` and no network
+> route to the hosts that serve them. What was executed is listed in §8 of that
+> report (tree-sitter parse of 141 main and 64 test sources, resource and
+> manifest cross-check, independent re-derivation of the new arithmetic). No
+> compile, test, lint or runtime result is claimed for it anywhere in this file.
+>
 > **2026-10-28 update:** The current branch's production-polish work and actual
 > validation outcomes are recorded in [docs/POLISH_REPORT.md](docs/POLISH_REPORT.md).
 > The subsequent wallpaper and widget work is reported separately in

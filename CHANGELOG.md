@@ -9,6 +9,85 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
 
 ## 1.0.0 — unreleased
 
+### Notification shade and Quick Controls
+
+- **The launcher has its own pull-down shade** (`LumaShade`): real notifications
+  above, a Quick Controls panel below, drawn at the same glass depth the widget
+  picker uses and built on the same overlay pattern. It opens only through a
+  gesture the user binds — **Settings → Gestures → *Open controls panel*** — and
+  closes on Back, on a scrim tap or on an upward drag from the scrim. No default
+  binding changed and no chrome was added to the resting home screen.
+- **Cards show only what apps posted**: icon, app name, title, body, time, group
+  count and the app's own actions. A group summary is never listed next to the
+  children it summarises, content an app marked secret stays hidden, and there is
+  no sample or placeholder card in the source.
+- **Inline reply is the app's reply.** A reply field appears only when the
+  posting app exposed a `RemoteInput`; sending re-uses that action's own
+  `PendingIntent`, so the message is delivered by the app. Dismiss, dismiss-all
+  and open all go through Android's listener APIs, and a refused action is
+  reported as refused.
+- **One grant, two features.** The shade reuses the existing
+  `MusicNotificationListener` and its optional notification-access grant — the
+  listener now forwards connect/disconnect/destroy and posted/removed events to
+  `NotificationHub`, which is callback-driven, extracts off the main thread,
+  keeps at most 60 entries in memory, and never persists, logs or transmits
+  notification text. Access states (granted, not granted, revoked, disconnected)
+  each render their own explanation and a route to Android's own screen.
+- **Quick controls report real device state and never fake a write.** Wi-Fi,
+  mobile data, Bluetooth, airplane mode, hotspot and cast are read where Android
+  allows a read and routed to Android's own panels or settings pages wherever a
+  third-party write is reserved to the system. Brightness and rotation lock need
+  the `WRITE_SETTINGS` app-op, Focus needs Notification Policy Access, and both
+  are requested through the real system screens with an explanation. Torch is
+  offered only when the device has a flash unit no camera app is holding; battery
+  comes from Android's sticky broadcast; media comes from the active
+  `MediaSession` and shows an empty state when nothing is playing.
+- **Focus and the context-profile automation no longer fight over one setting**:
+  `DndCoordination` ends the automation's ownership when Focus is switched off by
+  hand and records what to restore when it is switched on from a clean state.
+- **No new permission.** The manifest still declares four; four `<queries>`
+  intents were added so camera and cast destinations resolve on Android 11+.
+- See [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) for the
+  capability table and the device-test matrix.
+
+### Widget geometry and saved-layout repair
+
+- **Widgets are no longer clipped and no longer push the grid around.** One home
+  row occupies `cellHeight + 2 × gutter`, and three places disagreed with that:
+  a widget item was sized `rows × cellHeight` (24dp short at four rows), the size
+  reported to the provider was ~16dp taller than the frame it was drawn in and
+  had no width at all, and the drop-zone guide advanced by `cellHeight` per row
+  (32dp of drift by row five). `widgets/WidgetSlotGeometry.kt` is now the single
+  definition of that arithmetic and all three read it — including the box a
+  provider's RemoteViews actually get, which is the item minus four paddings
+  because `item_widget.xml` pads the root and the frame.
+- **Resizing commits what is drawn**: the gesture preview steps by the real grid
+  pitch, the live row count rounds a partial row up, and the committed height is
+  the same `itemHeightPx` the adapter binds.
+- **A saved layout that holds the same item twice is repaired on load**
+  (`HomeLayoutOps.dedupe`): dock before pages, first occurrence wins, a folder
+  keeps every member and claims them so a loose duplicate of a member is the cell
+  that goes, widgets and smart folders dedupe by id, nothing is reordered, and a
+  clean layout comes back as the same instance. The repair is written back with a
+  compare-and-set so a concurrent write is never clobbered. `HomeLayoutCodec`
+  is unchanged, so saved layouts stay byte-compatible in both directions.
+- **Studio's theme backdrop decodes on the IO thread through the wallpaper
+  store's own cache** instead of decoding a full-screen image on the composition
+  thread with a blind `inSampleSize`, which was dropping frames while scrolling
+  themes.
+- Tests: `WidgetSlotGeometryTest` (geometry chain, row recovery, reported size),
+  `NotificationPolicyTest` (replies, grouping, precedence, age buckets),
+  `QuickControlsPolicyTest` (tile set, columns, slider mapping, battery, DND
+  handover, torch verdict) and `HomeLayoutDedupeTest` (repair + codec
+  round-trip) — all plain JVM, no device and no Robolectric.
+- Verified in this environment: tree-sitter parse of every main and test source
+  (no new syntax errors), resource and manifest cross-check (82 new
+  strings/plurals, 15 glyphs, permission count unchanged), and an independent
+  re-derivation of the new arithmetic. **Not compiled, not tested, not linted and
+  not run on a device** — this sandbox has no JDK, Gradle, Android SDK, `adb` or
+  network route to them. See
+  [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) §8–§10.
+
 ### Home editing, gesture-first
 
 - **Removed the legacy editing chrome entirely.** The "Edit home" banner

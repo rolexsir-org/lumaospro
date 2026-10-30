@@ -76,6 +76,16 @@ Run with `./build.sh test` (or `./gradlew test`) on a machine with the toolchain
 | `ui/theme/DesignTokensParityTest` **(v3.2)** | Kotlin tokens ↔ `docs/design/v3.2/tokens/*.json`, token by token, including the bundle version | All pass |
 | `ui/theme/DesignSystemV32Test` **(v3.2)** | Authored vs derived colour paths, radius roles (34/26/16/10/6, 38/30/20/12/8, 8/4/2/2/2), blur material (26/34/0), saturation, label sizes, motion characters, backdrop fallbacks, fresh-install defaults | All pass |
 | `ui/theme/GlassMaterialTest` **(Luma Glass)** | Role completeness, distinct geometry/opacity/blur, light/dark contrast, opaque capability fallbacks, scrim polarity, unified accent presets, motion-token aliasing | All pass |
+| `widgets/WidgetSlotGeometryTest` **(shade)** | Grid pitch, multi-row item height, frame and content box, reported dp, row recovery, degenerate input | All pass |
+| `notifications/NotificationPolicyTest` **(shade)** | Reply only from a real `RemoteInput`, semantic-reply preference, inline-action cap, title/body precedence, secret content, group-summary suppression, ordering, card bound, age buckets | All pass |
+| `controls/QuickControlsPolicyTest` **(shade)** | Tile columns per width, tile set vs real capability, system-route decisions, brightness floor, volume zero, clamping, battery from level/scale, DND handover, torch verdict | All pass |
+| `launcher/model/HomeLayoutDedupeTest` **(shade)** | Duplicate repair (dock wins, first wins, folder keeps members, widget/smart ids), page and order preservation, stability, codec round-trip, decoder stays byte-faithful | All pass |
+
+The four **(shade)** rows were added after the standalone run above and have
+**never been executed**: this workspace has no JDK, Gradle or Android SDK, so
+their expectations were re-derived independently instead
+([docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) §8). Treat them
+as unrun until `./build.sh test` is green.
 
 If `ThemeEngineTest` fails on contrast after these changes, the failure is a real
 regression in the palette — do not relax the assertion.
@@ -92,7 +102,8 @@ regression in the palette — do not relax the assertion.
       XML, but verify the release mapping).
 - [ ] Install debug APK on a device; launch via HOME role and via the app icon.
 - [ ] `aapt2 dump resources` (or `apkanalyzer`) confirms 7 fonts, 6 WebP artworks,
-      45 `ic_rx_*` drawables are packaged.
+      60 `ic_rx_*` drawables are packaged (45 plus the 15 the shade added), and
+      that `strings_shade.xml`'s 82 entries survive shrinking.
 
 ---
 
@@ -217,6 +228,16 @@ While editing:
 - [ ] Widget content is not recoloured.
 - [ ] An unavailable widget shows the themed message, not a crash or blank frame.
 - [ ] Resize handle works while an item is lifted and snaps to rows.
+- [ ] A 1-, 2-, 3- and 4-row widget is drawn whole: no clipped content, no gap at
+      the bottom of the frame, and the row below starts where the grid says it
+      does (item + decoration equals exactly that many grid pitches).
+- [ ] Provider content is laid out for the box it really gets — check a provider
+      that draws edge-to-edge (music, battery) at every row count, in both
+      orientations, and after a rotation.
+- [ ] Drop zones under a widget drag land on the cells, with no cumulative drift
+      by the fourth or fifth row.
+- [ ] A resize commits the row count that is drawn, and that row count survives
+      process recreation.
 
 ### D8. Motion
 - [ ] Press feedback is subtle and immediate; it never delays launch.
@@ -260,6 +281,66 @@ While editing:
 - [ ] Memory: switching themes repeatedly does not grow the bitmap cache beyond
       its 6 MB budget.
 - [ ] Battery: ambient backdrop idles when motion is off; no wakelocks.
+
+### D12. Notification shade and Quick Controls (device required)
+
+Full detail, including what each control may and may not do, is in
+[docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) §9.
+
+Opening and closing:
+- [ ] **Settings → Gestures → Swipe down → Open controls panel**, then swipe down
+      from the top: the shade opens over the home screen.
+- [ ] Swipe-up drawer, search pull, long-press icon lift, widget resize drag and
+      page swipes all still work with the binding set.
+- [ ] Back, scrim tap and an upward drag from the scrim each close it; no touch is
+      swallowed afterwards and the home screen is immediately interactive.
+- [ ] Opening and closing rapidly ten times leaves no stuck animation, no leaked
+      view and no double-open.
+- [ ] Rotation and process recreation while open: no crash, no stale activity
+      reference; the shade is either rebuilt or closed cleanly.
+
+Notifications:
+- [ ] A notification with a `RemoteInput` reply shows a reply field; sending it
+      lands in the originating app (verify inside that app, not by the animation).
+- [ ] A notification without one shows no reply field, and only the app's own
+      actions, capped at three.
+- [ ] Grouped notifications: children listed once, summary suppressed; dismiss the
+      last child and the summary appears with its own count.
+- [ ] Dismiss from a card and dismiss-all both remove the notifications in Android
+      too.
+- [ ] Tapping a card opens the app's content intent and closes the shade.
+- [ ] An app that marked content secret shows its name and time, not its text.
+- [ ] Revoke notification access while the shade is open: the panel switches to
+      the revoked state with the route to Android's screen; no crash, no stale
+      cards, and no repeated prompt on the next open.
+- [ ] Long text, many notifications (24+) and a notification from an uninstalled
+      app all render without clipping or a blank card.
+
+Quick controls:
+- [ ] Wi-Fi, airplane mode, rotation lock, brightness, volume, torch: the state
+      shown matches Android's, and a tap either changes it or opens the real
+      system page — never both claimed and refused.
+- [ ] Mobile data, Bluetooth, hotspot, cast: the tile opens the system route;
+      Bluetooth on API 33+ without `BLUETOOTH_CONNECT` reads as system-managed,
+      not as "off".
+- [ ] Brightness without `WRITE_SETTINGS` shows the grant explanation and the
+      route; after granting, the slider moves the real screen brightness and never
+      reaches a level that blanks it.
+- [ ] Focus with and without Notification Policy Access; with a context profile
+      active, switch Focus off by hand and confirm the automation stops restoring
+      a filter it no longer owns.
+- [ ] Media playing shows real metadata and only advertised actions; nothing
+      playing shows the empty state and no invented track.
+- [ ] Battery matches Android's reading; a device that reports none shows unknown.
+- [ ] Torch on a device with no flash, and while a camera app holds the camera:
+      the tile is absent or explains itself — never a switch that cannot move.
+- [ ] Rapid repeated taps on every tile leave no corrupted or stuck state.
+- [ ] Card and tile text is legible over a busy wallpaper in light and dark, and
+      every control is announced and reachable by TalkBack with 48dp targets.
+
+Studio:
+- [ ] Scrolling Studio's theme list is smooth, the correct backdrop shows per
+      theme in light and dark, and no main-thread decode appears in StrictMode.
 
 ---
 
