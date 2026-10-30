@@ -239,9 +239,10 @@ seeds. Android exposes wallpaper colors here, not the wallpaper image, so that
 preview uses a clearly approximate gradient; the actual launcher continues to
 show the system wallpaper when Wallpaper is selected. Home widgets are hosted
 through Android's real `AppWidgetHost` and their provider apps. There is no
-weather/calendar aggregation source in this build, and LumaOS Pro cannot
-redesign Android-controlled surfaces such as the notification shade, Quick
-Settings, lock screen, or navigation UI.
+weather/calendar aggregation source in this build. LumaOS Pro cannot redesign
+Android-controlled surfaces — the system notification shade, Quick Settings, the
+lock screen or the navigation UI — so its own shade and controls panel are built
+from real readings of those systems instead of replacing them.
 
 ### Wallpaper and widgets
 
@@ -263,6 +264,42 @@ be restricted by the device. Existing clock/date UI and third-party providers
 remain available. Weather, calendar, and photo widgets are not supplied by Luma.
 See [docs/WALLPAPER_WIDGET_REPORT.md](docs/WALLPAPER_WIDGET_REPORT.md) for the
 verification boundary and backup limitations.
+
+### Notifications and quick controls
+
+The launcher's own shade (`LumaShade`) lists the notifications Android reports to
+a `NotificationListenerService` and a Quick Controls panel beneath them. It is
+reachable only through the gesture the user binds (see **Gestures**), opens over
+the home screen at the modal depth the widget picker already uses, and closes on
+Back, on a tap of the scrim, or on an upward drag from the scrim.
+
+- **Cards show what the app posted** — icon, app name, title, body, time, group
+  count and the app's own actions — and nothing else. A group summary is never
+  listed alongside the children it summarises, and content an app marked secret
+  stays hidden.
+- **Inline reply is the app's reply.** A reply field appears only when the
+  posting app exposed a `RemoteInput` on one of its actions; sending it re-uses
+  that action's own `PendingIntent`, so the message goes through the app exactly
+  as it would from the system shade. Dismiss uses Android's listener API and
+  opening a card fires the app's content intent.
+- **Quick controls report real device state.** Wi-Fi, mobile data, Bluetooth,
+  airplane mode and hotspot are read where Android allows a read and are changed
+  through Android's own panels (`Settings.Panel`, Bluetooth/Airplane settings)
+  wherever a third-party write is reserved to the system — a tile never claims a
+  change it could not make. Brightness and rotation lock need the
+  `WRITE_SETTINGS` app-op, Focus needs Notification Policy Access, and both are
+  requested through the real system screens with an explanation, never silently.
+  Torch is offered only when the device has a flash unit that is not held by a
+  camera app; battery comes from Android's sticky broadcast; media comes from the
+  active `MediaSession` and shows an empty state when nothing is playing.
+- **No new permission is requested.** The shade reuses the optional
+  notification-access grant the Luma Glass Music widget already asks for, and
+  four `<queries>` intents so the camera and cast destinations can be resolved on
+  Android 11+.
+
+See [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) for the
+per-control capability table, the verification boundary and what still needs a
+physical device.
 
 ### Context profiles
 
@@ -364,12 +401,19 @@ the problem it solves.
 Swipe up, swipe down, double tap on empty space, long press on empty space —
 each configurable.
 
-**Not offered, on purpose:** opening the notification shade. Android exposes no
-public API for it; the only route is an `AccessibilityService`, which would mean
-asking for a permission that can observe and act on everything on screen. The
-same reasoning excludes "show recent apps" and "lock the screen" (the latter
-needs Device Admin). Rather than ship a button that silently does nothing, the
-option is absent — see the note in `GestureAction.kt`.
+**Open controls panel** is offered as a gesture action. It opens LumaOS Pro's own
+shade — real notifications plus the Quick Controls panel — from inside the
+launcher. It is *not* Android's system shade and it changes no gesture binding by
+itself: bind it in **Settings → Gestures → Swipe down** (or any other slot) and
+it becomes reachable. Nothing is reserved for it, so it cannot steal the drawer
+swipe, the drag-to-move lift or the system's own edge gestures.
+
+**Not offered, on purpose:** opening *Android's* notification shade. Android
+exposes no public API for it; the only route is an `AccessibilityService`, which
+would mean asking for a permission that can observe and act on everything on
+screen. The same reasoning excludes "show recent apps" and "lock the screen"
+(the latter needs Device Admin). Rather than ship a button that silently does
+nothing, those options are absent — see the note in `GestureAction.kt`.
 
 ---
 
@@ -385,10 +429,16 @@ option is absent — see the note in `GestureAction.kt`.
 - Wallpaper Studio copies only user-selected photos into private storage. The
   copies may contain embedded metadata and are excluded from Android backup and
   device transfer. The manual Luma backup excludes photos and wallpaper favorites.
-- The optional Luma Glass Music widget asks for Android notification access. The
-  grant can expose all notifications; Luma queries media sessions without reading
-  or storing notification contents, and the Android widget host may cache the
-  displayed media details. The grant can be revoked in Android Settings.
+- The optional Luma Glass Music widget and the launcher shade share one Android
+  notification-access grant. The grant can expose all notifications; the Music
+  widget queries media sessions without reading or storing notification contents,
+  and the Android widget host may cache the displayed media details. The shade
+  reads notification content in memory to render a card and to send a reply
+  through the posting app's own `PendingIntent`; it does not store, log or
+  transmit titles, bodies or replies, and it keeps at most the newest cards in
+  RAM for as long as the shade exists. The grant can be revoked in Android
+  Settings at any time, and the shade then shows its revoked state instead of
+  cards. No new permission is requested by either feature.
 - Voice commands are optional and user-triggered. LumaOS Pro delegates recognition
   to the installed Android speech-recognition app; that provider may process
   audio locally or remotely under its own privacy policy. LumaOS Pro receives the
@@ -418,6 +468,14 @@ When run, they cover:
   queries behave, including the history cap and `vacuum()`
 - the optimizer deletes real files and reports the real byte count
 
+Pure decisions are covered by plain JVM tests that need no device and no
+Robolectric: widget slot geometry (`WidgetSlotGeometryTest`), what a notification
+card shows and which notifications are listed at all (`NotificationPolicyTest`),
+the quick-control tile set, slider mapping, battery reading, torch verdict and
+the Do-Not-Disturb handover with context profiles (`QuickControlsPolicyTest`),
+and the repair of a saved layout that holds the same item twice
+(`HomeLayoutDedupeTest`).
+
 They do **not** prove appearance, performance, or OEM-specific behaviour.
 Robolectric draws no pixels and measures no jank. Build the current source and
 validate it on supported physical devices before release; no verified APK/AAB
@@ -430,5 +488,10 @@ context triggers are not part of this release. Home-screen widgets are
 implemented, but their provider consent, configuration and interaction still
 need real-device validation. Android widget host IDs are not remapped after
 system backup/restore, so restored placements may need to be added again. Imported
-wallpaper photos are device-local and are not backed up. See [BUILD_REPORT.md](BUILD_REPORT.md) for the
-release verification boundary.
+wallpaper photos are device-local and are not backed up. Some quick controls are
+limited by Android itself rather than by this code — a tile that Android will not
+let a launcher write opens the real system page, hotspot state is not readable
+without carrier privileges, and Bluetooth state reads are restricted on API 33+.
+Each limitation, and which controls are still unverified without a device, is
+listed in [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md). See
+[BUILD_REPORT.md](BUILD_REPORT.md) for the release verification boundary.

@@ -22,7 +22,8 @@ import com.lumaos.pro.launcher.ui.theme.ColorMath
  *  - [columns] is the grid's span count;
  *  - [contentWidth] is the grid's width *minus* its own horizontal padding, so
  *    `contentWidth / columns` is exactly one cell wide;
- *  - [cellHeight] is the row height the adapter actually uses;
+ *  - [cellHeight] is the row *pitch* the adapter actually lays out (cell plus
+ *    decoration), so a zone sits on its cell at every row;
  *  - [scrollOffset] is the grid's vertical scroll in pixels, so the zones stay
  *    glued to the cells while the grid scrolls;
  *  - [occupied] lists the on-screen bounds of every placed item, in this view's
@@ -43,7 +44,11 @@ class PlacementGuideView @JvmOverloads constructor(
     /** Configured rows (used only as a sanity bound when the view is taller). */
     var rows = 5
 
-    /** Row height in px, as the adapter lays cells out. */
+    /**
+     * Row pitch in px: one row as the adapter lays it out, i.e. the cell height
+     * plus the item decoration above and below it. Zones advance by this, so they
+     * stay on their cells however many rows down the grid they are.
+     */
     var cellHeight = 0
 
     /** Grid content width in px (RecyclerView width minus horizontal padding). */

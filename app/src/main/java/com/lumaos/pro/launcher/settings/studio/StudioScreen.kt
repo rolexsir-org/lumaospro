@@ -67,6 +67,7 @@ import com.lumaos.pro.launcher.settings.StudioApplyState
 import com.lumaos.pro.launcher.settings.StudioConfiguration
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
 import com.lumaos.pro.launcher.wallpaper.WallpaperActivity
+import com.lumaos.pro.launcher.wallpaper.WallpaperCatalog
 import com.lumaos.pro.launcher.wallpaper.WallpaperImageStore
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
@@ -81,7 +82,6 @@ import com.lumaos.pro.launcher.ui.theme.ThemeSpec
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import com.lumaos.pro.launcher.ui.theme.WallpaperArt
-import com.lumaos.pro.launcher.ui.theme.WallpaperArtResources
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -129,10 +129,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             selectedEntry != null && (resolved.backdrop == Backdrop.LUMA || resolved.backdrop == Backdrop.WALLPAPER) ->
                 runCatching { WallpaperImageStore(context.applicationContext).preview(selectedEntry, 640)?.asImageBitmap() }.getOrNull()
             resolved.backdrop == Backdrop.LUMA -> WallpaperArt.forTheme(resolved.id)?.let { art ->
-                runCatching {
-                    val res = WallpaperArtResources.res(art)
-                    val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
-                    context.resources.openRawResource(res).use { android.graphics.BitmapFactory.decodeStream(it, null, options)?.asImageBitmap() }
+                // The wallpaper store's own cached IO decode, through the legacy
+                // entry that wraps this theme art. produceState runs on the
+                // composition's main-thread context, and a bundled wallpaper is a
+                // full-screen webp: decoding it inline - with a fixed inSampleSize
+                // and no bounds pass, so still near full size - was what made
+                // Studio drop frames while scrolling themes, and re-decoded the
+                // same art on every recomposition instead of hitting the cache.
+                val entry = WallpaperCatalog.findBundled("art:${art.storageKey}")
+                if (entry == null) null else runCatching {
+                    WallpaperImageStore(context.applicationContext).preview(entry, 640)?.asImageBitmap()
                 }.getOrNull()
             }
             else -> null

@@ -29,7 +29,9 @@
           * launcher activities (the app list itself);
           * web search, web browsers, and the store, for dock seeding and
             "Search elsewhere" in the drawer;
-          * icon packs for the major launcher families (appfilter.xml format).
+          * icon packs for the major launcher families (appfilter.xml format);
+          * the still-camera action and Android's cast/display screens, which the
+            Quick Controls panel resolves before offering those two tiles.
     -->
     <queries>
         <intent>
@@ -58,6 +60,19 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="market" />
+        </intent>
+        <!-- Quick Controls: only offered as a tile when a real handler answers. -->
+        <intent>
+            <action android:name="android.media.action.STILL_CAMERA" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.CAST_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.DISPLAY_SETTINGS" />
         </intent>
         <intent><action android:name="org.adw.launcher.THEMES" /></intent>
         <intent><action android:name="com.novalauncher.THEME" /></intent>

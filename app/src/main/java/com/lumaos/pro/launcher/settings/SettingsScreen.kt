@@ -970,6 +970,7 @@ private fun gestureActionLabel(action: GestureAction): String = stringResource(
         GestureAction.None -> R.string.gesture_none
         GestureAction.OpenDrawer -> R.string.gesture_open_drawer
         GestureAction.OpenSearch -> R.string.gesture_open_search
+        GestureAction.OpenQuickControls -> R.string.gesture_open_quick_controls
         GestureAction.OpenSettings -> R.string.gesture_open_settings
         GestureAction.OpenWallpaperPicker -> R.string.gesture_open_wallpaper
         GestureAction.EnterEditMode -> R.string.gesture_edit_mode

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Strings for the pull-down shade: Quick Controls and the notification cards.
+
+  Wording rules applied here:
+   - a control Android will not let LumaOS Pro read or write says so plainly and
+     names the Android screen that grants it; it never claims a state it cannot
+     know ("Managed by Android", not "Off");
+   - a failure message describes what did not happen, never what was attempted to
+     look like success;
+   - nothing here mentions notification content: card text comes from the
+     notification itself and is never duplicated into a resource.
+-->
+<resources>
+
+    <!-- Shade chrome -->
+    <string name="shade_title">Controls</string>
+    <string name="shade_notifications">Notifications</string>
+    <plurals name="shade_notifications_count">
+        <item quantity="one">%d notification</item>
+        <item quantity="other">%d notifications</item>
+    </plurals>
+    <string name="shade_clear_all">Clear all</string>
+    <string name="shade_settings_description">Open LumaOS Pro settings</string>
+    <string name="shade_close_description">Close controls</string>
+    <string name="shade_dismiss_description">Dismiss controls and notifications</string>
+    <string name="shade_announce_open">Controls and notifications open</string>
+    <string name="shade_battery">%1$d%% battery</string>
+    <string name="shade_battery_charging">%1$d%%, charging</string>
+
+    <!-- Quick Controls tiles -->
+    <string name="qc_tile_wifi">Wi-Fi</string>
+    <string name="qc_tile_mobile_data">Mobile data</string>
+    <string name="qc_tile_bluetooth">Bluetooth</string>
+    <string name="qc_tile_airplane">Airplane</string>
+    <string name="qc_tile_hotspot">Hotspot</string>
+    <string name="qc_tile_torch">Torch</string>
+    <string name="qc_tile_rotation">Rotation lock</string>
+    <string name="qc_tile_focus">Focus</string>
+    <string name="qc_tile_cast">Cast</string>
+    <string name="qc_tile_camera">Camera</string>
+
+    <!-- Tile state, read aloud and shown as the tile\'s marker -->
+    <string name="qc_state_on">On</string>
+    <string name="qc_state_off">Off</string>
+    <string name="qc_state_system_managed">State managed by Android</string>
+    <string name="qc_state_opens_system">Opens Android settings</string>
+    <string name="qc_state_needs_grant">Needs permission</string>
+    <string name="qc_state_unavailable">Not available on this device</string>
+
+    <!-- Where a restricted control goes instead of pretending to switch -->
+    <string name="qc_route_wifi">Wi-Fi is switched from Android\'s connectivity panel on this version of Android.</string>
+    <string name="qc_route_mobile_data">Mobile data is switched from Android\'s connectivity panel.</string>
+    <string name="qc_route_bluetooth">Bluetooth is switched from Android\'s Bluetooth settings.</string>
+    <string name="qc_route_airplane">Airplane mode is switched from Android\'s airplane mode settings.</string>
+    <string name="qc_route_hotspot">The hotspot is switched from Android\'s connectivity panel.</string>
+    <string name="qc_route_cast">Casting is started from Android\'s cast settings.</string>
+
+    <!-- Grants -->
+    <string name="qc_grant_write_settings">Android requires the \"Modify system settings\" grant before LumaOS Pro can change brightness or rotation lock.</string>
+    <string name="qc_grant_notification_policy">Android requires notification policy access before LumaOS Pro can change Focus.</string>
+    <string name="qc_no_system_page">This device has no Android page for that control.</string>
+
+    <!-- Sliders -->
+    <string name="qc_brightness">Brightness</string>
+    <string name="qc_volume">Volume</string>
+    <string name="qc_brightness_automatic">Automatic brightness is on</string>
+    <string name="qc_brightness_needs_grant">Grant \"Modify system settings\" to change brightness</string>
+    <string name="qc_slider_needs_grant">Android will not let LumaOS Pro change this level</string>
+    <string name="qc_volume_failed">Android refused the volume change.</string>
+
+    <!-- Failures, reported as failures -->
+    <string name="qc_action_failed">That control could not be changed.</string>
+    <string name="qc_torch_failed">The torch could not be switched.</string>
+    <string name="qc_torch_in_use">The camera is using the flash, so the torch is unavailable.</string>
+    <string name="qc_rotation_failed">Rotation lock could not be changed.</string>
+    <string name="qc_focus_failed">Focus could not be changed.</string>
+    <string name="qc_unavailable_wifi">This device has no Wi-Fi radio that LumaOS Pro can read.</string>
+    <string name="qc_unavailable_torch">This device has no flash unit.</string>
+    <string name="qc_unavailable_camera">No camera app is available to open.</string>
+
+    <!-- Media -->
+    <string name="qc_media_play">Play</string>
+    <string name="qc_media_pause">Pause</string>
+    <string name="qc_media_previous">Previous track</string>
+    <string name="qc_media_next">Next track</string>
+    <string name="qc_media_unknown_title">Unknown track</string>
+    <string name="qc_media_empty">Nothing is playing. A track appears here when an app starts one.</string>
+    <string name="qc_media_needs_access">Grant notification access to see and control what is playing.</string>
+    <string name="qc_media_description">Now playing: %1$s by %2$s</string>
+    <string name="qc_media_command_failed">The player refused that command.</string>
+
+    <!-- Notification access -->
+    <string name="notification_access_title">Show notifications here</string>
+    <string name="notification_access_disclosure">LumaOS Pro needs Android\'s notification access to list notifications in this panel and to send a reply back to the app that posted it. Notifications are read on this device only: nothing is stored, uploaded or shared, and access can be revoked at any time in Android\'s settings.</string>
+    <string name="notification_access_open">Open Android settings</string>
+    <string name="notification_access_disconnected_title">Android has not connected the listener</string>
+    <string name="notification_access_disconnected_body">Access is granted, but Android has not handed notifications to LumaOS Pro yet. This happens after an update or a restart. Reconnecting usually fixes it without leaving the launcher.</string>
+    <string name="notification_access_retry">Reconnect now</string>
+    <string name="notification_access_retry_started">Asked Android to reconnect the notification listener.</string>
+    <string name="notification_access_unavailable">This device has no notification access settings page to open.</string>
+    <string name="notification_empty">No notifications</string>
+
+    <!-- Notification cards -->
+    <string name="notification_age_now">now</string>
+    <string name="notification_content_hidden">Content hidden by the app</string>
+    <string name="notification_dismiss_description">Dismiss notification from %1$s</string>
+    <string name="notification_dismiss_failed">Android refused to dismiss that notification.</string>
+    <string name="notification_dismiss_all_failed">Android refused to clear the notifications.</string>
+    <string name="notification_open_failed">Could not open the notification from %1$s.</string>
+    <string name="notification_action_failed">The action from %1$s is no longer available.</string>
+    <plurals name="notification_group_count">
+        <item quantity="one">%d more notification in this group</item>
+        <item quantity="other">%d more notifications in this group</item>
+    </plurals>
+
+    <!-- Inline reply -->
+    <string name="notification_reply_hint">Write a reply</string>
+    <string name="notification_reply_field_description">Reply to %1$s</string>
+    <string name="notification_reply_send_description">Send reply</string>
+    <string name="notification_reply_sent">Reply sent to %1$s</string>
+    <string name="notification_reply_expired">That reply is no longer valid; the app replaced the notification from %1$s.</string>
+    <string name="notification_reply_unsupported">This app does not accept a reply from here.</string>
+    <string name="notification_reply_failed">The reply to %1$s was not delivered.</string>
+
+</resources>

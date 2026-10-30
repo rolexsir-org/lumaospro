@@ -25,8 +25,8 @@ import com.lumaos.pro.launcher.launcher.view.FolderIconDrawable
 import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetResizeGesture
 import com.lumaos.pro.launcher.widgets.WidgetResizeResult
+import com.lumaos.pro.launcher.widgets.WidgetSlotGeometry
 import java.util.Collections
-import kotlin.math.roundToInt
 
 /** How folder plates are drawn in the current theme. */
 data class FolderStyle(val plate: Int, val rim: Int, val outline: FloatArray?, val smartMarker: Int) {
@@ -65,10 +65,20 @@ class HomeGridAdapter(
         fun onWidgetResize(item: HomeItem.Widget, rows: Int, commit: Boolean) {}
     }
 
-    /** Supplies hosted widget views and the height of one grid row. */
+    /** Supplies hosted widget views and the geometry of one grid row. */
     interface WidgetViews {
         fun viewFor(item: HomeItem.Widget): View?
         fun rowHeightPx(): Int
+
+        /**
+         * One side of the grid's item-decoration gutter.
+         *
+         * A widget that spans rows has to occupy whole grid *pitches* - cell plus
+         * decoration - or it comes up short by the gutters between its rows and
+         * every item below it drifts up over the next row. The decoration lives in
+         * the grid, so the adapter asks for its value instead of assuming one.
+         */
+        fun gutterPx(): Int = 0
         fun editOutline(): Drawable
         fun handle(): Drawable
         /** Themed frame drawn behind every hosted widget so widgets stay consistent. */
@@ -229,6 +239,9 @@ class HomeGridAdapter(
     private fun bindWidget(holder: WidgetHolder, item: HomeItem.Widget) {
         val host = widgetHost
         val rowHeight = host?.rowHeightPx() ?: 0
+        val gutter = host?.gutterPx() ?: 0
+        // One row step as the grid lays it out, decoration included.
+        val pitch = WidgetSlotGeometry.pitchPx(rowHeight, gutter)
         // Provider-aware resize range. Without provider info we keep the legacy
         // 1..4 behaviour; with it, fixed-height widgets collapse to one legal size.
         val caps = host?.capabilitiesFor(item)
@@ -236,7 +249,11 @@ class HomeGridAdapter(
         val maxRows = caps?.maxRows ?: HomeLayout.MAX_WIDGET_ROWS
         val verticallyResizable = caps?.resizableVertical ?: true
         val displayRows = item.rows.coerceIn(minRows, maxRows)
-        val height = (rowHeight * displayRows).coerceAtLeast(rowHeight)
+        // rows * rowHeight was short by 2 * gutter * (rows - 1): a four-row widget
+        // lost 24dp against four app rows, which is what made widgets overlap the
+        // icons beneath them and disagree with the drop-zone guide.
+        val height = WidgetSlotGeometry.itemHeightPx(displayRows, rowHeight, gutter)
+            .coerceAtLeast(WidgetSlotGeometry.itemHeightPx(1, rowHeight, gutter))
         holder.setHeight(height)
         val frameDrawable = widgetFrameBackground ?: host?.frame()
         if (host != null && frameDrawable != null) {
@@ -293,10 +310,11 @@ class HomeGridAdapter(
         var gesture: WidgetResizeGesture? = null
         val touchSlop = ViewConfiguration.get(holder.itemView.context).scaledTouchSlop
         holder.handle.setOnTouchListener { v, ev ->
-            if (rowHeight <= 0 || !verticallyResizable) return@setOnTouchListener false
+            if (pitch <= 0 || !verticallyResizable) return@setOnTouchListener false
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    gesture = WidgetResizeGesture(ev.rawY, holder.itemView.height, rowHeight, minRows, maxRows, touchSlop)
+                    // The gesture steps in whole rows, and one row is one pitch.
+                    gesture = WidgetResizeGesture(ev.rawY, holder.itemView.height, pitch, minRows, maxRows, touchSlop)
                     v.parent.requestDisallowInterceptTouchEvent(true)
                     true
                 }
@@ -305,7 +323,9 @@ class HomeGridAdapter(
                         val h = current.move(ev.rawY)
                         if (current.dragged) {
                             holder.setHeight(h)
-                            listener.onWidgetResize(item, (h / rowHeight.toFloat()).roundToInt(), commit = false)
+                            listener.onWidgetResize(
+                                item, WidgetSlotGeometry.rowsForHeightPx(h, rowHeight, gutter), commit = false
+                            )
                         }
                     }
                     true
@@ -316,7 +336,7 @@ class HomeGridAdapter(
                         if (ev.actionMasked == MotionEvent.ACTION_UP) current.move(ev.rawY)
                         when (val result = current.finish(cancelled = ev.actionMasked == MotionEvent.ACTION_CANCEL)) {
                             is WidgetResizeResult.Commit -> {
-                                holder.setHeight(rowHeight * result.rows)
+                                holder.setHeight(WidgetSlotGeometry.itemHeightPx(result.rows, rowHeight, gutter))
                                 listener.onWidgetResize(item, result.rows, commit = true)
                             }
                             is WidgetResizeResult.Cancel -> holder.setHeight(result.originalHeight)

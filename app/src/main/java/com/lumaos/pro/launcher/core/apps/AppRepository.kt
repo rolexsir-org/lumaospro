@@ -151,6 +151,26 @@ class AppRepository(
         }.getOrNull()
     }
 
+    /**
+     * The launcher's own label for a package, taken from the LauncherApps
+     * enumeration.
+     *
+     * LauncherApps is exempt from Android 11+ package-visibility filtering, so
+     * this resolves packages that `PackageManager.getApplicationLabel` would
+     * refuse to see. That matters for notification cards: the app that posted a
+     * notification has no reason to be visible to this launcher, yet its real name
+     * is the honest thing to show. Null means "no launchable activity here", and
+     * the caller falls back to its own wording rather than guessing.
+     */
+    fun labelForPackage(packageName: String): String? =
+        lastEntries.firstOrNull { it.key.packageName == packageName }?.label
+
+    /** Icon for a package at [density], or null when it has no launchable activity here. */
+    fun iconForPackage(packageName: String, density: Int): Drawable? {
+        val key = lastEntries.firstOrNull { it.key.packageName == packageName }?.key ?: return null
+        return iconFor(key, density)
+    }
+
     /** Whether [key] is currently installed and launchable (resolves directly during cold start). */
     fun isInstalled(key: ComponentKey): Boolean {
         if (snapshot.containsKey(key)) return true

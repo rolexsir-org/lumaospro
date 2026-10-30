@@ -103,6 +103,13 @@ class EditModeController(
         fun gridColumns(): Int
         fun gridRows(): Int
         fun cellHeight(): Int
+
+        /**
+         * One row of the grid as the RecyclerView lays it out: the cell plus the
+         * item decoration on both sides. Drop zones advance by this, not by
+         * [cellHeight], or they drift further from their cells with every row.
+         */
+        fun rowPitchPx(): Int = cellHeight()
     }
 
     /** Everything the contextual capsule can do. Icon-only; labels are a11y only. */
@@ -456,7 +463,9 @@ class EditModeController(
         val columns = host.gridColumns().coerceAtLeast(1)
         guide.columns = columns
         guide.rows = host.gridRows().coerceAtLeast(1)
-        guide.cellHeight = host.cellHeight()
+        // The guide walks rows, so it needs the pitch: advancing by the bare cell
+        // height left the zones 8dp per row short of the cells they outline.
+        guide.cellHeight = host.rowPitchPx()
         guide.contentWidth = (grid.width - grid.paddingLeft - grid.paddingRight).coerceAtLeast(0)
         guide.scrollOffset = grid.computeVerticalScrollOffset()
         guide.gutterPx = EditModeDesign.gutterPx(density)
