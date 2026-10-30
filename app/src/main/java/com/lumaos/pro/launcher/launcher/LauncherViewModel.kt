@@ -169,7 +169,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         history.load()
         viewModelScope.launch {
             activeContextProfile.flatMapLatest(prefs::homeLayoutRaw).collect { raw ->
-                _layout.value = HomeLayoutCodec.decode(raw)
+                val decoded = HomeLayoutCodec.decode(raw)
+                // A layout that arrives with the same app, folder or widget id twice
+                // would render two cells for one thing, so it is repaired here, where
+                // storage becomes UI state. Deliberately not inside decode(): decode is
+                // also the round-trip oracle behind canSafelyRewrite, and that proof has
+                // to stay about the file as written, not about repairs we would make.
+                val repaired = HomeLayoutOps.dedupe(decoded)
+                _layout.value = repaired
+                if (repaired != decoded) healDuplicatedLayout(raw, repaired)
             }
         }
         viewModelScope.launch {
@@ -272,6 +280,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
         prefs.setLayoutSeeded(true)
+    }
+
+    /**
+     * Writes a de-duplicated layout back, but only while the stored value is still
+     * the one that was repaired - a concurrent user edit wins, exactly as in the
+     * seeding and reconciliation passes. The write re-enters the layout flow once
+     * and stops there: the repaired layout de-duplicates to itself.
+     */
+    private fun healDuplicatedLayout(raw: String?, repaired: HomeLayout) {
+        val profile = activeContextProfile.value
+        viewModelScope.launch {
+            if (prefs.setHomeLayoutRawIfUnchanged(profile, raw, HomeLayoutCodec.encode(repaired))) {
+                LumaLog.i("A home layout holding duplicate entries was repaired")
+            }
+        }
     }
 
     private fun hasLayoutContent(layout: HomeLayout): Boolean =

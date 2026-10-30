@@ -468,6 +468,63 @@ object HomeLayoutOps {
         return setPage(layout, pageIndex, layout.page(pageIndex) + folder)
     }
 
+    /**
+     * Repairs a layout that holds the same thing twice.
+     *
+     * The mutation paths in this object cannot create a duplicate - [addToHome],
+     * [addToDock] and the insert guards all refuse one - but duplicates do arrive
+     * from an older build, a cloud restore or a hand-edited backup. On screen they
+     * are two cells that launch the same app, or two cells bound to one widget id,
+     * which is how a restored layout ends up looking duplicated and overlapped.
+     *
+     * Two passes, both conservative:
+     *
+     *  1. The folders that survive - the first of each id, in reading order -
+     *     claim their members. An app inside a folder is placed, so a loose copy
+     *     of it elsewhere is the duplicate; dropping the loose cell loses nothing,
+     *     while dropping a folder member would lose a folder the user named. That
+     *     is the same reason [moveHomeToDock] refuses to de-duplicate a folder.
+     *  2. One cell per identity, first occurrence winning: dock before pages,
+     *     pages in order, apps by key, widgets by platform id, smart folders and
+     *     folders by id.
+     *
+     * Nothing is reordered and no page is added or removed, so a layout without
+     * duplicates comes back as the *same instance* - which keeps the codec's
+     * round-trip proofs about the file rather than about repairs.
+     */
+    fun dedupe(layout: HomeLayout): HomeLayout {
+        val ordered = layout.dock + layout.pages.flatten()
+
+        val folderMembers = HashSet<ComponentKey>()
+        val survivingFolders = HashSet<String>()
+        ordered.filterIsInstance<HomeItem.Folder>().forEach { folder ->
+            if (survivingFolders.add(folder.id)) folderMembers += folder.children
+        }
+
+        val placed = HashSet(folderMembers)
+        val seenFolders = HashSet<String>()
+        val seenWidgets = HashSet<Int>()
+        val seenSmartFolders = HashSet<String>()
+        var changed = false
+
+        fun claim(item: HomeItem): Boolean = when (item) {
+            is HomeItem.App -> placed.add(item.key)
+            is HomeItem.Folder -> seenFolders.add(item.id)
+            is HomeItem.Widget -> seenWidgets.add(item.appWidgetId)
+            is HomeItem.SmartFolder -> seenSmartFolders.add(item.id)
+        }
+
+        fun dedupeList(items: List<HomeItem>): List<HomeItem> {
+            val kept = items.filter { claim(it) }
+            if (kept.size != items.size) changed = true
+            return kept
+        }
+
+        val dock = dedupeList(layout.dock)
+        val pages = layout.pages.map(::dedupeList)
+        return if (changed) layout.copy(dock = dock, pages = pages) else layout
+    }
+
     /** An empty system scan is not sufficient evidence to discard every placement. */
     fun pruneAfterScan(layout: HomeLayout, installed: Set<ComponentKey>): HomeLayout =
         if (installed.isEmpty()) layout else prune(layout, installed)
