@@ -19,8 +19,9 @@ import kotlin.math.roundToInt
  *
  *  1. [itemHeightPx] - the RecyclerView child height, so item + decoration equals
  *     exactly `rows` grid pitches;
- *  2. [frameHeightPx] - the glass frame inside that child, after the layout's own
- *     padding;
+ *  2. [contentBoxPx] - the glass frame inside that child and then the box the
+ *     provider is drawn in, after the layout's own padding (applied twice, because
+ *     `item_widget.xml` pads the root and the frame);
  *  3. [reportedHeightDp] / [reportedWidthDp] - the size handed to
  *     `AppWidgetHostView.updateAppWidgetSize`, which must be the frame, not the
  *     theoretical cell, because that is the box the provider's RemoteViews get.
@@ -28,6 +29,16 @@ import kotlin.math.roundToInt
  * Pure arithmetic on pixel values, so it is unit-tested without a device.
  */
 object WidgetSlotGeometry {
+
+    /**
+     * The home grid's item-decoration gutter, one side, in dp.
+     *
+     * This is the single definition of the grid's gutter: the RecyclerView
+     * decoration, the widget slot height, the size reported to a provider and the
+     * drop-zone pitch all read it, which is what stops them from disagreeing.
+     * Changing it changes the whole grid rhythm at once - and nothing else.
+     */
+    const val GUTTER_DP: Float = 4f
 
     /** One row of the home grid as the RecyclerView actually lays it out. */
     fun pitchPx(cellHeightPx: Int, gutterPx: Int): Int =
@@ -46,9 +57,17 @@ object WidgetSlotGeometry {
         return safeRows * cell + 2 * gutter * (safeRows - 1)
     }
 
-    /** The glass frame inside the item view, after the layout's own padding. */
-    fun frameHeightPx(itemHeightPx: Int, rootPaddingPx: Int): Int =
-        (itemHeightPx - 2 * rootPaddingPx.coerceAtLeast(0)).coerceAtLeast(0)
+    /**
+     * A box after [paddingOneSidePx] of padding on both sides; never negative.
+     *
+     * `item_widget.xml` pads twice - once on the item root and once on the glass
+     * frame - so this is applied twice, on both axes: item to frame, frame to the
+     * box a provider's RemoteViews are actually drawn in. That box, not the item
+     * and not the theoretical cell, is what `updateAppWidgetSize` must be told
+     * about, or providers lay out for height they never get and clip.
+     */
+    fun contentBoxPx(boxPx: Int, paddingOneSidePx: Int): Int =
+        (boxPx - 2 * paddingOneSidePx.coerceAtLeast(0)).coerceAtLeast(0)
 
     /** Pixels to dp, rounded the way `updateAppWidgetSize` consumers expect. */
     fun toDp(px: Int, density: Float): Float {
@@ -56,11 +75,11 @@ object WidgetSlotGeometry {
         return (px / density * 10f).roundToInt() / 10f
     }
 
-    /** Height in dp to report to the provider: the frame it is really drawn in. */
-    fun reportedHeightDp(frameHeightPx: Int, density: Float): Float = toDp(frameHeightPx, density)
+    /** Height in dp to report to the provider: the box it is really drawn in. */
+    fun reportedHeightDp(boxHeightPx: Int, density: Float): Float = toDp(boxHeightPx, density)
 
-    /** Width in dp to report to the provider. */
-    fun reportedWidthDp(frameWidthPx: Int, density: Float): Float = toDp(frameWidthPx, density)
+    /** Width in dp to report to the provider: the box it is really drawn in. */
+    fun reportedWidthDp(boxWidthPx: Int, density: Float): Float = toDp(boxWidthPx, density)
 
     /**
      * Rows that fit a measured height, for the resize gesture and for reconciling
