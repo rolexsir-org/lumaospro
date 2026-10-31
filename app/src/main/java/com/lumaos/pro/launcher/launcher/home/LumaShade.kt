@@ -550,7 +550,6 @@ class LumaShade(
         applyInsets()
         controls.refresh()
         NotificationHub.refreshAccessState(context)
-        if (NotificationHub.state.value.access == NotificationAccessState.GRANTED) NotificationHub.resync()
         else NotificationAccess.requestRebindIfGranted(context)
     }
 
