@@ -17,12 +17,9 @@ import com.lumaos.pro.launcher.icons.LivingIconDrawable
 import com.lumaos.pro.launcher.icons.LivingIconManager
 import com.lumaos.pro.launcher.icons.LivingIconOverride
 import com.lumaos.pro.launcher.icons.LivingIconResolver
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Decodes and renders app icons off the main thread and fills [IconCache].
@@ -36,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * contend with the very UI work we are trying to keep smooth.
  *
  * When the render spec changes (theme, shape, style, icon pack, size), the
- * generation counter advances: the cache is cleared and results computed for
+ * pending requests are invalidated: the cache is cleared and results computed for
  * the old spec are discarded instead of being cached.
  */
 class IconLoader(
@@ -54,12 +51,12 @@ class IconLoader(
         }
     }
     private val handler = Handler(Looper.getMainLooper())
-    private val inFlight = Collections.synchronizedSet(HashSet<ComponentKey>())
+    private val lock = Any()
+    private val inFlight = IconRequestTracker<ComponentKey>()
     /** Negative results are cached until the package changes or the render spec does. */
-    private val unavailable = Collections.synchronizedSet(HashSet<ComponentKey>())
-    private val keyGenerations = ConcurrentHashMap<ComponentKey, Int>()
+    private val unavailable = HashSet<ComponentKey>()
+    private var activeDensity: Int? = null
     private val shutdown = AtomicBoolean(false)
-    private val generation = AtomicInteger(0)
     private val renderer = IconRenderer()
 
     @Volatile
@@ -71,50 +68,59 @@ class IconLoader(
     var onIconReady: ((ComponentKey) -> Unit)? = null
 
     /** Returns true when the spec changed and icons will be re-rendered. */
-    fun updateSpec(newSpec: IconRenderSpec): Boolean {
-        if (newSpec == spec) return false
+    fun updateSpec(newSpec: IconRenderSpec): Boolean = synchronized(lock) {
+        if (newSpec == spec) return@synchronized false
         spec = newSpec
-        generation.incrementAndGet()
         inFlight.clear()
         unavailable.clear()
         cache.clear()
-        return true
+        true
     }
 
-    /**
-     * Returns a cached icon immediately, or schedules a decode and returns null.
-     * The caller shows a placeholder and repaints when [onIconReady] fires.
-     */
+    /** Returns a cached icon, or schedules one decode for the current configuration. */
     fun get(key: ComponentKey, density: Int): Drawable? {
-        cache[key]?.let { return it }
-        if (shutdown.get() || unavailable.contains(key)) return null
-        if (!inFlight.add(key)) return null
-        val gen = generation.get()
-        val keyGen = keyGenerations[key] ?: 0
-        val s = spec
+        val token: Any
+        val renderSpec: IconRenderSpec?
+        synchronized(lock) {
+            if (shutdown.get()) return null
+            // The shared cache is keyed by component; only one density may occupy it.
+            if (activeDensity != null && activeDensity != density) {
+                inFlight.clear()
+                unavailable.clear()
+                cache.clear()
+            }
+            activeDensity = density
+            cache[key]?.let { return it }
+            if (key in unavailable) return null
+            token = inFlight.start(key) ?: return null
+            renderSpec = spec
+        }
         try {
             executor.execute {
+                if (!synchronized(lock) { !shutdown.get() && inFlight.isCurrent(key, token) }) return@execute
+                var failed = false
                 val drawable = try {
-                    produce(key, density, s)
-                } catch (t: Throwable) {
-                    LumaLog.w("Icon decode failed for ${key.packageName}")
+                    produce(key, density, renderSpec)
+                } catch (e: Exception) {
+                    LumaLog.e("Icon decode failed for ${key.packageName}", e)
+                    failed = true
                     null
                 }
-                if (gen == generation.get()) {
-                    inFlight.remove(key)
-                    // A package callback may have invalidated this exact icon
-                    // while its old decode was running. Never let that stale
-                    // result overwrite the package's new generation.
-                    if (keyGen == (keyGenerations[key] ?: 0)) {
+                val accepted = synchronized(lock) {
+                    if (shutdown.get() || !inFlight.finish(key, token)) false
+                    else if (failed) {
+                        // Retry on a future bind, but don't trigger an immediate
+                        // decode/rebind loop for a persistently broken resource.
+                        false
+                    } else {
                         if (drawable != null) cache[key] = drawable else unavailable.add(key)
+                        true
                     }
-                    // Post on success, absence and invalidation. Absence is
-                    // remembered, so this cannot become a decode/notify loop.
-                    handler.post { onIconReady?.invoke(key) }
                 }
+                if (accepted) handler.post { if (!shutdown.get()) onIconReady?.invoke(key) }
             }
         } catch (e: RejectedExecutionException) {
-            inFlight.remove(key)
+            synchronized(lock) { inFlight.finish(key, token) }
         }
         return null
     }
@@ -223,28 +229,17 @@ class IconLoader(
     }
 
     /** Invalidates one installed component after a package add/remove/update. */
-    fun invalidate(key: ComponentKey) {
+    fun invalidate(key: ComponentKey) = synchronized(lock) {
         cache.remove(key)
         unavailable.remove(key)
-        keyGenerations.merge(key, 1) { old, delta -> old + delta }
+        inFlight.invalidate(key)
     }
 
-    /** Invalidates all cached or negative entries belonging to [packageName]. */
-    fun invalidatePackage(packageName: String) {
-        val removedCached = cache.removePackage(packageName)
-        val removedUnavailable = synchronized(unavailable) {
-            val matching = unavailable.filter { it.packageName == packageName }
-            unavailable.removeAll(matching.toSet())
-            matching
-        }
-        val knownKeys = HashSet<ComponentKey>().apply {
-            addAll(removedCached)
-            addAll(removedUnavailable)
-            addAll(keyGenerations.keys.filter { it.packageName == packageName })
-        }
-        knownKeys.forEach { key ->
-            keyGenerations.merge(key, 1) { old, delta -> old + delta }
-        }
+    /** Invalidates cached, negative and still-running requests across profiles. */
+    fun invalidatePackage(packageName: String) = synchronized(lock) {
+        cache.removePackage(packageName)
+        unavailable.removeAll { it.packageName == packageName }
+        inFlight.invalidateWhere { it.packageName == packageName }
     }
 
     /** Synchronously peeks a cached icon without scheduling background work. */
@@ -271,8 +266,10 @@ class IconLoader(
             onIconReady = null
             handler.removeCallbacksAndMessages(null)
             executor.shutdownNow()
-            inFlight.clear()
-            unavailable.clear()
+            synchronized(lock) {
+                inFlight.clear()
+                unavailable.clear()
+            }
         }
     }
 }

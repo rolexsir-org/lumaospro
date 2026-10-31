@@ -17,7 +17,7 @@ import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.util.LumaLog
 import java.util.concurrent.ConcurrentHashMap
 
-/** Result of an installed-app enumeration; false means [apps] is only the last known snapshot. */
+/** Result of an installed-app enumeration; false means [apps] may be partial or stale. */
 data class AppRefreshResult(val apps: List<AppEntry>, val successful: Boolean)
 
 /**
@@ -31,7 +31,7 @@ data class AppRefreshResult(val apps: List<AppEntry>, val successful: Boolean)
  *     Android 11, so LumaOS Pro does not need QUERY_ALL_PACKAGES.
  *  2. It gives per-profile results and the correctly themed icon for free.
  *
- * The last complete app snapshot is retained across transient system-service
+ * The last usable app snapshot is retained across primary system-service
  * failures; rendered icons are cached separately by [IconCache].
  */
 class AppRepository(
@@ -59,7 +59,7 @@ class AppRepository(
     @Volatile
     private var hasCompletedInitialScan: Boolean = false
 
-    /** Last complete list, retained if the system service temporarily fails. */
+    /** Last usable list, retained if the primary system query temporarily fails. */
     @Volatile
     private var lastEntries: List<AppEntry> = emptyList()
 
@@ -77,6 +77,7 @@ class AppRepository(
     @Synchronized
     fun refreshSnapshot(): AppRefreshResult {
         val taggedInfos = ArrayList<Pair<Long, LauncherActivityInfo>>()
+        var complete = true
         if (activityListQuery != null) {
             val infos = try {
                 activityListQuery.invoke()
@@ -89,31 +90,62 @@ class AppRepository(
             }
             infos.forEach { taggedInfos += 0L to it }
         } else {
-            val profiles = runCatching { launcherApps.profiles }
-                .getOrNull()
-                ?.takeIf { it.isNotEmpty() }
-                ?: listOf(userHandle)
+            val profiles = try {
+                launcherApps.profiles
+            } catch (e: RuntimeException) {
+                LumaLog.e("Could not enumerate launcher profiles", e)
+                return AppRefreshResult(lastEntries, successful = false)
+            }
+            if (profiles.isEmpty() || userHandle !in profiles) {
+                LumaLog.w("Incomplete launcher profile list; retaining previous snapshot")
+                return AppRefreshResult(lastEntries, successful = false)
+            }
             for (profile in profiles) {
                 val isPrimary = profile == userHandle
+                if (!isPrimary) {
+                    val quiet = try {
+                        userManager?.isQuietModeEnabled(profile) ?: true
+                    } catch (e: RuntimeException) {
+                        LumaLog.e("Could not check launcher profile availability", e)
+                        true
+                    }
+                    if (quiet) {
+                        LumaLog.w("Launcher profile paused; skipping destructive reconciliation")
+                        complete = false
+                        continue
+                    }
+                }
                 val serial = if (isPrimary) 0L else {
-                    runCatching { userManager?.getSerialNumberForUser(profile) ?: 0L }.getOrDefault(0L)
+                    val id = try {
+                        userManager?.getSerialNumberForUser(profile) ?: -1L
+                    } catch (e: RuntimeException) {
+                        LumaLog.e("Could not identify launcher profile", e)
+                        -1L
+                    }
+                    if (id <= 0L) {
+                        LumaLog.w("Incomplete launcher profile identity; retaining previous snapshot")
+                        return AppRefreshResult(lastEntries, successful = false)
+                    }
+                    id
                 }
                 profileHandles[serial] = profile
                 try {
-                    val list = launcherApps.getActivityList(null, profile).orEmpty()
+                    val list = launcherApps.getActivityList(null, profile)
+                    if (list == null) {
+                        LumaLog.w("Launcher profile query returned no result")
+                        if (isPrimary) return AppRefreshResult(lastEntries, successful = false)
+                        complete = false
+                        continue
+                    }
                     for (info in list) taggedInfos += serial to info
                 } catch (e: SecurityException) {
-                    if (isPrimary) {
-                        LumaLog.e("Not permitted to enumerate apps", e)
-                        return AppRefreshResult(lastEntries, successful = false)
-                    }
-                    LumaLog.w("Work profile enumeration skipped: ${e.javaClass.simpleName}")
+                    LumaLog.e("Not permitted to enumerate launcher profile", e)
+                    if (isPrimary) return AppRefreshResult(lastEntries, successful = false)
+                    complete = false
                 } catch (e: RuntimeException) {
-                    if (isPrimary) {
-                        LumaLog.e("LauncherApps query failed", e)
-                        return AppRefreshResult(lastEntries, successful = false)
-                    }
-                    LumaLog.w("Work profile unavailable: ${e.javaClass.simpleName}")
+                    LumaLog.e("Launcher profile unavailable", e)
+                    if (isPrimary) return AppRefreshResult(lastEntries, successful = false)
+                    complete = false
                 }
             }
         }
@@ -136,7 +168,7 @@ class AppRepository(
         snapshot = map
         hasCompletedInitialScan = true
         lastEntries = sorted
-        return AppRefreshResult(sorted, successful = true)
+        return AppRefreshResult(sorted, successful = complete)
     }
 
     /** Compatibility helper for consumers that only need the latest known list. */
