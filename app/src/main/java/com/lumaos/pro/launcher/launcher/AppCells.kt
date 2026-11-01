@@ -59,7 +59,9 @@ data class CellConfig(
     val labelAlpha: Float = LumaTokens.typeAppLabelAlpha,
     /** Icon geometry for the monogram fallback, so it matches the theme's icons. */
     val iconShape: com.lumaos.pro.launcher.ui.theme.IconShape =
-        com.lumaos.pro.launcher.ui.theme.IconShape.SQUIRCLE
+        com.lumaos.pro.launcher.ui.theme.IconShape.SQUIRCLE,
+    /** True when the active theme voices app labels in uppercase monospace (Monolith). */
+    val labelAllCaps: Boolean = false
 )
 
 class AppCellViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -157,6 +159,7 @@ class AppEntryAdapter(
             }
 
             holder.label.text = label
+            holder.label.isAllCaps = config.labelAllCaps
             val effectiveAlpha = ((ColorMath.alpha(config.labelColor) / 255f) * config.labelAlpha).coerceIn(0f, 1f)
             holder.label.setTextColor(ColorMath.withAlpha(config.labelColor, effectiveAlpha))
             holder.label.textSize = (config.labelSizeSp ?: BASE_LABEL_SP) * config.textScale

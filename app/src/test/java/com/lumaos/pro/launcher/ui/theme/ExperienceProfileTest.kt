@@ -99,4 +99,30 @@ class ExperienceProfileTest {
         val applied = ExperienceProfile.LIQUID.themeSettings(base)
         assertEquals(ThemeId.OBSIDIAN, applied.profileThemes[ContextProfile.SLEEP])
     }
+
+    @Test
+    fun `v3_2 theme launcher packages define distinct composition dock blur and icon physics`() {
+        val sig = ThemeLauncherPackage.forTheme(ThemeId.SIGNATURE)
+        val atm = ThemeLauncherPackage.forTheme(ThemeId.ATMOSPHERE)
+        val mono = ThemeLauncherPackage.forTheme(ThemeId.MONOLITH)
+
+        assertEquals(com.lumaos.pro.launcher.launcher.model.HomePreset.INSTRUMENT, sig.preset)
+        assertEquals(DockStyle.FLOAT, sig.dockStyle)
+        assertEquals(EffectsPreference.FULL, sig.effects)
+        assertEquals(IconShape.SQUIRCLE, sig.iconShape)
+        assertTrue(sig.livingIcons)
+
+        assertEquals(com.lumaos.pro.launcher.launcher.model.HomePreset.HORIZON, atm.preset)
+        assertEquals(DockStyle.FLOAT, atm.dockStyle)
+        assertEquals(Backdrop.WALLPAPER, atm.backdrop)
+        assertEquals(IconShape.CIRCLE, atm.iconShape)
+        assertTrue(atm.dynamicWallpaperColors)
+        assertTrue(atm.livingIcons)
+
+        assertEquals(com.lumaos.pro.launcher.launcher.model.HomePreset.GRID, mono.preset)
+        assertEquals(DockStyle.BEZEL, mono.dockStyle)
+        assertEquals(EffectsPreference.MINIMAL, mono.effects)
+        assertEquals(IconStyle.TINTED, mono.iconStyle)
+        assertFalse(mono.livingIcons)
+    }
 }

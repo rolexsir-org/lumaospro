@@ -226,6 +226,7 @@ object GlassBackdrop {
  */
 object GlassMaterials {
     private data class Recipe(
+        val radiusRole: RadiusRole,
         val radiusDp: Float,
         val darkFill: Float,
         val lightFill: Float,
@@ -236,25 +237,22 @@ object GlassMaterials {
     )
 
     private val RECIPES = mapOf(
-        GlassRole.PRIMARY to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.SECONDARY to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.SEARCH to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.78f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.DOCK to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.FOLDER to Recipe(LumaTokens.radiusFolder, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.MENU to Recipe(LumaTokens.radiusMedium, LumaTokens.glassDarkCardAlpha + 0.04f, LumaTokens.glassLightCardAlpha + 0.04f, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.SHEET to Recipe(LumaTokens.radiusXLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha, topOnly = true),
-        GlassRole.WIDGET to Recipe(LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
-        GlassRole.SETTINGS_CONTROL to Recipe(LumaTokens.radiusSmall, LumaTokens.glassDarkBgAlpha * 0.85f, LumaTokens.glassLightBgAlpha * 0.85f, 0.50f, 2f, LumaTokens.glassBorderTopAlpha),
-        GlassRole.OVERLAY to Recipe(LumaTokens.radiusMedium, LumaTokens.glassDarkBgAlpha * 0.75f, LumaTokens.glassLightBgAlpha * 0.75f, 0.40f, 0f, LumaTokens.glassBorderTopAlpha)
+        GlassRole.PRIMARY to Recipe(RadiusRole.EXTRA_LARGE, LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SECONDARY to Recipe(RadiusRole.LARGE, LumaTokens.radiusLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SEARCH to Recipe(RadiusRole.LARGE, LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.78f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.DOCK to Recipe(RadiusRole.EXTRA_LARGE, LumaTokens.radiusXLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.FOLDER to Recipe(RadiusRole.LARGE, LumaTokens.radiusFolder, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.MENU to Recipe(RadiusRole.MEDIUM, LumaTokens.radiusMedium, LumaTokens.glassDarkCardAlpha + 0.04f, LumaTokens.glassLightCardAlpha + 0.04f, 0.96f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SHEET to Recipe(RadiusRole.EXTRA_LARGE, LumaTokens.radiusXLarge, LumaTokens.glassDarkCardAlpha, LumaTokens.glassLightCardAlpha, 1.0f, LumaTokens.shadowFloatingElevation, LumaTokens.glassBorderTopAlpha, topOnly = true),
+        GlassRole.WIDGET to Recipe(RadiusRole.LARGE, LumaTokens.radiusLarge, LumaTokens.glassDarkBgAlpha, LumaTokens.glassLightBgAlpha, 0.96f, LumaTokens.shadowCardElevation, LumaTokens.glassBorderTopAlpha),
+        GlassRole.SETTINGS_CONTROL to Recipe(RadiusRole.SMALL, LumaTokens.radiusSmall, LumaTokens.glassDarkBgAlpha * 0.85f, LumaTokens.glassLightBgAlpha * 0.85f, 0.50f, 2f, LumaTokens.glassBorderTopAlpha),
+        GlassRole.OVERLAY to Recipe(RadiusRole.MEDIUM, LumaTokens.radiusMedium, LumaTokens.glassDarkBgAlpha * 0.75f, LumaTokens.glassLightBgAlpha * 0.75f, 0.40f, 0f, LumaTokens.glassBorderTopAlpha)
     )
 
     fun palette(theme: ResolvedTheme, capabilities: GlassCapabilities = GlassCapabilities.DEFAULT): GlassPalette {
-        // Keep legacy shape characters as a light modulation, never as nine
-        // unrelated geometries. Monolith's authored sharpness cannot collapse
-        // the glass radius below a usable, touch-friendly shape.
-        val shapeScale = (theme.radius(RadiusRole.MEDIUM) / 16f).coerceIn(0.78f, 1.15f)
         val blurAvailable = capabilities.translucency && capabilities.blur && theme.usesBlur
         val themeBlur = theme.blurDp.coerceIn(0f, 34f)
+        val highRefraction = theme.saturation > 1.4f
         // Glass surfaces carry theme.colors.onSurface, so their base plate polarity
         // must match !theme.isDark (not homeForeground, which flips independently on
         // manual dark-theme-over-light-wallpaper combinations).
@@ -266,17 +264,17 @@ object GlassMaterials {
         val surfaceTinted = ColorMath.lerp(
             ColorMath.opaque(fillAnchor),
             ColorMath.opaque(theme.colors.surface1),
-            0.34f
+            if (highRefraction) 0.42f else 0.34f
         )
         val identityTint = ColorMath.lerp(
             surfaceTinted,
             ColorMath.opaque(theme.colors.accent),
-            0.045f
+            if (highRefraction) 0.08f else 0.045f
         )
         val edgeTint = ColorMath.lerp(
             ColorMath.opaque(edgeAnchor),
             ColorMath.opaque(theme.colors.accent),
-            if (theme.isDark) 0.08f else 0.05f
+            if (highRefraction) 0.14f else if (theme.isDark) 0.08f else 0.05f
         )
         val accent = ColorMath.opaque(theme.colors.accent)
 
@@ -299,15 +297,15 @@ object GlassMaterials {
                 edgeTint = edgeTint,
                 accent = accent,
                 alpha = resolvedAlpha,
-                edgeAlpha = recipe.edgeAlpha,
+                edgeAlpha = if (highRefraction) (recipe.edgeAlpha * 1.30f).coerceAtMost(0.32f) else recipe.edgeAlpha,
                 content = ColorMath.opaque(theme.colors.onSurface),
                 opaqueFallback = !capabilities.translucency || !blurAvailable
             )
             GlassSpec(
                 role = role,
-                radiusDp = recipe.radiusDp * shapeScale,
-                blurDp = if (blurAvailable) (themeBlur * recipe.blurFactor).coerceIn(0f, 26f) else 0f,
-                elevationDp = if (capabilities.depth) recipe.elevationDp else 0f,
+                radiusDp = theme.radius(recipe.radiusRole),
+                blurDp = if (blurAvailable) (themeBlur * recipe.blurFactor).coerceIn(0f, 34f) else 0f,
+                elevationDp = if (capabilities.depth && theme.usesBlur) recipe.elevationDp else 0f,
                 borderDp = GlassGeometry.BORDER_DP,
                 topOnly = recipe.topOnly,
                 states = states
@@ -389,14 +387,32 @@ object GlassMaterials {
         if (opaqueFallback) {
             val base = theme.colors.surface1
             val raised = theme.colors.surface2
-            fun solidify(c: GlassColors, top: Int, bottom: Int): GlassColors = c.copy(
+            val flatStone = !theme.usesBlur
+            val stoneBorder = ColorMath.opaque(theme.colors.outline)
+            val stoneBorderStrong = ColorMath.opaque(theme.colors.outlineStrong)
+            fun solidify(c: GlassColors, top: Int, bottom: Int, borderTop: Int = c.edgeTop, borderBottom: Int = c.edgeBottom): GlassColors = c.copy(
                 fillTop = ColorMath.opaque(top),
-                fillBottom = ColorMath.opaque(bottom)
+                fillBottom = ColorMath.opaque(if (flatStone) base else bottom),
+                edgeTop = if (flatStone) borderTop else c.edgeTop,
+                edgeBottom = if (flatStone) borderBottom else c.edgeBottom,
+                specular = if (flatStone) 0x00000000 else c.specular
             )
-            rest = solidify(rest, raised, base)
-            pressed = solidify(pressed, ColorMath.lerp(raised, theme.colors.accent, 0.05f), ColorMath.lerp(base, theme.colors.accent, 0.03f))
-            focused = solidify(focused, raised, base)
-            selected = solidify(selected, ColorMath.lerp(raised, theme.colors.accent, 0.13f), ColorMath.lerp(base, theme.colors.accent, 0.09f))
+            rest = solidify(rest, if (flatStone) base else raised, base, stoneBorder, stoneBorder)
+            pressed = solidify(
+                pressed,
+                ColorMath.lerp(raised, theme.colors.accent, 0.05f),
+                ColorMath.lerp(base, theme.colors.accent, 0.03f),
+                stoneBorderStrong,
+                stoneBorderStrong
+            )
+            focused = solidify(focused, raised, base, focusRing, focusRing)
+            selected = solidify(
+                selected,
+                ColorMath.lerp(raised, theme.colors.accent, 0.13f),
+                ColorMath.lerp(base, theme.colors.accent, 0.09f),
+                focusRing,
+                focusRing
+            )
         }
 
         // Muted content is derived from the selected text, not from the surface.

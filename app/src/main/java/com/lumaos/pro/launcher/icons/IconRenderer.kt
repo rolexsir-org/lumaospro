@@ -21,6 +21,7 @@ import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconShapes
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
+import com.lumaos.pro.launcher.ui.theme.ThemeId
 
 /**
  * Everything that decides how an icon looks. Part of the icon-cache key: when
@@ -42,7 +43,9 @@ data class IconRenderSpec(
     /** Hash/revision of per-app Living Icon overrides so cache invalidates on change. */
     val livingOverridesHash: Int = 0,
     /** True only when the user explicitly forced TINTED style (not merely a preset default). */
-    val explicitTint: Boolean = false
+    val explicitTint: Boolean = false,
+    /** Active theme identity so v3.2 tile treatments (Signature / Atmosphere / Monolith) stay distinct. */
+    val themeId: ThemeId = ThemeId.SIGNATURE
 ) {
     companion object {
         fun from(
@@ -55,19 +58,40 @@ data class IconRenderSpec(
             explicitTint: Boolean = false
         ): IconRenderSpec {
             val c = theme.colors
+            val plateColor = when (theme.id) {
+                ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
+                ThemeId.ATMOSPHERE -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.16f)
+                else -> if (theme.isDark) c.surface2 else ColorMath.WHITE
+            }
+            val rimColor = when (theme.id) {
+                ThemeId.MONOLITH -> ColorMath.opaque(c.outline)
+                ThemeId.ATMOSPHERE -> c.outlineStrong
+                else -> ColorMath.withAlpha(if (theme.isDark) c.outlineStrong else c.outline, 0.9f)
+            }
+            val tintPlateColor = when (theme.id) {
+                ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
+                ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.10f)
+                else -> c.accentContainer
+            }
+            val tintColor = when (theme.id) {
+                ThemeId.MONOLITH -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.28f)
+                ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.22f)
+                else -> c.onAccentContainer
+            }
             return IconRenderSpec(
                 sizePx = sizePx.coerceAtLeast(16),
                 shape = theme.iconShape,
                 style = theme.iconStyle,
-                plateColor = if (theme.isDark) c.surface2 else ColorMath.WHITE,
-                rimColor = ColorMath.withAlpha(if (theme.isDark) c.outlineStrong else c.outline, 0.9f),
-                tintColor = c.onAccentContainer,
-                tintPlateColor = c.accentContainer,
-                depth = depth,
+                plateColor = plateColor,
+                rimColor = rimColor,
+                tintColor = tintColor,
+                tintPlateColor = tintPlateColor,
+                depth = depth && theme.usesBlur,
                 iconPack = iconPack,
                 livingIcons = livingIcons,
                 livingOverridesHash = livingOverridesHash,
-                explicitTint = explicitTint
+                explicitTint = explicitTint,
+                themeId = theme.id
             )
         }
     }
@@ -109,7 +133,8 @@ class IconRenderer {
             IconStyle.NATURAL -> !fromIconPack && adaptive == null && spec.shape != IconShape.SYSTEM && !isOpaqueSquare(source)
         }
 
-        if (spec.depth && (plateNeeded || adaptive != null || spec.shape != IconShape.SYSTEM)) {
+        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH
+        if (allowDepth && (plateNeeded || adaptive != null || spec.shape != IconShape.SYSTEM)) {
             drawShadow(canvas, mask, size)
         }
 
@@ -148,7 +173,7 @@ class IconRenderer {
         // Fine rim: defines the edge on busy wallpapers and gives plates a
         // machined finish. Natural icons with the system mask keep their edge.
         if (plateNeeded || spec.style != IconStyle.NATURAL) stroke(canvas, mask, spec.rimColor, size * 0.012f)
-        if (spec.depth && (plateNeeded || adaptive != null)) rimLight(canvas, mask, rect, size)
+        if (allowDepth && (plateNeeded || adaptive != null)) rimLight(canvas, mask, rect, size)
         return bitmap
     }
 
@@ -312,8 +337,35 @@ class IconRenderer {
         spec: IconRenderSpec
     ) {
         if (living.bitmap.isRecycled) return
-        val targetRect = if (spec.depth) rect else inset(rect, 0.94f)
-        if (spec.depth) {
+        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH
+        val targetRect = if (allowDepth) rect else inset(rect, 0.94f)
+        if (spec.style == IconStyle.TINTED && spec.explicitTint) {
+            val mask = maskPath(spec.shape, null, targetRect)
+            if (allowDepth) drawShadow(canvas, mask, size)
+            fill(canvas, mask, spec.tintPlateColor)
+            val innerRect = inset(targetRect, 0.88f)
+            val bounds = computeLivingBounds(
+                iconId = living.iconId,
+                targetLeft = innerRect.left,
+                targetTop = innerRect.top,
+                targetRight = innerRect.right,
+                targetBottom = innerRect.bottom
+            )
+            val dst = RectF(bounds[0], bounds[1], bounds[2], bounds[3])
+            val save = canvas.save()
+            canvas.clipPath(mask)
+            paint.reset()
+            paint.isAntiAlias = true
+            paint.isFilterBitmap = true
+            paint.colorFilter = toneFilter(spec.tintColor)
+            canvas.drawBitmap(living.bitmap, null, dst, paint)
+            paint.colorFilter = null
+            canvas.restoreToCount(save)
+            stroke(canvas, mask, spec.rimColor, size * 0.014f)
+            if (allowDepth) rimLight(canvas, mask, targetRect, size)
+            return
+        }
+        if (allowDepth) {
             val shadowFootprint = inset(targetRect, 0.93f)
             val shadowPath = polygon(IconShapes.outline(IconShape.SQUIRCLE)!!, shadowFootprint)
             drawShadow(canvas, shadowPath, size)
@@ -329,13 +381,12 @@ class IconRenderer {
         paint.reset()
         paint.isAntiAlias = true
         paint.isFilterBitmap = true
-        paint.colorFilter = if (spec.style == IconStyle.TINTED && spec.explicitTint) {
-            toneFilter(spec.tintColor)
-        } else {
-            null
-        }
         canvas.drawBitmap(living.bitmap, null, dst, paint)
-        paint.colorFilter = null
+        if (allowDepth && spec.themeId == ThemeId.ATMOSPHERE) {
+            val rimFootprint = inset(targetRect, 0.95f)
+            val rimPath = polygon(IconShapes.outline(IconShape.SQUIRCLE)!!, rimFootprint)
+            rimLight(canvas, rimPath, rimFootprint, size)
+        }
     }
 
     /** True when a legacy icon already fills its square (full-bleed artwork). */

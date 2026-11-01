@@ -78,58 +78,140 @@ fun HomePreview(
             val unit = w / 100f
             drawBackdrop(theme, wallpaper, artwork, focalX, focalY)
 
-            // One refined clock/date focal point.
-            val top = h * 0.07f
-            val compact = preset.clock == ClockStyle.COMPACT
+            // Theme-voiced clock, date & context readout.
+            val isMonolith = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH
+            val isAtmosphere = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE
+            val centered = when (theme.id) {
+                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock == ClockStyle.EDITORIAL
+                com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE,
+                com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH -> false
+                else -> preset.clock == ClockStyle.EDITORIAL
+            }
+            val top = when {
+                isMonolith -> h * 0.045f
+                isAtmosphere -> h * 0.06f
+                else -> h * 0.08f
+            }
+            val gutter = unit * (GlassGeometry.GUTTER_DP / 3.6f)
             val clockPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeForeground
                 typeface = Typefaces.clock(theme.typography)
                 letterSpacing = theme.typography.clockTracking
-                textAlign = if (compact) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.CENTER
-                if (theme.backdrop.usesArtwork) setShadowLayer(unit * 0.6f, 0f, unit * 0.2f, c.homeShadow)
+                textAlign = if (centered) android.graphics.Paint.Align.CENTER else android.graphics.Paint.Align.LEFT
+                if (theme.backdrop.usesArtwork && theme.usesBlur) {
+                    setShadowLayer(unit * 0.6f, 0f, unit * 0.2f, c.homeShadow)
+                }
             }
             val readPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeMuted
                 typeface = Typefaces.readout(theme.typography)
                 letterSpacing = theme.typography.readoutTracking
-                textSize = unit * 3.1f
+                textSize = if (isMonolith) unit * 2.8f else unit * 3.1f
                 textAlign = clockPaint.textAlign
             }
-            val dateOnly = if (theme.typography.readoutCaps) dateText.uppercase() else dateText
-            val x = if (compact) unit * 6f else w / 2f
-            clockPaint.textSize = if (compact) unit * 10f else unit * 21f
-            drawContext.canvas.nativeCanvas.drawText(timeText, x, top + unit * if (compact) 9f else 20f, clockPaint)
-            drawContext.canvas.nativeCanvas.drawText(dateOnly, x, top + unit * if (compact) 14f else 27f, readPaint)
+            val dateFormatted = if (theme.typography.readoutCaps) dateText.uppercase() else dateText
+            val x = if (centered) w / 2f else gutter
+            val clockTextSize = when {
+                isMonolith -> unit * 23.5f
+                isAtmosphere -> unit * 16.5f
+                preset.clock == ClockStyle.COMPACT -> unit * 13f
+                else -> unit * 18.5f
+            }
+            clockPaint.textSize = clockTextSize
+            val clockBaseline = top + clockTextSize * 0.88f
+            val dateBaseline = clockBaseline + unit * 6.2f
+            drawContext.canvas.nativeCanvas.drawText(timeText, x, clockBaseline, clockPaint)
+            drawContext.canvas.nativeCanvas.drawText(dateFormatted, x, dateBaseline, readPaint)
+
+            if (preset.showContextLine && readout.isNotBlank()) {
+                val contextFormatted = if (theme.typography.readoutCaps) readout.uppercase() else readout
+                when {
+                    isMonolith -> {
+                        val ruleY = dateBaseline + unit * 2.8f
+                        drawLine(
+                            Color(c.outline),
+                            Offset(gutter, ruleY),
+                            Offset(w - gutter, ruleY),
+                            strokeWidth = max(1f, unit * 0.28f)
+                        )
+                        drawLine(
+                            Color(c.accent),
+                            Offset(gutter, ruleY),
+                            Offset(gutter + unit * 8f, ruleY),
+                            strokeWidth = max(1.5f, unit * 0.35f)
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            contextFormatted,
+                            x,
+                            ruleY + unit * 4.4f,
+                            readPaint
+                        )
+                    }
+                    isAtmosphere -> {
+                        val chipSpec = palette[GlassRole.SETTINGS_CONTROL].rest
+                        val textW = readPaint.measureText(contextFormatted)
+                        val chipW = textW + unit * 5f
+                        val chipH = unit * 5.2f
+                        val chipY = dateBaseline + unit * 2.2f
+                        drawRoundRect(
+                            Brush.verticalGradient(listOf(Color(chipSpec.fillTop), Color(chipSpec.fillBottom))),
+                            Offset(gutter, chipY),
+                            Size(chipW, chipH),
+                            CornerRadius(chipH / 2f)
+                        )
+                        drawRoundRect(
+                            Color(chipSpec.edgeTop),
+                            Offset(gutter, chipY),
+                            Size(chipW, chipH),
+                            CornerRadius(chipH / 2f),
+                            style = Stroke(unit * 0.25f)
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            contextFormatted,
+                            gutter + unit * 2.5f,
+                            chipY + chipH * 0.68f,
+                            readPaint.apply { color = chipSpec.content }
+                        )
+                    }
+                    else -> {
+                        drawContext.canvas.nativeCanvas.drawText(
+                            contextFormatted,
+                            x,
+                            dateBaseline + unit * 4.6f,
+                            readPaint
+                        )
+                    }
+                }
+            }
 
             // Clean, aligned icon grid.
             val muted = Color(c.homeMuted)
             val columns = 4
             val rows = if (preset.showGrid) min(preset.defaultRows, 4) else 0
-            val gridTop = top + unit * if (compact) 26f else 44f
-            val gutter = unit * (GlassGeometry.GUTTER_DP / 3.6f)
+            val gridTop = dateBaseline + unit * 13f
             val cellW = (w - gutter * 2f) / columns
             val iconSize = min(cellW * 0.58f, unit * 14f)
             var index = 0
             for (r in 0 until rows) for (col in 0 until columns) {
                 val img = icons.getOrNull(index++) ?: continue
                 val ix = gutter + col * cellW + (cellW - iconSize) / 2f
-                val iy = gridTop + r * (iconSize + unit * 9f)
-                if (iy + iconSize > h * 0.74f) continue
+                val iy = gridTop + r * (iconSize + unit * 8.5f)
+                if (iy + iconSize > h * 0.73f) continue
                 drawImageFit(img, ix, iy, iconSize)
                 drawRoundRect(
                     muted.copy(alpha = 0.55f),
                     Offset(ix + iconSize * 0.15f, iy + iconSize + unit * 2f),
                     Size(iconSize * 0.7f, unit * 1.2f),
-                    CornerRadius(unit)
+                    CornerRadius(if (isMonolith) unit * 0.2f else unit)
                 )
             }
 
-            // Primary search: translucent fill, directional edge, one reflection.
-            val search = palette[GlassRole.SEARCH].rest
+            // Primary search: respects theme radius (pill on Signature/Atmosphere, sharp 4dp on Monolith).
+            val searchSpec = palette[GlassRole.SEARCH]
+            val search = searchSpec.rest
             val pillH = unit * 10f
             val pillY = h - unit * 34f
-            val searchRadius = GlassGeometry.ROLE_RADIUS_DP.getValue(GlassRole.SEARCH) /
-                GlassGeometry.SEARCH_HEIGHT_DP * pillH
+            val searchRadius = (searchSpec.radiusDp / GlassGeometry.SEARCH_HEIGHT_DP * pillH).coerceAtMost(pillH / 2f)
             drawRoundRect(
                 Brush.verticalGradient(listOf(Color(search.fillTop), Color(search.fillBottom))),
                 Offset(gutter, pillY), Size(w - gutter * 2f, pillH), CornerRadius(searchRadius)
@@ -140,56 +222,82 @@ fun HomePreview(
                     startY = pillY, endY = pillY + pillH
                 ),
                 Offset(gutter, pillY), Size(w - gutter * 2f, pillH), CornerRadius(searchRadius),
-                style = Stroke(unit * 0.25f)
+                style = Stroke(unit * 0.28f)
             )
-            drawRoundRect(
-                Brush.horizontalGradient(
-                    listOf(Color.Transparent, Color(search.specular), Color.Transparent)
-                ),
-                Offset(gutter + searchRadius, pillY + unit * 0.3f),
-                Size(w - gutter * 2f - searchRadius * 2f, unit * 0.25f),
-                CornerRadius(unit * 0.2f)
-            )
-            drawCircle(Color(search.muted), unit * 1.6f, Offset(gutter + unit * 3f, pillY + pillH / 2f), style = Stroke(unit * 0.5f))
-            drawRoundRect(
-                Color(search.muted).copy(alpha = 0.5f),
-                Offset(gutter + unit * 8f, pillY + pillH / 2f - unit * 0.6f),
-                Size(w * 0.35f, unit * 1.2f), CornerRadius(unit)
-            )
-
-            // Floating glass dock.
-            val dockSpec = palette[GlassRole.DOCK].rest
-            val dockH = unit * 18f
-            val dockY = h - unit * 22f
-            val inset = gutter
-            if (dock != DockStyle.MINIMAL) {
-                val dockRadius = GlassGeometry.ROLE_RADIUS_DP.getValue(GlassRole.DOCK) /
-                    GlassGeometry.DOCK_HEIGHT_DP * dockH
-                drawRoundRect(
-                    Brush.verticalGradient(listOf(Color(dockSpec.fillTop), Color(dockSpec.fillBottom))),
-                    Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius)
-                )
-                drawRoundRect(
-                    Brush.verticalGradient(
-                        listOf(Color(dockSpec.edgeTop), Color(dockSpec.edgeBottom)),
-                        startY = dockY, endY = dockY + dockH
-                    ),
-                    Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius),
-                    style = Stroke(unit * 0.3f)
-                )
+            if (theme.usesBlur) {
                 drawRoundRect(
                     Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color(dockSpec.specular), Color.Transparent)
+                        listOf(Color.Transparent, Color(search.specular), Color.Transparent)
                     ),
-                    Offset(inset + dockRadius, dockY + unit * 0.3f),
-                    Size(w - inset * 2f - dockRadius * 2f, unit * 0.25f),
+                    Offset(gutter + searchRadius, pillY + unit * 0.3f),
+                    Size((w - gutter * 2f - searchRadius * 2f).coerceAtLeast(1f), unit * 0.25f),
                     CornerRadius(unit * 0.2f)
                 )
             }
-            val dockCell = (w - inset * 2f) / 4f
+            drawCircle(Color(search.muted), unit * 1.6f, Offset(gutter + unit * 3.5f, pillY + pillH / 2f), style = Stroke(unit * 0.5f))
+            drawRoundRect(
+                Color(search.muted).copy(alpha = 0.5f),
+                Offset(gutter + unit * 8f, pillY + pillH / 2f - unit * 0.6f),
+                Size(w * 0.35f, unit * 1.2f), CornerRadius(if (isMonolith) unit * 0.2f else unit)
+            )
+
+            // Dock: floating translucent capsule (FLOAT), edge-anchored solid stone bar (BEZEL), or bare (MINIMAL).
+            val dockRoleSpec = palette[GlassRole.DOCK]
+            val dockSpec = dockRoleSpec.rest
+            val dockH = unit * 18f
+            val dockY = if (dock == DockStyle.BEZEL) h - dockH else h - unit * 22f
+            val inset = if (dock == DockStyle.BEZEL) 0f else gutter
+            when (dock) {
+                DockStyle.MINIMAL -> Unit
+                DockStyle.BEZEL -> {
+                    drawRect(
+                        Color(c.surface1),
+                        topLeft = Offset(0f, dockY),
+                        size = Size(w, dockH)
+                    )
+                    drawLine(
+                        Color(c.outline),
+                        Offset(0f, dockY),
+                        Offset(w, dockY),
+                        strokeWidth = max(1f, unit * 0.32f)
+                    )
+                }
+                DockStyle.FLOAT -> {
+                    val dockRadius = (dockRoleSpec.radiusDp / GlassGeometry.DOCK_HEIGHT_DP * dockH).coerceAtMost(dockH / 2f)
+                    drawRoundRect(
+                        Brush.verticalGradient(listOf(Color(dockSpec.fillTop), Color(dockSpec.fillBottom))),
+                        Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius)
+                    )
+                    drawRoundRect(
+                        Brush.verticalGradient(
+                            listOf(Color(dockSpec.edgeTop), Color(dockSpec.edgeBottom)),
+                            startY = dockY, endY = dockY + dockH
+                        ),
+                        Offset(inset, dockY), Size(w - inset * 2f, dockH), CornerRadius(dockRadius),
+                        style = Stroke(unit * 0.3f)
+                    )
+                    if (theme.usesBlur) {
+                        drawRoundRect(
+                            Brush.horizontalGradient(
+                                listOf(Color.Transparent, Color(dockSpec.specular), Color.Transparent)
+                            ),
+                            Offset(inset + dockRadius, dockY + unit * 0.3f),
+                            Size((w - inset * 2f - dockRadius * 2f).coerceAtLeast(1f), unit * 0.25f),
+                            CornerRadius(unit * 0.2f)
+                        )
+                    }
+                }
+            }
+            val dockContentInset = gutter
+            val dockCell = (w - dockContentInset * 2f) / 4f
             val dockIcon = min(dockCell * 0.6f, dockH * 0.62f)
             dockIcons.forEachIndexed { i, img ->
-                drawImageFit(img, inset + i * dockCell + (dockCell - dockIcon) / 2f, dockY + (dockH - dockIcon) / 2f, dockIcon)
+                drawImageFit(
+                    img,
+                    dockContentInset + i * dockCell + (dockCell - dockIcon) / 2f,
+                    dockY + (dockH - dockIcon) / 2f,
+                    dockIcon
+                )
             }
         }
     }

@@ -82,7 +82,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.border
+import androidx.compose.ui.text.font.FontFamily
 import com.lumaos.pro.launcher.settings.ExperienceProfileController
+import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
+import com.lumaos.pro.launcher.ui.theme.ThemePresets
 
 @Composable
 fun SettingsRoot(
@@ -104,14 +109,13 @@ fun SettingsRoot(
         ) {
             Spacer(Modifier.height(8.dp))
             HomeRoleHeader(viewModel, onRequestHomeRole, onOpenHomeSettings)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+
+            ActiveThemeBanner(viewModel = viewModel, onOpenStudio = onOpenStudio)
+            Spacer(Modifier.height(20.dp))
 
             CleanGroupTitle(R.string.settings_group_make_yours)
             CleanSection {
-                ExperienceRow(viewModel)
-                CleanDivider()
-                StudioRow(onOpenStudio)
-                CleanDivider()
                 WallpaperRow(onOpenWallpaper)
                 CleanDivider()
                 WidgetsRow(viewModel)
@@ -449,85 +453,191 @@ private fun HomeRoleHeader(
     }
 }
 
-// ---------- Experience ----------
+// ---------- Active Theme Banner (v3.2 Reference) ----------
 
 @Composable
-private fun ExperienceRow(viewModel: SettingsViewModel) {
+private fun ActiveThemeBanner(
+    viewModel: SettingsViewModel,
+    onOpenStudio: () -> Unit
+) {
     val context = LocalContext.current
-    val selected by viewModel.prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
+    val resolved by viewModel.themes.theme.collectAsState()
+    val pkg = remember(resolved.id) { ThemeLauncherPackage.forTheme(resolved.id) }
     val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.onboarding_profiles_title),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 14.sp),
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = selected.name.lowercase().replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ExperienceProfile.entries.forEach { profile ->
-                val isSelected = profile == selected
-                val title = when (profile) {
-                    ExperienceProfile.PURE -> stringResource(R.string.experience_pure)
-                    ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid)
-                    ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight)
-                }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                MaterialTheme.shapes.large
+            ),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ACTIVE THEME",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        letterSpacing = 1.4.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    tonalElevation = 0.dp,
-                    modifier = Modifier.weight(1f).clickable {
-                        scope.launch {
-                            try { ExperienceProfileController.apply(viewModel.prefs, profile) } catch (e: Exception) {
-                                Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                 ) {
-                    Column(
-                        Modifier.padding(10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Row(
+                        Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(
-                                when (profile) {
-                                    ExperienceProfile.PURE -> Color(0xFF7C86FF)
-                                    ExperienceProfile.LIQUID -> Color(0xFF46E0B0)
-                                    ExperienceProfile.MIDNIGHT -> Color(0xFF1A1C1E)
-                                }
-                            )
+                            Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
-                        Spacer(Modifier.height(6.dp))
-                        Text(text = title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold), maxLines = 1)
-                        if (isSelected) {
-                            Spacer(Modifier.height(3.dp))
-                            Box(Modifier.size(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                        Text(
+                            text = "ACTIVE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.5.sp,
+                                letterSpacing = 0.8.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                text = resolved.displayName,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = pkg.subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = pkg.effectsSummary,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                ),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            // Quick 3-flagship theme switcher (applies full launcher effects package)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ThemePresets.SIGNATURE.forEach { spec ->
+                    val isSelected = resolved.id == spec.id
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(
+                                if (isSelected) 1.2.dp else 0.5.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                MaterialTheme.shapes.small
+                            )
+                            .clickable {
+                                scope.launch {
+                                    try {
+                                        viewModel.prefs.applyThemePackage(spec.id)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(spec.accent))
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = spec.displayName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                                ),
+                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
+
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), MaterialTheme.shapes.small)
+                    .clickable { onOpenStudio() }
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Open Theme Studio",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "→",
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
     }
-}
-
-@Composable
-private fun StudioRow(onOpenStudio: () -> Unit) {
-    CleanRow(
-        title = stringResource(R.string.studio_themes),
-        subtitle = stringResource(R.string.onboarding_profiles_subtitle),
-        onClick = onOpenStudio
-    )
 }
 
 @Composable
@@ -562,7 +672,6 @@ private fun WidgetsRow(viewModel: SettingsViewModel) {
 
 @Composable
 private fun AppearanceSection(viewModel: SettingsViewModel) {
-    val themeMode by viewModel.prefs.themeMode.collectAsState(ThemeMode.SYSTEM)
     val livingIconsEnabled by viewModel.prefs.livingIconsEnabled.collectAsState(true)
     val livingOverrides by viewModel.prefs.livingIconOverrides.collectAsState(emptyMap())
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
@@ -596,21 +705,6 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
                 }
             )
         }
-        CleanDivider()
-        ChoiceRowCompact(
-            label = stringResource(R.string.pref_theme),
-            selected = when (themeMode) {
-                ThemeMode.SYSTEM -> stringResource(R.string.pref_theme_system)
-                ThemeMode.LIGHT -> stringResource(R.string.pref_theme_light)
-                ThemeMode.DARK -> stringResource(R.string.pref_theme_dark)
-            },
-            options = listOf(
-                ThemeMode.SYSTEM to stringResource(R.string.pref_theme_system),
-                ThemeMode.LIGHT to stringResource(R.string.pref_theme_light),
-                ThemeMode.DARK to stringResource(R.string.pref_theme_dark)
-            ).map { it as Pair<Any,String> },
-            onSelected = { scope.launch { viewModel.prefs.setThemeMode(it as ThemeMode) } }
-        )
         CleanDivider()
         SliderCompact(stringResource(R.string.pref_grid_columns), gridColumns.toFloat(), 3f..7f) {
             scope.launch { viewModel.prefs.setGridColumns(it.roundToInt()) }

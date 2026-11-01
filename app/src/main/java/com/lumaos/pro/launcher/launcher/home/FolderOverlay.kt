@@ -100,7 +100,7 @@ class FolderOverlay(
         closeImmediately()
         val theme = host.theme()
         val palette = host.glassPalette()
-        val folderSpec = palette[GlassRole.FOLDER].copy(radiusDp = LumaTokens.radiusFolder)
+        val folderSpec = palette[GlassRole.FOLDER]
         val colors = folderSpec.rest
         folderId = id
         originalName = name
@@ -136,8 +136,7 @@ class FolderOverlay(
             spec = folderSpec,
             density = dpScale,
             ripple = false,
-            depth = LumaTokens.depthFolder,
-            radiusOverrideDp = LumaTokens.radiusFolder
+            depth = LumaTokens.depthFolder
         )
 
         if (smart) {
@@ -418,7 +417,7 @@ class FolderOverlay(
         val p = panel ?: return
         val theme = host.theme()
         val palette = host.glassPalette()
-        val folderSpec = palette[GlassRole.FOLDER].copy(radiusDp = LumaTokens.radiusFolder)
+        val folderSpec = palette[GlassRole.FOLDER]
         val colors = folderSpec.rest
         scrimView?.setBackgroundColor(ColorMath.withAlpha(0xFF000000.toInt(), LumaTokens.folderScrimAlpha))
         GlassViews.apply(
@@ -426,8 +425,7 @@ class FolderOverlay(
             spec = folderSpec,
             density = dpScale,
             ripple = false,
-            depth = LumaTokens.depthFolder,
-            radiusOverrideDp = LumaTokens.radiusFolder
+            depth = LumaTokens.depthFolder
         )
         smartTitleView?.apply {
             setTextColor(colors.content)

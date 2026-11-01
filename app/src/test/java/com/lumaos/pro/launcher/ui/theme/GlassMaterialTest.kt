@@ -129,6 +129,27 @@ class GlassMaterialTest {
     }
 
     @Test
+    fun `v3_2 themes produce distinct glass radii blur budgets and monolith stone surfaces`() {
+        val sig = GlassMaterials.palette(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.SIGNATURE), envDark))
+        val atm = GlassMaterials.palette(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.ATMOSPHERE), envDark))
+        val mono = GlassMaterials.palette(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.MONOLITH), envDark))
+
+        assertEquals(34f, sig[GlassRole.DOCK].radiusDp, 0.01f)
+        assertEquals(38f, atm[GlassRole.DOCK].radiusDp, 0.01f)
+        assertEquals(8f, mono[GlassRole.DOCK].radiusDp, 0.01f)
+
+        assertEquals(26f, sig[GlassRole.SEARCH].radiusDp, 0.01f)
+        assertEquals(30f, atm[GlassRole.SEARCH].radiusDp, 0.01f)
+        assertEquals(4f, mono[GlassRole.SEARCH].radiusDp, 0.01f)
+
+        assertTrue("Atmosphere has deeper blur than Signature", atm[GlassRole.DOCK].blurDp > sig[GlassRole.DOCK].blurDp)
+        assertEquals(0f, mono[GlassRole.DOCK].blurDp, 0f)
+        assertEquals(0f, mono[GlassRole.DOCK].elevationDp, 0f)
+        assertEquals(0, ColorMath.alpha(mono[GlassRole.DOCK].rest.specular))
+    }
+
+
+    @Test
     fun `glass motion aliases the central token family`() {
         assertEquals(LumaDesignTokens.Motion.PRESS, GlassMotion.pressMs)
         assertEquals(LumaDesignTokens.Motion.DUR_2, GlassMotion.openMs)

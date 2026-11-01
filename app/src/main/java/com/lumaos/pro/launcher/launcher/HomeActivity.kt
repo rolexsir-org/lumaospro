@@ -1794,12 +1794,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(sheetColors.content)
         findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(sheetColors.content)
 
-        val cellCorner = t.corner(shapes.cellDp) * d
-        // Press feedback uses LumaTokens.pressScale (0.92f) and disappears under reduced motion.
-        val pressScale = if (motion.enabled && !motion.reduced) LumaTokens.pressScale else 1f
+        val cellCorner = t.iconTileRadiusDp * d
+        // Press feedback follows the active theme's motion character (0.96 Signature, 0.94 Atmosphere, 0.98 Monolith).
+        val pressScale = if (motion.enabled && !motion.reduced) t.motionProfile.pressScale else 1f
         val pressMs = t.motionProfile.pressMs
         homeCellConfig = homeCellConfig.copy(
-            labelColor = c.homeForeground, labelShadow = true, labelShadowColor = c.homeShadow,
+            labelColor = c.homeForeground, labelShadow = t.usesBlur, labelShadowColor = c.homeShadow,
             rippleColor = c.ripple, cornerPx = cellCorner,
             placeholderFill = ColorMath.withAlpha(c.homeForeground, 0.10f),
             placeholderText = ColorMath.withAlpha(c.homeForeground, 0.85f),
@@ -1829,6 +1829,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             placeholderText = folderColors.muted,
             labelAlpha = LumaTokens.typeAppLabelAlpha
         )
+        styleHomeContext(t)
         undoBar?.let { styleUndoBar(it, t) }
         if (::homeAdapter.isInitialized && !themeAnimating) {
             forEachHomeAdapter { adapter ->
@@ -1837,6 +1838,54 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
             drawerAdapter.notifyItemRangeChanged(0, drawerAdapter.itemCount)
+        }
+    }
+
+    /**
+     * Styles the ambient context/telemetry readout below the date according to
+     * Design System v3.2:
+     * - Signature: clean unframed tracked readout
+     * - Atmosphere: soft translucent glass pill chip
+     * - Monolith: 1dp horizontal architectural rule with signal-amber leading tick
+     */
+    private fun styleHomeContext(t: ResolvedTheme) {
+        val c = t.colors
+        val d = resources.displayMetrics.density
+        when (t.id) {
+            ThemeId.ATMOSPHERE -> {
+                val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL].copy(radiusDp = LumaTokens.radiusFull)
+                homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false, radiusOverrideDp = LumaTokens.radiusFull)
+                homeContext.setPadding(dp(12), dp(5), dp(12), dp(5))
+                homeContext.setTextColor(chipSpec.rest.content)
+            }
+            ThemeId.MONOLITH -> {
+                val ruleHeight = dp(1).coerceAtLeast(1)
+                val tickWidth = dp(20)
+                val ruleColor = ColorMath.opaque(c.outline)
+                val accentColor = ColorMath.opaque(c.accent)
+                homeContext.background = object : android.graphics.drawable.Drawable() {
+                    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    override fun draw(canvas: android.graphics.Canvas) {
+                        val b = bounds
+                        if (b.isEmpty) return
+                        paint.color = ruleColor
+                        canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), (b.top + ruleHeight).toFloat(), paint)
+                        paint.color = accentColor
+                        canvas.drawRect(b.left.toFloat(), b.top.toFloat(), (b.left + tickWidth).coerceAtMost(b.right).toFloat(), (b.top + ruleHeight).toFloat(), paint)
+                    }
+                    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+                    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+                    @Deprecated("Deprecated in Java")
+                    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+                }
+                homeContext.setPadding(0, dp(8), 0, 0)
+                homeContext.setTextColor(c.homeMuted)
+            }
+            else -> {
+                homeContext.background = null
+                homeContext.setPadding(0, dp(2), 0, 0)
+                homeContext.setTextColor(c.homeMuted)
+            }
         }
     }
 
@@ -1883,34 +1932,66 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun applyTypography(t: ResolvedTheme) {
         val style = t.typography
+        val isMonolith = t.id == ThemeId.MONOLITH || style == TypeStyle.MONOGRAPH
         homeClock.typeface = Typefaces.clock(style)
         homeClock.letterSpacing = style.clockTracking
-        homeDate.typeface = Typefaces.body(style)
-        homeDate.letterSpacing = if (style.readoutCaps) style.readoutTracking * 0.50f else 0.01f
-        homeDate.isAllCaps = false
-        homeDate.textSize = EditModeDesign.dateSp
+        homeDate.typeface = if (isMonolith) Typefaces.readout(style) else Typefaces.body(style)
+        homeDate.letterSpacing = style.readoutTracking
+        homeDate.isAllCaps = style.readoutCaps
+        homeDate.textSize = when (t.id) {
+            ThemeId.MONOLITH -> 10.5f
+            ThemeId.SIGNATURE -> 11.5f
+            ThemeId.ATMOSPHERE -> 13.5f
+            else -> EditModeDesign.dateSp
+        }
+        val datePattern = when {
+            isMonolith -> "EEE · dd MMM · yyyy"
+            style.readoutCaps -> "EEE · MMM d"
+            else -> "EEEE, MMMM d"
+        }
+        homeDate.format12Hour = datePattern
+        homeDate.format24Hour = datePattern
         homeContext.typeface = Typefaces.readout(style)
-        homeContext.letterSpacing = style.readoutTracking
+        homeContext.letterSpacing = if (isMonolith) 0.16f else style.readoutTracking * 0.5f
         homeContext.isAllCaps = style.readoutCaps
-        homeContext.textSize = LumaTokens.typeMicroSp
+        homeContext.textSize = when (t.id) {
+            ThemeId.MONOLITH -> 10.5f
+            ThemeId.ATMOSPHERE -> 11.5f
+            else -> LumaTokens.typeMicroSp
+        }
         homeEmpty.typeface = Typefaces.body(style)
         homeEmpty.textSize = EditModeDesign.hintTextSp
         findViewById<TextView>(R.id.search_pill_text).apply {
-            typeface = Typefaces.body(style)
-            textSize = LumaTokens.typeBodySp
+            typeface = if (isMonolith) Typefaces.readout(style) else Typefaces.body(style)
+            isAllCaps = isMonolith
+            letterSpacing = if (isMonolith) 0.10f else 0f
+            textSize = if (isMonolith) 12f else LumaTokens.typeBodySp
         }
         drawer.setSearchTypeface(Typefaces.body(style))
-        // App labels: 11sp Regular (400), 0.85 alpha, single-line centered.
-        val label = Typefaces.body(style)
-        val labelSize = LumaTokens.typeAppLabelSp
+        // App labels follow the theme's authored voice, size (10.5 / 11 / 9 sp), and tracking.
+        val label = Typefaces.label(style)
+        val labelSize = t.appLabelSp
+        val tracking = style.labelTracking
         homeCellConfig = homeCellConfig.copy(
-            typeface = label, labelTracking = 0f, labelSizeSp = labelSize, labelAlpha = LumaTokens.typeAppLabelAlpha
+            typeface = label,
+            labelTracking = tracking,
+            labelSizeSp = labelSize,
+            labelAlpha = LumaTokens.typeAppLabelAlpha,
+            labelAllCaps = isMonolith
         )
         dockCellConfig = dockCellConfig.copy(
-            showLabels = false, typeface = label, labelTracking = 0f, labelSizeSp = labelSize
+            showLabels = false,
+            typeface = label,
+            labelTracking = tracking,
+            labelSizeSp = labelSize,
+            labelAllCaps = isMonolith
         )
         drawerCellConfig = drawerCellConfig.copy(
-            typeface = label, labelTracking = 0f, labelSizeSp = labelSize, labelAlpha = LumaTokens.typeAppLabelAlpha
+            typeface = label,
+            labelTracking = tracking,
+            labelSizeSp = labelSize,
+            labelAlpha = LumaTokens.typeAppLabelAlpha,
+            labelAllCaps = isMonolith
         )
         val folderColors = glassPalette[GlassRole.FOLDER].rest
         folderCellConfig = drawerCellConfig.copy(
@@ -1918,6 +1999,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             placeholderText = folderColors.muted,
             labelAlpha = LumaTokens.typeAppLabelAlpha
         )
+        styleHomeContext(t)
         applyPreset(appearance.preset)
     }
 
@@ -1925,26 +2007,55 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val c = t.colors
         val s = t.semantics
         val d = resources.displayMetrics.density
-        val spec = glassPalette[GlassRole.DOCK].copy(radiusDp = LumaTokens.radiusXLarge)
+        val spec = glassPalette[GlassRole.DOCK]
         val lp = dockSurface.layoutParams as ViewGroup.MarginLayoutParams
         val marginPx = currentScreenMarginPx()
-        lp.marginStart = marginPx
-        lp.marginEnd = marginPx
         lp.height = dp(LumaTokens.dockHeight.roundToInt())
         when (appearance.effectiveDock) {
             DockStyle.MINIMAL -> {
+                lp.marginStart = marginPx
+                lp.marginEnd = marginPx
                 dockSurface.background = null
                 dockSurface.elevation = 0f
                 dockSurface.clipToOutline = false
+                dockSurface.outlineProvider = null
             }
-            else -> {
+            DockStyle.BEZEL -> {
+                // Edge-anchored architectural bar (Monolith / Grid): 0 horizontal margin,
+                // 1dp top border in stroke-1, solid surface-1 plate, zero float.
+                lp.marginStart = 0
+                lp.marginEnd = 0
+                val topBorderPx = dp(1).coerceAtLeast(1)
+                val fillColor = if (!t.usesBlur) ColorMath.opaque(c.surface1) else c.dockSurface
+                val borderColor = if (!t.usesBlur) ColorMath.opaque(c.outline) else c.dockRim
+                dockSurface.background = object : android.graphics.drawable.Drawable() {
+                    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    override fun draw(canvas: android.graphics.Canvas) {
+                        val b = bounds
+                        if (b.isEmpty) return
+                        paint.color = fillColor
+                        canvas.drawRect(b, paint)
+                        paint.color = borderColor
+                        canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), (b.top + topBorderPx).toFloat(), paint)
+                    }
+                    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+                    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+                    @Deprecated("Deprecated in Java")
+                    override fun getOpacity(): Int = android.graphics.PixelFormat.OPAQUE
+                }
+                dockSurface.elevation = 0f
+                dockSurface.clipToOutline = false
+                dockSurface.outlineProvider = null
+            }
+            DockStyle.FLOAT -> {
+                lp.marginStart = marginPx
+                lp.marginEnd = marginPx
                 GlassViews.apply(
                     view = dockSurface,
                     spec = spec,
                     density = d,
                     ripple = false,
-                    depth = LumaTokens.depthHome,
-                    radiusOverrideDp = LumaTokens.radiusXLarge
+                    depth = LumaTokens.depthHome
                 )
             }
         }
@@ -1988,18 +2099,19 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun drawerRowStyle(): DrawerRowStyle {
         val colors = glassPalette[GlassRole.SHEET].rest
+        val style = theme.typography
         return DrawerRowStyle(
             headerColor = ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
-            headerTypeface = Typefaces.title(theme.typography),
-            headerCaps = false,
-            headerTracking = 0.01f,
+            headerTypeface = Typefaces.readout(style),
+            headerCaps = style.readoutCaps,
+            headerTracking = style.readoutTracking,
             titleColor = colors.content,
-            titleTypeface = Typefaces.body(theme.typography),
+            titleTypeface = Typefaces.body(style),
             subtitleColor = colors.muted,
-            subtitleTypeface = Typefaces.body(theme.typography),
+            subtitleTypeface = Typefaces.body(style),
             iconTint = colors.content,
             rippleColor = colors.ripple,
-            cornerPx = LumaTokens.radiusSmall * resources.displayMetrics.density
+            cornerPx = theme.radius(RadiusRole.SMALL) * resources.displayMetrics.density
         )
     }
 
@@ -2047,22 +2159,50 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         refreshAll()
     }
 
-    /** Spatial arrangement for the chosen composition preset. */
+    /** Spatial arrangement for the chosen composition preset & active v3.2 theme. */
     private fun applyPreset(preset: HomePreset) {
-        val voiceClock = theme.clockSp.coerceAtLeast(LumaTokens.typeDisplayClockSp)
-        val clockSp = if (preset.clock == ClockStyle.COMPACT) LumaTokens.typeDisplayClockSp * 0.72f else voiceClock
+        val showClock = preset.clock != ClockStyle.NONE
+        homeHeader.visibility = if (showClock) View.VISIBLE else View.GONE
+        homeClock.visibility = if (showClock) View.VISIBLE else View.GONE
+        homeDate.visibility = if (showClock && preset.showDate) View.VISIBLE else View.GONE
 
-        // Luma Glass has one clock/date focal point. The decorative chronometer,
-        // header action cluster and context chip are compatibility-only views.
-        dial.visibility = View.GONE
+        val showDial = showClock && preset.clock == ClockStyle.CHRONO && theme.id != ThemeId.MONOLITH
+        dial.visibility = if (showDial) View.VISIBLE else View.GONE
         headerActions.visibility = View.GONE
-        homeContext.visibility = View.GONE
-        homeHeader.gravity = Gravity.CENTER_HORIZONTAL
-        clusterRow.gravity = Gravity.CENTER
-        clockColumn.gravity = Gravity.CENTER_HORIZONTAL
-        homeClock.gravity = Gravity.CENTER
-        homeDate.gravity = Gravity.CENTER
-        homeContext.gravity = Gravity.CENTER
+        homeContext.visibility = if (showClock && preset.showContextLine) View.VISIBLE else View.GONE
+
+        val clockSp = when {
+            theme.id == ThemeId.MONOLITH -> theme.clockSp
+            theme.id == ThemeId.ATMOSPHERE -> theme.clockSp
+            theme.id == ThemeId.SIGNATURE -> theme.clockSp
+            preset.clock == ClockStyle.COMPACT -> theme.clockSp * 0.82f
+            else -> theme.clockSp
+        }
+
+        // Signature centers the editorial clock; Atmosphere, Monolith, Horizon, and Grid align left.
+        val centered = when (theme.id) {
+            ThemeId.SIGNATURE -> preset.clock == ClockStyle.EDITORIAL
+            ThemeId.ATMOSPHERE, ThemeId.MONOLITH -> false
+            else -> preset.clock == ClockStyle.EDITORIAL
+        }
+        val horizGravity = if (centered) Gravity.CENTER_HORIZONTAL else Gravity.START
+        val textGravity = if (centered) Gravity.CENTER else (Gravity.START or Gravity.CENTER_VERTICAL)
+
+        homeHeader.gravity = horizGravity
+        clusterRow.gravity = if (centered) Gravity.CENTER else (Gravity.START or Gravity.CENTER_VERTICAL)
+        clockColumn.gravity = horizGravity
+        homeClock.gravity = textGravity
+        homeDate.gravity = textGravity
+        homeContext.gravity = textGravity
+
+        val topPad = when (theme.id) {
+            ThemeId.SIGNATURE -> dp(18)
+            ThemeId.ATMOSPHERE -> dp(6)
+            ThemeId.MONOLITH -> dp(2)
+            else -> dp(12)
+        }
+        homeHeader.setPadding(homeHeader.paddingLeft, topPad, homeHeader.paddingRight, homeHeader.paddingBottom)
+
         homeClock.setAutoSizeTextTypeUniformWithConfiguration(
             (clockSp * 0.55f).roundToInt(), clockSp.roundToInt(), 1, TypedValue.COMPLEX_UNIT_SP
         )
@@ -2263,13 +2403,23 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun playReturnSettle() {
         if (::launchPortal.isInitialized && launchPortal.lastLaunchedKey != null) {
             val targetIcon = findIconViewForKey(launchPortal.lastLaunchedKey)
-            launchPortal.playReturn(homeRoot, targetIcon, theme.colors.surface1, motion)
+            val portalBorder = if (theme.id == ThemeId.MONOLITH) theme.colors.accent else theme.colors.outline
+            launchPortal.playReturn(
+                root = homeRoot,
+                targetView = targetIcon,
+                fillColor = theme.colors.surface1,
+                motion = motion,
+                startRadiusDp = theme.iconTileRadiusDp,
+                borderColor = portalBorder,
+                snappy = !theme.usesBlur
+            )
         }
         if (!effects.depthTransforms || !motion.enabled || motion.reduced) return
+        val spring = if (!theme.usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
         SpringAnimator(0.4f) { p ->
             settleProgress = p.coerceIn(0f, 1.1f)
             applyDepth()
-        }.animateTo(1f, MotionTokens.LUMA, motion)
+        }.animateTo(1f, spring, motion)
     }
 
     private fun findIconViewForKey(key: ComponentKey?): View? {
@@ -2580,13 +2730,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         if (core.appRepository.launch(key, bounds, options)) {
             LumaHaptics.tap(iconSource ?: desktop)
             if (::launchPortal.isInitialized) {
+                val portalBorder = if (theme.id == ThemeId.MONOLITH) theme.colors.accent else theme.colors.outline
                 launchPortal.playLaunch(
                     root = homeRoot,
                     key = key,
                     sourceView = iconSource,
                     icon = iconLoader.get(key, density),
                     fillColor = theme.colors.surface1,
-                    motion = motion
+                    motion = motion,
+                    startRadiusDp = theme.iconTileRadiusDp,
+                    borderColor = portalBorder,
+                    snappy = !theme.usesBlur
                 )
             }
             viewModel.recordLaunch(key)
