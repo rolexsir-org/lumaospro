@@ -154,32 +154,50 @@ class GlassDrawable(
             Shader.TileMode.CLAMP
         )
 
-        // Layer 4: Diagonal top-left -> bottom-right 6% white overhead specular sheen.
-        val sheenTopLeft = ColorMath.withAlpha(0xFFFFFFFF.toInt(), LumaTokens.glassSheenAlpha)
+        val hasSpecular = ColorMath.alpha(colors.specular) > 0
+        val highRefraction = spec.blurDp >= 28f
+        val sheenAlpha = when {
+            !hasSpecular -> 0f
+            highRefraction -> LumaTokens.glassSheenAlpha * 1.45f
+            else -> LumaTokens.glassSheenAlpha
+        }
+
+        // Layer 4: Diagonal top-left -> bottom-right overhead specular sheen (absent on zero-blur stone).
+        val sheenTopLeft = ColorMath.withAlpha(0xFFFFFFFF.toInt(), sheenAlpha)
         sheenPaint.shader = LinearGradient(
             left, top, right, bottom,
             intArrayOf(
                 sheenTopLeft,
-                ColorMath.withAlpha(0xFFFFFFFF.toInt(), LumaTokens.glassSheenAlpha * 0.35f),
+                ColorMath.withAlpha(0xFFFFFFFF.toInt(), sheenAlpha * 0.35f),
                 0x00FFFFFF
             ),
             floatArrayOf(0f, 0.42f, 1f),
             Shader.TileMode.CLAMP
         )
 
-        // Layer 5: 1dp directional inner border — 18% top/left light catch -> 6% bottom/right.
-        val isBrightSurface = ColorMath.luminance(ColorMath.opaque(colors.fillBottom)) > 0.65
-        val borderAnchor = if (isBrightSurface) {
-            ColorMath.lerp(0xFFFFFFFF.toInt(), ColorMath.opaque(colors.edgeTop), 0.35f)
+        // Layer 5: 1dp directional inner border — crisp stone outline on zero-blur, directional light catch on glass.
+        val isFocusedOrSelected = state.contains(android.R.attr.state_focused) ||
+            state.contains(android.R.attr.state_selected)
+        val topLeftBorder: Int
+        val bottomRightBorder: Int
+        if (!hasSpecular) {
+            topLeftBorder = colors.edgeTop
+            bottomRightBorder = colors.edgeBottom
         } else {
-            0xFFFFFFFF.toInt()
+            val isBrightSurface = ColorMath.luminance(ColorMath.opaque(colors.fillBottom)) > 0.65
+            val borderAnchor = if (isBrightSurface) {
+                ColorMath.lerp(0xFFFFFFFF.toInt(), ColorMath.opaque(colors.edgeTop), 0.35f)
+            } else {
+                ColorMath.lerp(0xFFFFFFFF.toInt(), ColorMath.opaque(colors.edgeTop), if (highRefraction) 0.45f else 0.20f)
+            }
+            val topAlpha = if (highRefraction) (LumaTokens.glassBorderTopAlpha * 1.35f).coerceAtMost(0.30f) else LumaTokens.glassBorderTopAlpha
+            topLeftBorder = if (isFocusedOrSelected) {
+                colors.edgeTop
+            } else {
+                ColorMath.withAlpha(ColorMath.opaque(borderAnchor), topAlpha)
+            }
+            bottomRightBorder = ColorMath.withAlpha(ColorMath.opaque(borderAnchor), LumaTokens.glassBorderBottomAlpha)
         }
-        val topLeftBorder = if (state.contains(android.R.attr.state_focused)) {
-            colors.edgeTop
-        } else {
-            ColorMath.withAlpha(ColorMath.opaque(borderAnchor), LumaTokens.glassBorderTopAlpha)
-        }
-        val bottomRightBorder = ColorMath.withAlpha(ColorMath.opaque(borderAnchor), LumaTokens.glassBorderBottomAlpha)
         edgePaint.shader = LinearGradient(
             left, top, right, bottom,
             topLeftBorder, bottomRightBorder,
@@ -221,18 +239,21 @@ class GlassDrawable(
         fillPaint.alpha = drawableAlpha
         canvas.drawPath(fillPath, fillPaint)
 
-        // Layer 3: Permanently cached 256x256 procedural noise grain at 0.02f opacity.
-        LumaGlassNoise.shader()?.let { shader ->
-            noisePaint.shader = shader
-            noisePaint.alpha = ((LumaTokens.glassNoiseOpacity * drawableAlpha).roundToInt()).coerceIn(1, 255)
-            canvas.drawPath(fillPath, noisePaint)
+        val hasSpecular = ColorMath.alpha(colors.specular) > 0
+        if (hasSpecular) {
+            // Layer 3: Permanently cached 256x256 procedural noise grain at 0.02f opacity.
+            LumaGlassNoise.shader()?.let { shader ->
+                noisePaint.shader = shader
+                noisePaint.alpha = ((LumaTokens.glassNoiseOpacity * drawableAlpha).roundToInt()).coerceIn(1, 255)
+                canvas.drawPath(fillPath, noisePaint)
+            }
+
+            // Layer 4: Diagonal top-left -> bottom-right specular sheen.
+            sheenPaint.alpha = drawableAlpha
+            canvas.drawPath(fillPath, sheenPaint)
         }
 
-        // Layer 4: Diagonal top-left -> bottom-right 6% white specular sheen.
-        sheenPaint.alpha = drawableAlpha
-        canvas.drawPath(fillPath, sheenPaint)
-
-        // Layer 5: 1dp directional inner border (18% top/left -> 6% bottom/right).
+        // Layer 5: 1dp directional inner border.
         edgePaint.alpha = drawableAlpha
         canvas.drawPath(edgePath, edgePaint)
     }

@@ -77,6 +77,23 @@ object AtmospherePlan {
             if (theme.atmosphere == Atmosphere.HORIZON) {
                 out += AtmosphereLayer.Glow(0.5f, 1.08f, 0.62f, ColorMath.withAlpha(c.accent, 0.12f), 0.55f)
             }
+            if (theme.atmosphere == Atmosphere.AURORA && !luma) {
+                val drift = (phase * 2 * PI).toFloat()
+                out += AtmosphereLayer.Glow(
+                    0.22f + 0.05f * sin(drift),
+                    0.18f + 0.02f * cos(drift),
+                    0.68f,
+                    ColorMath.withAlpha(c.accent, 0.14f),
+                    0.55f
+                )
+                out += AtmosphereLayer.Glow(
+                    0.82f - 0.04f * sin(drift + 1.6f),
+                    0.44f + 0.02f * cos(drift * 1.5f),
+                    0.62f,
+                    ColorMath.withAlpha(c.secondary, 0.11f),
+                    0.58f
+                )
+            }
             if (theme.atmosphere == Atmosphere.TINT) {
                 out += AtmosphereLayer.Glow(0.12f, 0.02f, 0.55f, ColorMath.withAlpha(c.accent, 0.12f), 0.7f)
             }
@@ -89,6 +106,28 @@ object AtmospherePlan {
         }
 
         val t = (phase * 2 * PI).toFloat()
+        if (theme.id == ThemeId.MONOLITH && theme.backdrop == Backdrop.THEME) {
+            out += AtmosphereLayer.Glow(0.50f, 0.02f, 0.72f, ColorMath.withAlpha(c.accent, 0.08f), 0.55f)
+            if (detail) {
+                out += AtmosphereLayer.Lines(monolithGridSegments(), ColorMath.withAlpha(ColorMath.WHITE, 0.03f), 1f)
+            }
+            return out
+        }
+        if (theme.id == ThemeId.SIGNATURE && theme.backdrop == Backdrop.THEME) {
+            out += AtmosphereLayer.VerticalFade(
+                0f,
+                0.58f,
+                ColorMath.withAlpha(0xFF0C101C.toInt(), 0.55f),
+                ColorMath.withAlpha(c.background, 0f)
+            )
+            out += AtmosphereLayer.Glow(0.78f + 0.02f * sin(t), 0.14f, 0.76f, ColorMath.withAlpha(c.accent, 0.22f), 0.62f)
+            out += AtmosphereLayer.Glow(0.18f - 0.02f * cos(t), 0.88f, 0.68f, ColorMath.withAlpha(c.secondary, 0.14f), 0.58f)
+            if (detail) {
+                out += AtmosphereLayer.Lines(floatArrayOf(0.06f, 0.22f, 0.94f, 0.22f), c.outline, 1f)
+            }
+            return out
+        }
+
         when (theme.atmosphere) {
             Atmosphere.NONE -> Unit
             Atmosphere.HORIZON -> {
@@ -148,6 +187,22 @@ object AtmospherePlan {
             val f = ((k + phase.coerceIn(0f, 1f)) / rows)
             val y = horizon + (1f - horizon) * f.pow(2)
             if (y <= horizon + 0.004f) continue
+            segs += listOf(0f, y, 1f, y)
+        }
+        return segs.toFloatArray()
+    }
+
+    /** Crisp orthogonal 28dp architectural grid for Monolith (`wall--mono` in Design System v3.2). */
+    internal fun monolithGridSegments(): FloatArray {
+        val cols = 14
+        val rows = 28
+        val segs = ArrayList<Float>((cols + rows + 4) * 4)
+        for (c in 1 until cols) {
+            val x = c.toFloat() / cols
+            segs += listOf(x, 0f, x, 1f)
+        }
+        for (r in 1 until rows) {
+            val y = r.toFloat() / rows
             segs += listOf(0f, y, 1f, y)
         }
         return segs.toFloatArray()

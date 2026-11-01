@@ -157,6 +157,9 @@ class AppLaunchPortalView(context: Context) : View(context) {
     private var iconDrawable: Drawable? = null
     private var lastKey: ComponentKey? = null
     private var surfaceColor: Int = 0xFF141820.toInt()
+    private var portalBorderColor: Int = 0xFFFFFFFF.toInt()
+    private var portalStartRadiusDp: Float = 24f
+    private var portalSnappy: Boolean = false
     private var progress: Float = 0f
     private var launchingOut: Boolean = true
 
@@ -178,7 +181,7 @@ class AppLaunchPortalView(context: Context) : View(context) {
     val lastLaunchedKey: ComponentKey? get() = lastKey
 
     /**
-     * Morphs from [sourceView] (`56dp` icon bounds + `14dp` icon corner radius)
+     * Morphs from [sourceView] (`56dp` icon bounds + theme tile corner radius)
      * outward toward full-screen bounds (`0dp` corner radius) on [LumaSpring].
      */
     fun playLaunch(
@@ -187,11 +190,17 @@ class AppLaunchPortalView(context: Context) : View(context) {
         sourceView: View?,
         icon: Drawable?,
         fillColor: Int,
-        motion: MotionPolicy
+        motion: MotionPolicy,
+        startRadiusDp: Float = 24f,
+        borderColor: Int = 0xFFFFFFFF.toInt(),
+        snappy: Boolean = false
     ) {
         lastKey = key
         iconDrawable = icon?.constantState?.newDrawable(resources)?.mutate() ?: icon
         surfaceColor = ColorMath.withAlpha(fillColor, 0.92f)
+        portalStartRadiusDp = startRadiusDp
+        portalBorderColor = borderColor
+        portalSnappy = snappy
         captureSourceBounds(root, sourceView)
 
         if (!motion.enabled || motion.reduced || width <= 0 && root.width <= 0) {
@@ -203,7 +212,8 @@ class AppLaunchPortalView(context: Context) : View(context) {
         launchingOut = true
         visibility = VISIBLE
         spring.snapTo(0f)
-        spring.animateTo(1f, MotionTokens.LUMA, motion) {
+        val springSpec = if (snappy) MotionTokens.SNAPPY else MotionTokens.LUMA
+        spring.animateTo(1f, springSpec, motion) {
             // Once the external app window covers the launcher, reset portal invisibly
             // while preserving startRect & iconDrawable for the return morph!
             visibility = GONE
@@ -237,7 +247,8 @@ class AppLaunchPortalView(context: Context) : View(context) {
         launchingOut = false
         visibility = VISIBLE
         spring.snapTo(1f)
-        spring.animateTo(0f, MotionTokens.LUMA, motion) {
+        val springSpec = if (portalSnappy) MotionTokens.SNAPPY else MotionTokens.LUMA
+        spring.animateTo(0f, springSpec, motion) {
             visibility = GONE
             onLaunchProgress?.invoke(0f)
         }
@@ -280,7 +291,7 @@ class AppLaunchPortalView(context: Context) : View(context) {
             lerp(startRect.bottom, h, p)
         )
 
-        val iconCornerPx = 14f * resources.displayMetrics.density
+        val iconCornerPx = portalStartRadiusDp * resources.displayMetrics.density
         val cornerPx = lerp(iconCornerPx, 0f, p)
 
         // Envelope fades cleanly near both endpoints so neither the icon nor the OS window double-draws.
@@ -293,7 +304,7 @@ class AppLaunchPortalView(context: Context) : View(context) {
         cardPaint.color = ColorMath.withAlpha(surfaceColor, envelopeAlpha.coerceIn(0f, 0.88f))
         canvas.drawRoundRect(currentRect, cornerPx, cornerPx, cardPaint)
 
-        borderPaint.color = ColorMath.withAlpha(0xFFFFFFFF.toInt(), (0.18f * (1f - p)).coerceIn(0f, 0.18f))
+        borderPaint.color = ColorMath.withAlpha(portalBorderColor, (0.32f * (1f - p)).coerceIn(0f, 0.32f))
         if (cornerPx > 0.5f) {
             canvas.drawRoundRect(currentRect, cornerPx, cornerPx, borderPaint)
         }

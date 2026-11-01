@@ -318,6 +318,12 @@ data class ResolvedTheme(
     /** App-label size for this theme, in sp. */
     val appLabelSp: Float get() = tokens?.appLabelSp ?: typeScale.appLabel
 
+    /** Corner radius of app icon tiles in dp (24 Signature, 26 Atmosphere, 10 Monolith). */
+    val iconTileRadiusDp: Float get() = radius(RadiusRole.TILE)
+
+    /** App icon tile size in dp (58 in v3.2). */
+    val iconTileDp: Float get() = tokens?.shape?.tileSize ?: 56f
+
     /**
      * Home clock size for this theme, in sp.
      *

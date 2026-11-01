@@ -77,6 +77,7 @@ object LumaComponents {
             shapes = ShapeTokens(shapeScale(theme)),
             surfaces = surfaceTokens(theme),
             sizes = SizeTokens(),
+            appLabelSp = theme.appLabelSp,
             pressScale = motion.pressScale,
             pressMs = motion.pressMs
         )

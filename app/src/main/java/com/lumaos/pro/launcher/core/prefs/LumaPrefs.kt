@@ -376,6 +376,25 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
+     * Applies the complete v3.2 launcher effects package for [themeId] in one
+     * atomic DataStore transaction: composition preset, dock style, backdrop,
+     * blur/effects tier, motion identity, icon treatment, and Living Icons mode.
+     */
+    suspend fun applyThemePackage(themeId: ThemeId) {
+        val pkg = com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage.forTheme(themeId)
+        dataStore.edit { p ->
+            val currentTheme = themeSettingsFrom(p)
+            putThemeSettings(p, pkg.toThemeSettings(currentTheme))
+            p[Keys.HOME_PRESET] = pkg.preset.storageKey
+            p[Keys.GRID_ROWS] = pkg.preset.defaultRows
+            p[Keys.DOCK_STYLE] = pkg.dockStyle.storageKey
+            p[Keys.EFFECTS_PREF] = pkg.effects.storageKey
+            p[Keys.MOTION_PREF] = pkg.motion.storageKey
+            p[Keys.LIVING_ICONS_ENABLED] = pkg.livingIcons
+        }
+    }
+
+    /**
      * Seed Liquid only on a genuinely unconfigured installation. Onboarding can
      * be recreated or shown after a restore, so it must not reapply defaults over
      * an existing appearance merely because it was opened again.

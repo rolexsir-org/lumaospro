@@ -187,7 +187,8 @@ class DrawerController(
         // Wait one layout pass when the sheet was GONE, so travel is real.
         sheet.post {
             if (!isOpen) return@post
-            spring.animateTo(1f, MotionTokens.LUMA, host.motion())
+            val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
+            spring.animateTo(1f, spec, host.motion())
             if (shouldStagger) {
                 staggerCancel?.run()
                 staggerCancel = LumaSpring.staggerRecyclerView(grid, host.motion())
@@ -205,7 +206,8 @@ class DrawerController(
         staggerCancel?.run()
         staggerCancel = null
         hideKeyboard()
-        spring.animateTo(0f, MotionTokens.LUMA, host.motion()) { finishClose() }
+        val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
+        spring.animateTo(0f, spec, host.motion()) { finishClose() }
     }
 
     /** Immediately closed (returning home with the Home button). */
@@ -248,13 +250,14 @@ class DrawerController(
     fun release(velocityY: Float, focusSearchWhenOpened: Boolean = false) {
         val v = -velocityY / sheetTravel()
         val target = LumaSpring.resolveBinarySnapTarget(progress, v)
+        val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
         spring.setVelocity(v)
         if (target == 1f) {
             val wasOpen = isOpen
             isOpen = true
             LumaHaptics.snap(sheet)
             if (!wasOpen) host.onDrawerOpened()
-            spring.animateTo(1f, MotionTokens.LUMA, host.motion()) {
+            spring.animateTo(1f, spec, host.motion()) {
                 if (focusSearchWhenOpened && isOpen) {
                     searchField.requestFocus()
                     showKeyboard()
@@ -264,7 +267,7 @@ class DrawerController(
             if (isOpen) LumaHaptics.snap(sheet)
             isOpen = false
             hideKeyboard()
-            spring.animateTo(0f, MotionTokens.LUMA, host.motion()) { finishClose() }
+            spring.animateTo(0f, spec, host.motion()) { finishClose() }
         }
     }
 
@@ -339,9 +342,10 @@ class DrawerController(
                 minHeight = dp(48f)
                 minWidth = dp(48f)
                 setPadding(dp(14f), 0, dp(14f), 0)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.labelLargeSp)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, if (!theme.usesBlur) 10.5f else LumaTypeScale.labelLargeSp)
                 typeface = Typefaces.label(theme.typography)
                 letterSpacing = theme.typography.labelTracking
+                isAllCaps = !theme.usesBlur && theme.typography.readoutCaps
                 val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
                 val chipColors = if (chosen) chipSpec.states.selected else chipSpec.rest
                 setTextColor(chipColors.content)

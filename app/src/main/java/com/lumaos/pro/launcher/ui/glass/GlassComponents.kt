@@ -132,6 +132,11 @@ private fun fillBrush(colors: GlassColors, alphaDelta: Float = 0f): Brush = Brus
 )
 
 private fun directionalBorderBrush(colors: GlassColors, focused: Boolean): Brush {
+    val hasSpecular = ColorMath.alpha(colors.specular) > 0
+    if (!hasSpecular) {
+        val edge = if (focused) Color(colors.edgeTop) else Color(colors.edgeTop)
+        return Brush.linearGradient(colors = listOf(edge, Color(colors.edgeBottom)))
+    }
     val isBrightSurface = ColorMath.luminance(ColorMath.opaque(colors.fillBottom)) > 0.65
     val anchor = if (isBrightSurface) {
         ColorMath.lerp(0xFFFFFFFF.toInt(), ColorMath.opaque(colors.edgeTop), 0.35f)
@@ -235,18 +240,26 @@ fun LumaGlassSurface(
             .clip(shape)
             .background(fillBrush(colors, lumDelta + depthShift), shape)
             .drawWithCache {
+                val hasSpecular = ColorMath.alpha(colors.specular) > 0
+                val sheenAlpha = when {
+                    !hasSpecular -> 0f
+                    theme.saturation > 1.4f -> LumaTokens.glassSheenAlpha * 1.45f
+                    else -> LumaTokens.glassSheenAlpha
+                }
                 val sheen = Brush.linearGradient(
-                    0f to Color.White.copy(alpha = LumaTokens.glassSheenAlpha),
-                    0.42f to Color.White.copy(alpha = LumaTokens.glassSheenAlpha * 0.35f),
+                    0f to Color.White.copy(alpha = sheenAlpha),
+                    0.42f to Color.White.copy(alpha = sheenAlpha * 0.35f),
                     1f to Color.Transparent,
                     start = Offset.Zero,
                     end = Offset(size.width.coerceAtLeast(1f), size.height.coerceAtLeast(1f))
                 )
                 onDrawBehind {
-                    if (noiseBrush != null) {
-                        drawRect(brush = noiseBrush, alpha = LumaTokens.glassNoiseOpacity)
+                    if (hasSpecular) {
+                        if (noiseBrush != null) {
+                            drawRect(brush = noiseBrush, alpha = LumaTokens.glassNoiseOpacity)
+                        }
+                        drawRect(brush = sheen)
                     }
-                    drawRect(brush = sheen)
                 }
             }
             .border(

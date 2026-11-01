@@ -132,4 +132,24 @@ class IconRendererLivingBoundsTest {
         assertNotEquals(enabledSpec, disabledSpec)
         assertNotEquals(enabledSpec, overriddenSpec)
     }
+
+    @Test
+    fun `v3_2 themes produce distinct IconRenderSpecs and Monolith disables depth`() {
+        val env = ThemeEnvironment(systemDark = true, minuteOfDay = 0)
+        val sig = IconRenderSpec.from(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.SIGNATURE), env), 144, depth = true, iconPack = null)
+        val atm = IconRenderSpec.from(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.ATMOSPHERE), env), 144, depth = true, iconPack = null)
+        val mono = IconRenderSpec.from(ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.MONOLITH), env), 144, depth = true, iconPack = null)
+
+        assertEquals(ThemeId.SIGNATURE, sig.themeId)
+        assertEquals(ThemeId.ATMOSPHERE, atm.themeId)
+        assertEquals(ThemeId.MONOLITH, mono.themeId)
+
+        assertTrue(sig.depth)
+        assertTrue(atm.depth)
+        assertFalse("Monolith must disable 3D icon depth and shadow", mono.depth)
+
+        assertNotEquals(sig.plateColor, atm.plateColor)
+        assertNotEquals(sig.plateColor, mono.plateColor)
+        assertNotEquals(sig.tintColor, mono.tintColor)
+    }
 }

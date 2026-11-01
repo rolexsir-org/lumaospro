@@ -33,6 +33,8 @@ import com.lumaos.pro.launcher.optimizer.OptimizationAction
 import com.lumaos.pro.launcher.optimizer.OptimizationResult
 import com.lumaos.pro.launcher.optimizer.Optimizer
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
+import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -63,7 +65,23 @@ data class StudioConfiguration(
     val dockStyle: DockStyle? = null,
     val effects: EffectsPreference = EffectsPreference.AUTO,
     val motion: MotionPreference = MotionPreference.FULL
-)
+) {
+    /**
+     * Switches to [id] and adopts its full v3.2 launcher effects package
+     * (composition preset, dock style, backdrop, effects tier, motion, icon treatment).
+     */
+    fun withThemePackage(id: ThemeId): StudioConfiguration {
+        val pkg = ThemeLauncherPackage.forTheme(id)
+        return copy(
+            theme = pkg.toThemeSettings(theme),
+            livingIconsEnabled = pkg.livingIcons,
+            homePreset = pkg.preset,
+            dockStyle = pkg.dockStyle,
+            effects = pkg.effects,
+            motion = pkg.motion
+        )
+    }
+}
 
 data class StudioPreviewIcons(val home: List<Bitmap>, val dock: List<Bitmap>)
 
