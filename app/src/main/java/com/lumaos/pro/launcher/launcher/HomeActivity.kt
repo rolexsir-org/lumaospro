@@ -505,6 +505,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun onDestroy() {
         undoHandler.removeCallbacks(widgetRemovalTimeout)
         undoHandler.removeCallbacks(wallpaperRefreshDebounced)
+        undoHandler.removeCallbacks(packageRefreshCoalesced)
         if (systemGuardsRegistered) {
             runCatching { unregisterReceiver(powerAndWallpaperReceiver) }
             systemGuardsRegistered = false
@@ -3504,9 +3505,30 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     }
                 }
                 viewModel.refreshApps()
-                refreshAll()
+                schedulePackageRefresh()
             }
         }
+    }
+
+    /**
+     * One trailing home-screen rebuild per package burst.
+     *
+     * `onPackagesAvailable` / `onPackagesUnavailable` deliver a batch as one
+     * callback per package, and each used to call [refreshAll] directly -
+     * rebinding every home cell, dock slot and drawer row. A work-profile sync
+     * or a batch of app updates therefore rebuilt the entire grid once per
+     * package, on the main thread, while the user was looking at it.
+     *
+     * Only the full rebuild is coalesced: the per-package icon invalidation in
+     * [packageCallback] stays immediate because it is keyed by package name and
+     * must not be dropped. App re-enumeration is already coalesced by
+     * `LauncherViewModel`'s [com.lumaos.pro.launcher.core.util.RefreshCoalescer].
+     */
+    private val packageRefreshCoalesced = Runnable { refreshAll() }
+
+    private fun schedulePackageRefresh() {
+        undoHandler.removeCallbacks(packageRefreshCoalesced)
+        undoHandler.post(packageRefreshCoalesced)
     }
 
     // ----------------------------------------------------------------- helpers

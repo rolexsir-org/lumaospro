@@ -88,7 +88,7 @@ class LaunchHistoryStore(context: Context, private val scope: CoroutineScope) {
             runCatching {
                 val db = helper.writableDatabase
                 gone.forEach { db.delete(TABLE, "app = ?", arrayOf(it.serialize())) }
-            }
+            }.onFailure { LumaLog.e("Launch history could not be pruned", it) }
         }
     }
 

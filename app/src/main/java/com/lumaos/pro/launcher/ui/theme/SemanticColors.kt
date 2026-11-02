@@ -16,7 +16,12 @@ package com.lumaos.pro.launcher.ui.theme
  * Contrast is enforced where the role carries meaning:
  *  - status colours and their on-colours: >= 4.5:1 (WCAG AA text);
  *  - disabled content: >= 3.0:1 (perceivable, deliberately quieter);
- *  - focus rings and dividers: >= 3.0:1 on the surface they sit on.
+ *  - [focusRing] and [dividerStrong]: >= 3.0:1 on `surface1`, because both
+ *    exist to mark a boundary the user has to see (WCAG non-text contrast).
+ *
+ * [divider] deliberately carries no floor: it is a hairline used to texture a
+ * surface, not to convey a boundary, and forcing it to 3.0:1 would make every
+ * list row read as boxed. Use [dividerStrong] where separation is meaningful.
  */
 data class SemanticColors(
     // Status
@@ -139,7 +144,13 @@ object SemanticPalette {
             info = info,
             onInfo = on(info),
             divider = c.outline,
-            dividerStrong = c.outlineStrong,
+            // A "strong" divider is the one a component uses to separate
+            // sections that must read as separated, so it carries the 3.0:1
+            // floor the class contract promises. outlineStrong alone reached
+            // only 1.47:1 on Signature/dark - effectively invisible. Hue and
+            // alpha are preserved; only lightness moves, exactly as focusRing
+            // below already does.
+            dividerStrong = ColorMath.ensureContrast(c.outlineStrong, c.surface1, 3.0),
             focusRing = ColorMath.ensureContrast(c.focusRing, c.surface1, 3.0),
             pressed = c.pressedOverlay,
             selectedSurface = c.accentContainer,

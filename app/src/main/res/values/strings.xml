@@ -145,6 +145,7 @@
     <string name="dash_recent_actions">Recent optimization actions</string>
     <string name="dash_history_loading">Loading recent activity…</string>
     <string name="dash_no_actions">No actions recorded yet.</string>
+    <string name="dash_history_error">Couldn’t read recent activity. Tap to try again.</string>
 
     <!-- Dashboard: provenance badges -->
     <string name="dash_measured">Measured</string>
