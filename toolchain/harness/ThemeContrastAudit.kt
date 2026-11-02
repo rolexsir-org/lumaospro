@@ -26,10 +26,24 @@
  *               scrim -- not over ThemeColors.background -- so it is measured against
  *               the wallpaper seed that is actually behind it.
  *
- * Each pairing is also flagged `live` when at least one of its semantic roles is read
- * outside ui/theme (i.e. wired into shipped UI). A violation on a role nothing reads
- * is a design-system defect, not a shipped accessibility defect, and the report says
- * which of the two it is.
+ * Each pairing is flagged `live` only when BOTH of its roles are read outside
+ * ui/theme, i.e. the pairing can actually be rendered by shipped UI. A violation on a
+ * pairing nothing renders is a design-system defect, not a shipped accessibility
+ * defect, and the report says which of the two it is.
+ *
+ * Measured read counts outside ui/theme (grep, this tree) that decide those flags:
+ *   ThemeColors  background 82, accent 49, onSurface 35, isDark 34, surface 23,
+ *                ripple 22, homeForeground 19, outline 18, onAccent 13, secondary 13,
+ *                focusRing 11, onSurfaceMuted 10, scrim 8, homeMuted 8, homeShadow 5,
+ *                accentContainer 4, danger 4, outlineStrong 3, onAccentContainer 3,
+ *                onBackground 2 -- and 0 for onSurfaceFaint, glow, pressedOverlay,
+ *                selectedFill, successSeed, warningSeed.
+ *   SemanticColors  focusRing 11, onSuccess 6, info 6, danger 4, disabledSurface 3,
+ *                inverseOnSurface/inverseSurface/overlay/pressed 2 each,
+ *                onDanger/onDangerContainer/dangerContainer 2 each,
+ *                dockBorder/dockSurface 1 each -- and 0 for the other 30 roles,
+ *                which includes the whole widget*, search*, selected*, chip*,
+ *                track* and divider* families.
  */
 @file:Suppress("PackageDirectoryMismatch")
 
@@ -82,9 +96,9 @@ private val pairs = listOf(
     Pair("onAccent / accent", { c, _ -> c.onAccent }, { c, _ -> c.accent }, Tier.TEXT, true),
     Pair("onAccentContainer / accentContainer",
         { c, _ -> c.onAccentContainer }, { c, _ -> c.accentContainer }, Tier.TEXT, true),
-    Pair("onSuccess / success", { _, s -> s.onSuccess }, { _, s -> s.success }, Tier.TEXT, true),
+    Pair("onSuccess / success", { _, s -> s.onSuccess }, { _, s -> s.success }, Tier.TEXT, false),
     Pair("onDanger / danger", { _, s -> s.onDanger }, { _, s -> s.danger }, Tier.TEXT, true),
-    Pair("onInfo / info", { _, s -> s.onInfo }, { _, s -> s.info }, Tier.TEXT, true),
+    Pair("onInfo / info", { _, s -> s.onInfo }, { _, s -> s.info }, Tier.TEXT, false),
     Pair("onDangerContainer / dangerContainer",
         { _, s -> s.onDangerContainer }, { _, s -> s.dangerContainer }, Tier.TEXT, true),
     Pair("inverseOnSurface / inverseSurface",
@@ -109,7 +123,7 @@ private val pairs = listOf(
     Pair("accent / background", { c, _ -> c.accent }, { c, _ -> c.background }, Tier.UI_REQUIRED, true),
     Pair("secondary / surface1", { c, _ -> c.secondary }, { c, _ -> c.surface1 }, Tier.UI_REQUIRED, true),
     Pair("danger / surface1", { c, _ -> c.danger }, { c, _ -> c.surface1 }, Tier.UI_REQUIRED, true),
-    Pair("onSurfaceFaint / surface1", { c, _ -> c.onSurfaceFaint }, { c, _ -> c.surface1 }, Tier.UI_REQUIRED, true),
+    Pair("onSurfaceFaint / surface1", { c, _ -> c.onSurfaceFaint }, { c, _ -> c.surface1 }, Tier.UI_REQUIRED, false),
     // outlineStrong is read in exactly two places outside ui/theme, both decorative:
     // the icon plate border (IconRenderer.kt:68-69) and a wallpaper thumbnail frame
     // (WallpaperActivity.kt:607). Neither is a boundary needed to identify a
@@ -133,13 +147,13 @@ private val pairs = listOf(
     Pair("dockBorder / dockSurface", { _, s -> s.dockBorder }, { _, s -> s.dockSurface }, Tier.DECORATIVE, true),
     Pair("trackOff / surface1", { _, s -> s.trackOff }, { c, _ -> c.surface1 }, Tier.DECORATIVE, false),
     Pair("ripple / surface1", { c, _ -> c.ripple }, { c, _ -> c.surface1 }, Tier.DECORATIVE, true),
-    Pair("pressedOverlay / surface1", { c, _ -> c.pressedOverlay }, { c, _ -> c.surface1 }, Tier.DECORATIVE, true),
-    Pair("selectedFill / surface1", { c, _ -> c.selectedFill }, { c, _ -> c.surface1 }, Tier.DECORATIVE, true),
-    Pair("glow / background", { c, _ -> c.glow }, { c, _ -> c.background }, Tier.DECORATIVE, true),
+    Pair("pressedOverlay / surface1", { c, _ -> c.pressedOverlay }, { c, _ -> c.surface1 }, Tier.DECORATIVE, false),
+    Pair("selectedFill / surface1", { c, _ -> c.selectedFill }, { c, _ -> c.surface1 }, Tier.DECORATIVE, false),
+    Pair("glow / background", { c, _ -> c.glow }, { c, _ -> c.background }, Tier.DECORATIVE, false),
 
     // ---- EXEMPT: SC 1.4.3 exempts inactive UI ------------------------------
     Pair("disabledContent / disabledSurface (inactive UI)",
-        { _, s -> s.disabledContent }, { _, s -> s.disabledSurface }, Tier.EXEMPT, true)
+        { _, s -> s.disabledContent }, { _, s -> s.disabledSurface }, Tier.EXEMPT, false)
 )
 
 /**
