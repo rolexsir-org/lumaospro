@@ -132,8 +132,11 @@ import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassPalette
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.IconShapes
+import com.lumaos.pro.launcher.ui.theme.RadiusRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeColors
+import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
@@ -1855,7 +1858,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         when (t.id) {
             ThemeId.ATMOSPHERE -> {
                 val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL].copy(radiusDp = LumaTokens.radiusFull)
-                homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false, radiusOverrideDp = LumaTokens.radiusFull)
+                homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false)
                 homeContext.setPadding(dp(12), dp(5), dp(12), dp(5))
                 homeContext.setTextColor(chipSpec.rest.content)
             }
@@ -2027,8 +2030,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 lp.marginStart = 0
                 lp.marginEnd = 0
                 val topBorderPx = dp(1).coerceAtLeast(1)
-                val fillColor = if (!t.usesBlur) ColorMath.opaque(c.surface1) else c.dockSurface
-                val borderColor = if (!t.usesBlur) ColorMath.opaque(c.outline) else c.dockRim
+                val fillColor = if (!t.usesBlur) ColorMath.opaque(c.surface1) else s.dockSurface
+                val borderColor = if (!t.usesBlur) ColorMath.opaque(c.outline) else s.dockBorder
                 dockSurface.background = object : android.graphics.drawable.Drawable() {
                     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
                     override fun draw(canvas: android.graphics.Canvas) {
@@ -2162,12 +2165,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     /** Spatial arrangement for the chosen composition preset & active v3.2 theme. */
     private fun applyPreset(preset: HomePreset) {
-        val showClock = preset.clock != ClockStyle.NONE
+        // Every HomePreset carries a clock; ClockStyle has no clock-less member.
+        // Kept as a named value so the intent stays readable if one is added.
+        val showClock = true
         homeHeader.visibility = if (showClock) View.VISIBLE else View.GONE
         homeClock.visibility = if (showClock) View.VISIBLE else View.GONE
         homeDate.visibility = if (showClock && preset.showDate) View.VISIBLE else View.GONE
 
-        val showDial = showClock && preset.clock == ClockStyle.CHRONO && theme.id != ThemeId.MONOLITH
+        val showDial = showClock && preset.clock == ClockStyle.DIAL && theme.id != ThemeId.MONOLITH
         dial.visibility = if (showDial) View.VISIBLE else View.GONE
         headerActions.visibility = View.GONE
         homeContext.visibility = if (showClock && preset.showContextLine) View.VISIBLE else View.GONE
@@ -2182,9 +2187,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         // Signature centers the editorial clock; Atmosphere, Monolith, Horizon, and Grid align left.
         val centered = when (theme.id) {
-            ThemeId.SIGNATURE -> preset.clock == ClockStyle.EDITORIAL
+            ThemeId.SIGNATURE -> preset.clock == ClockStyle.HERO
             ThemeId.ATMOSPHERE, ThemeId.MONOLITH -> false
-            else -> preset.clock == ClockStyle.EDITORIAL
+            else -> preset.clock == ClockStyle.HERO
         }
         val horizGravity = if (centered) Gravity.CENTER_HORIZONTAL else Gravity.START
         val textGravity = if (centered) Gravity.CENTER else (Gravity.START or Gravity.CENTER_VERTICAL)
@@ -2404,15 +2409,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun playReturnSettle() {
         if (::launchPortal.isInitialized && launchPortal.lastLaunchedKey != null) {
             val targetIcon = findIconViewForKey(launchPortal.lastLaunchedKey)
-            val portalBorder = if (theme.id == ThemeId.MONOLITH) theme.colors.accent else theme.colors.outline
+            // playReturn deliberately takes no radius/border/snappy: playLaunch
+            // already stored them (portalSnappy drives the return spring), so the
+            // way back matches the way out without restating them here.
             launchPortal.playReturn(
                 root = homeRoot,
-                targetView = targetIcon,
+                resolvedTargetView = targetIcon,
                 fillColor = theme.colors.surface1,
-                motion = motion,
-                startRadiusDp = theme.iconTileRadiusDp,
-                borderColor = portalBorder,
-                snappy = !theme.usesBlur
+                motion = motion
             )
         }
         if (!effects.depthTransforms || !motion.enabled || motion.reduced) return

@@ -181,11 +181,14 @@ class GlassSlider(context: Context) : View(context) {
         info.className = android.widget.SeekBar::class.java.name
         // RangeInfo is what makes TalkBack announce "50 percent" and expose the
         // adjust actions; a bare content description would not.
+        // API 36 removed the int overload of RangeInfo.obtain; the only one left
+        // is (int rangeType, float, float, float). RANGE_TYPE_INT is what makes
+        // TalkBack announce a whole percentage rather than a decimal.
         info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(
             AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_INT,
-            0,
-            100,
-            (fraction * 100).toInt()
+            0f,
+            100f,
+            fraction * 100f
         )
         info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
         info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)

@@ -310,20 +310,20 @@ class LumaShade(
             }
         )
 
-        sheetView.addView(buildHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        sheetView.addView(buildHeader(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val controlsView = QuickControlsView(context, this)
         quickControls = controlsView
         sheetView.addView(
             controlsView,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceSM)
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
             }
         )
 
-        sheetView.addView(buildNotificationHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        sheetView.addView(buildNotificationHeader(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(LumaTokens.spaceMD)
             marginStart = dp(LumaTokens.spaceSM)
             marginEnd = dp(LumaTokens.spaceSM)
@@ -335,7 +335,7 @@ class LumaShade(
         stateView = stateContainer
         sheetView.addView(
             stateContainer,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
             }
@@ -355,7 +355,7 @@ class LumaShade(
         listView.adapter = cardAdapter
         sheetView.addView(
             listView,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceXS)
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
@@ -549,8 +549,14 @@ class LumaShade(
     private fun refreshEverything() {
         applyInsets()
         controls.refresh()
-        NotificationHub.refreshAccessState(context)
-        else NotificationAccess.requestRebindIfGranted(context)
+        // When the grant is live, re-read Android's snapshot; when it is not,
+        // ask the system to rebind the listener so a revocation or a killed
+        // service is reflected instead of showing stale cards.
+        if (NotificationAccess.isGranted(context)) {
+            NotificationHub.refreshAccessState(context)
+        } else {
+            NotificationAccess.requestRebindIfGranted(context)
+        }
     }
 
     private fun startObserving() {
@@ -681,7 +687,7 @@ class LumaShade(
         }
         container.addView(
             button,
-            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceSM)
             }
         )

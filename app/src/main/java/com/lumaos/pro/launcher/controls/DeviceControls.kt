@@ -179,8 +179,11 @@ class DeviceControls(private val context: Context) {
 
     private fun mobileDataState(): SwitchState {
         val on = runCatching {
-            val network = connectivityManager?.activeNetwork ?: return@runCatching null
-            connectivityManager.getNetworkCapabilities(network)
+            // Hold the manager in a local: `connectivityManager` has a custom
+            // getter, so the compiler cannot smart-cast it after a null check.
+            val cm = connectivityManager ?: return@runCatching null
+            val network = cm.activeNetwork ?: return@runCatching null
+            cm.getNetworkCapabilities(network)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
         }.getOrNull()
         // Only the system can switch the radio; the panel reports what is live.
@@ -239,10 +242,12 @@ class DeviceControls(private val context: Context) {
     private fun focusState(): SwitchState {
         val filter = focusFilter()
         val on = if (filter == FocusFilter.UNKNOWN) null else filter != FocusFilter.ALL
-        return if (hasNotificationPolicyAccess()) {
-            SwitchState.direct(on, detail = null)
-        } else {
-            SwitchState.needsGrant(on)
+        // An unreadable filter is not the same fact as "focus is off": report it
+        // as unavailable rather than inventing a state for the switch.
+        return when {
+            on == null -> SwitchState.unavailable(detail = null)
+            hasNotificationPolicyAccess() -> SwitchState.direct(on, detail = null)
+            else -> SwitchState.needsGrant(on)
         }
     }
 
@@ -503,7 +508,7 @@ class DeviceControls(private val context: Context) {
 
     fun displayFallbackIntent(): Intent = Intent(Settings.ACTION_DISPLAY_SETTINGS)
 
-    fun cameraIntent(): Intent? = Intent(MediaStore.INTENT_ACTION_STILL_CAMERA)
+    fun cameraIntent(): Intent? = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
         .addCategory(Intent.CATEGORY_DEFAULT)
         .takeIf { isResolvable(it) } ?: Intent(MediaStore.ACTION_IMAGE_CAPTURE)
 

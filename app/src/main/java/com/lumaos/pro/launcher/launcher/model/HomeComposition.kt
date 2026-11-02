@@ -40,27 +40,51 @@ enum class HomePreset(
     val showGrid: Boolean,
     val defaultRows: Int,
     val dock: DockStyle,
-    val dockLabels: Boolean
+    val dockLabels: Boolean,
+    /**
+     * Whether the date line sits under the clock.
+     *
+     * Taken from [ClockStyle]'s own contract: `HERO` is "centred time with date
+     * beneath", `COMPACT` is "one compact line, maximising room for the grid".
+     */
+    val showDate: Boolean,
+    /**
+     * Whether the context/readout line is shown under the header.
+     *
+     * Only the presets whose own [description] leaves room for it: HORIZON is
+     * "a spacious centred clock ... and open wallpaper". GRID exists to
+     * maximise grid room and ZEN states "everything else lives in the drawer",
+     * so both keep the chrome minimal. INSTRUMENT is the balanced default row
+     * count with a dock and likewise keeps the line off.
+     *
+     * Not persisted: a preset is stored by [storageKey] alone, so adding these
+     * fields changes no stored value and needs no migration.
+     */
+    val showContextLine: Boolean
 ) {
     INSTRUMENT(
         "instrument", "Balanced",
         "Centred clock, four app rows and a floating glass dock.",
-        ClockStyle.HERO, showGrid = true, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false
+        ClockStyle.HERO, showGrid = true, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false,
+        showDate = true, showContextLine = false
     ),
     HORIZON(
         "horizon", "Horizon",
         "A spacious centred clock, three rows and open wallpaper.",
-        ClockStyle.HERO, showGrid = true, defaultRows = 3, dock = DockStyle.FLOAT, dockLabels = false
+        ClockStyle.HERO, showGrid = true, defaultRows = 3, dock = DockStyle.FLOAT, dockLabels = false,
+        showDate = true, showContextLine = true
     ),
     GRID(
         "grid", "Grid",
         "Compact clock and a dense, aligned grid for many apps.",
-        ClockStyle.COMPACT, showGrid = true, defaultRows = 6, dock = DockStyle.FLOAT, dockLabels = false
+        ClockStyle.COMPACT, showGrid = true, defaultRows = 6, dock = DockStyle.FLOAT, dockLabels = false,
+        showDate = false, showContextLine = false
     ),
     ZEN(
         "zen", "Zen",
         "Clock, date and dock only. Everything else lives in the drawer.",
-        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false
+        ClockStyle.HERO, showGrid = false, defaultRows = 4, dock = DockStyle.FLOAT, dockLabels = false,
+        showDate = true, showContextLine = false
     );
 
     companion object {
