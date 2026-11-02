@@ -141,7 +141,10 @@ internal object NotificationExtractor {
             val text = runCatching { message.text?.toString().orEmpty() }.getOrDefault("")
             if (text.isBlank()) continue
             val sender = runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) message.person?.name?.toString()
+                // The accessor is getSenderPerson(), added in API 28; there is no
+                // getPerson() on MessagingStyle.Message. Below 28 fall back to the
+                // deprecated CharSequence sender.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) message.senderPerson?.name?.toString()
                 else @Suppress("DEPRECATION") message.sender?.toString()
             }.getOrNull()?.takeIf { it.isNotBlank() }
             val fromMe = sender != null && self != null && sender == self

@@ -222,5 +222,11 @@ class LumaCore(private val application: Application) {
     fun shutdown() {
         idleCacheReleaseJob?.cancel()
         intelligence.shutdown()
+        // The diagnostics store owns the process's single SQLite connection.
+        // Closing it here (and only here) is what makes "never close the
+        // helper's database per operation" safe: the connection has exactly one
+        // owner and exactly one release point.
+        runCatching { diagnosticsStore.close() }
+            .onFailure { LumaLog.e("Diagnostics store could not be closed", it) }
     }
 }

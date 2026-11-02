@@ -59,6 +59,7 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
     val state by viewModel.intelligenceState.collectAsState()
     val events by viewModel.events.collectAsState()
     val historyLoading by viewModel.historyLoading.collectAsState()
+    val historyError by viewModel.historyError.collectAsState()
     val startupStats by viewModel.startupStats.collectAsState()
     val results by viewModel.lastResults.collectAsState()
     val running by viewModel.isRunning.collectAsState()
@@ -186,6 +187,21 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.dash_history_loading), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (events.isEmpty() && historyError != null) {
+                // A database that could not be read is not the same fact as an
+                // empty one. Say so, and offer the retry that actually works.
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.refreshHistory() }
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.dash_history_error),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             } else if (events.isEmpty()) {
                 Box(Modifier.padding(16.dp)) { Text(stringResource(R.string.dash_no_actions), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant) }

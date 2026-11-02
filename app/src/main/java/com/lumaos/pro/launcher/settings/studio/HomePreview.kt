@@ -82,10 +82,10 @@ fun HomePreview(
             val isMonolith = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH
             val isAtmosphere = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE
             val centered = when (theme.id) {
-                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock == ClockStyle.EDITORIAL
+                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock == ClockStyle.HERO
                 com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE,
                 com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH -> false
-                else -> preset.clock == ClockStyle.EDITORIAL
+                else -> preset.clock == ClockStyle.HERO
             }
             val top = when {
                 isMonolith -> h * 0.045f

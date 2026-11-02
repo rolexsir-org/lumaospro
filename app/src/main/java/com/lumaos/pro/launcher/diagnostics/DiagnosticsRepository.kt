@@ -1,31 +1,104 @@
 package com.lumaos.pro.launcher.diagnostics
 
+import android.database.sqlite.SQLiteException
+import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.intelligence.ProcessMemory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * Outcome of reading the diagnostics history.
+ *
+ * Diagnostics are measurements about LumaOS Pro itself, so a database that
+ * cannot be read (full storage, a file damaged by a power cut) is a
+ * *recoverable* condition: the launcher must keep working and the dashboard
+ * must say what happened. Returning an empty list instead would tell the user
+ * there is no history, which is a lie.
+ */
+sealed interface DiagnosticsHistory {
+    data class Loaded(
+        val events: List<OptimizationEvent>,
+        val startup: List<Pair<Long, Long>>
+    ) : DiagnosticsHistory
+
+    /** [cause] is a short, non-sensitive description safe to show in the UI. */
+    data class Unavailable(val cause: String) : DiagnosticsHistory
+}
+
+/**
  * Coroutine facade over [DiagnosticsStore].
  *
- * All SQLite work happens on Dispatchers.IO. The store is a single connection
- * and SQLite serialises access, so no additional locking is needed.
+ * All SQLite work happens on Dispatchers.IO. The store owns a single shared
+ * connection and serialises access internally, so callers here only need to be
+ * on a background dispatcher.
+ *
+ * Errors are handled at this boundary rather than in the store: the store is a
+ * thin SQL layer that should throw on genuine failure, while this layer decides
+ * what each caller can tolerate. Telemetry that cannot be written and history
+ * that cannot be read both degrade the product slightly; neither may crash a
+ * launcher that the user is standing on.
  */
 class DiagnosticsRepository(val store: DiagnosticsStore) {
 
-    suspend fun record(event: OptimizationEvent): Long = withContext(Dispatchers.IO) {
-        store.insertEvent(event)
+    /**
+     * Records one event. Returns false when the write failed, so a caller can
+     * tell "recorded" from "lost" instead of assuming.
+     */
+    suspend fun record(event: OptimizationEvent): Boolean = withContext(Dispatchers.IO) {
+        recordBlocking(event)
+    }
+
+    fun recordBlocking(event: OptimizationEvent): Boolean = try {
+        store.insertEvent(event) != -1L
+    } catch (e: SQLiteException) {
+        // Storage full or database damaged. Diagnostics are disposable; the
+        // launcher is not.
+        LumaLog.e("Diagnostics event could not be recorded", e)
+        false
+    }
+
+    /** Loads both tables in one dispatch, for the dashboard. */
+    suspend fun loadHistory(
+        eventsLimit: Int = 30,
+        startupLimit: Int = 20
+    ): DiagnosticsHistory = withContext(Dispatchers.IO) {
+        try {
+            DiagnosticsHistory.Loaded(
+                events = store.recentEvents(eventsLimit),
+                startup = store.startupHistory(startupLimit)
+            )
+        } catch (e: SQLiteException) {
+            LumaLog.e("Diagnostics history could not be read", e)
+            DiagnosticsHistory.Unavailable(e.javaClass.simpleName)
+        }
     }
 
     suspend fun recentEvents(limit: Int = 50): List<OptimizationEvent> =
         withContext(Dispatchers.IO) { store.recentEvents(limit) }
 
-    suspend fun recordStartup(durationMs: Long, atMillis: Long = System.currentTimeMillis()) =
-        withContext(Dispatchers.IO) { store.recordStartup(durationMs, atMillis) }
+    suspend fun recordStartup(durationMs: Long, atMillis: Long = System.currentTimeMillis()): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                store.recordStartup(durationMs, atMillis)
+                true
+            } catch (e: SQLiteException) {
+                LumaLog.e("Startup sample could not be recorded", e)
+                false
+            }
+        }
 
     suspend fun startupHistory(limit: Int = 20): List<Pair<Long, Long>> =
         withContext(Dispatchers.IO) { store.startupHistory(limit) }
 
-    suspend fun clearHistory() = withContext(Dispatchers.IO) { store.clearHistory() }
+    suspend fun clearHistory(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            store.clearHistory()
+            true
+        } catch (e: SQLiteException) {
+            LumaLog.e("Diagnostics history could not be cleared", e)
+            false
+        }
+    }
 
     suspend fun vacuum() = withContext(Dispatchers.IO) { store.vacuum() }
 

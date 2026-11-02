@@ -52,7 +52,10 @@ class MediaSessionSource(context: Context) {
         override fun onPlaybackStateChanged(state: PlaybackState?) = notifyChanged()
         override fun onMetadataChanged(metadata: MediaMetadata?) = notifyChanged()
         override fun onSessionDestroyed() = refresh()
-        override fun onAudioInfoChanged() = notifyChanged()
+        // The platform signature is onAudioInfoChanged(PlaybackInfo) and the
+        // parameter is @NonNull in the current SDK, so the override must be
+        // non-null. Overriding it with no parameters no longer compiles.
+        override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) = notifyChanged()
     }
 
     fun hasAccess(): Boolean = MusicBridge.hasAccess(appContext)

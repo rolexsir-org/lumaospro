@@ -336,23 +336,49 @@ object NotificationHub {
 
     // ── State publication ──────────────────────────────────────────────────
 
+    /**
+     * Serialises the read-modify-write on [_state]. Separate from [entries]:
+     * the projection below is the expensive part of publishing, and holding the
+     * entries lock across it would block the main thread's `fallbackIcon`,
+     * `dismiss` and `open` calls behind work they do not need.
+     */
+    private val stateLock = Any()
+
     private fun publish(
         access: NotificationAccessState? = null,
         replySetFor: String? = null,
         replyClearedFor: String? = null
     ) {
+        // Cheap, bounded work under the entries lock: read the access state and
+        // copy out the raw models. Grouping, sorting and card building - the
+        // part that scales with the number of notifications - runs unlocked, so
+        // a burst of posts cannot stall a shade that is trying to draw.
+        val snapshot: List<RawNotification>
+        val effectiveAccess: NotificationAccessState
         synchronized(entries) {
-            val effectiveAccess = access ?: _state.value.access
-            val cards = if (effectiveAccess == NotificationAccessState.GRANTED) {
-                NotificationPolicy.visibleCards(entries.values.map { it.raw })
-            } else emptyList()
+            effectiveAccess = access ?: _state.value.access
+            snapshot = if (effectiveAccess == NotificationAccessState.GRANTED) {
+                entries.values.map { it.raw }
+            } else {
+                emptyList()
+            }
+        }
+
+        val cards = if (snapshot.isEmpty()) {
+            emptyList()
+        } else {
+            NotificationPolicy.visibleCards(snapshot)
+        }
+
+        synchronized(stateLock) {
             val current = _state.value.awaitingReply
             val candidates = when {
                 replySetFor != null -> current + replySetFor
                 replyClearedFor != null -> current - replyClearedFor
                 else -> current
             }
-            val awaiting = candidates.filter { entries.containsKey(it) }.toSet()
+            val liveKeys = if (candidates.isEmpty()) emptySet() else snapshot.map { it.key }.toSet()
+            val awaiting = candidates.filter { it in liveKeys }.toSet()
             // StateFlow is thread-safe. Posting a precomputed value to the main
             // queue can otherwise overwrite a newer disconnect or removal.
             _state.value = NotificationShadeState(effectiveAccess, cards, awaiting)

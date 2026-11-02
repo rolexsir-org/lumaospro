@@ -150,6 +150,11 @@ class Optimizer(
                 ACTION_APPLY_PROFILE -> applyProfile(profile)
                 else -> "Nothing to do." to 0L
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            // The caller went away (Settings closed, the process is shutting
+            // down). Nothing was achieved and nothing may be recorded as if it
+            // had been: rethrow so cancellation keeps propagating.
+            throw cancelled
         } catch (e: Exception) {
             LumaLog.e("Optimization $actionId failed", e)
             "Failed: ${e.message ?: "unknown error"}" to 0L
@@ -217,9 +222,11 @@ class Optimizer(
     }
 
     private fun compactDiagnostics(): Pair<String, Long> {
-        val before = runCatching { diagnostics.databaseSizeBytesBlocking() }.getOrDefault(0L)
+        // databaseSizeBytes() stats the file; it returns 0 when there is no file
+        // yet rather than throwing, so there is nothing to swallow here.
+        val before = diagnostics.databaseSizeBytesBlocking()
         diagnostics.vacuumBlocking()
-        val after = runCatching { diagnostics.databaseSizeBytesBlocking() }.getOrDefault(0L)
+        val after = diagnostics.databaseSizeBytesBlocking()
         return if (before > after) {
             "Compacted the diagnostics database (${formatBytes(before)} -> ${formatBytes(after)})."
         } else {

@@ -16,6 +16,8 @@ import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.core.util.RefreshCoalescer
+import com.lumaos.pro.launcher.diagnostics.DiagnosticsHistory
 import com.lumaos.pro.launcher.diagnostics.OptimizationEvent
 import com.lumaos.pro.launcher.diagnostics.StartupStats
 import com.lumaos.pro.launcher.intelligence.DeviceCapability
@@ -177,8 +179,54 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _historyLoading = MutableStateFlow(true)
     val historyLoading: StateFlow<Boolean> = _historyLoading.asStateFlow()
 
+    /**
+     * Non-null when the diagnostics database could not be read.
+     *
+     * The dashboard shows this instead of "no actions recorded", because an
+     * unreadable database and an empty one are different facts and only one of
+     * them is true. Never a crash: this screen is reached by tapping a menu
+     * item on the home screen, so anything thrown out of [init] or [onResume]
+     * would take the launcher process down with it.
+     */
+    private val _historyError = MutableStateFlow<String?>(null)
+    val historyError: StateFlow<String?> = _historyError.asStateFlow()
+
+    private val _appsFailed = MutableStateFlow(false)
+    val appsFailed: StateFlow<Boolean> = _appsFailed.asStateFlow()
+
     private val _hasDndAccess = MutableStateFlow(false)
     val hasDndAccess: StateFlow<Boolean> = _hasDndAccess.asStateFlow()
+
+    /**
+     * `onCreate` and every `onResume` ask for the app list and the diagnostics
+     * history. Without coalescing, returning to this screen repeatedly stacks a
+     * fresh IO job per visit, each one opening a cursor on the same shared
+     * SQLite connection. One pass at a time, with a single trailing pass for
+     * anything requested in between, is both correct and cheaper.
+     */
+    private val appsCoalescer = RefreshCoalescer(
+        scope = viewModelScope,
+        dispatcher = Dispatchers.IO,
+        onLoadingChanged = { _appsLoading.value = it },
+        operation = { _apps.value = core.appRepository.refresh() },
+        onFailure = {
+            LumaLog.e("Installed apps could not be listed in Settings", it)
+            _appsFailed.value = true
+        }
+    )
+
+    private val historyCoalescer = RefreshCoalescer(
+        scope = viewModelScope,
+        dispatcher = Dispatchers.IO,
+        onLoadingChanged = { _historyLoading.value = it },
+        operation = ::loadHistoryOnce,
+        onFailure = {
+            // A history read must degrade, never escape: an exception thrown
+            // here would propagate out of viewModelScope and kill the process.
+            LumaLog.e("Diagnostics history could not be loaded", it)
+            _historyError.value = it.javaClass.simpleName
+        }
+    )
 
     init {
         refreshApps()
@@ -188,14 +236,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshApps() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _appsLoading.value = true
-            try {
-                _apps.value = core.appRepository.refresh()
-            } finally {
-                _appsLoading.value = false
-            }
-        }
+        _appsFailed.value = false
+        appsCoalescer.request()
     }
 
     fun setAppHidden(profile: ContextProfile, key: ComponentKey, hidden: Boolean) {
@@ -236,7 +278,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun refreshIconPacks() {
         viewModelScope.launch(Dispatchers.IO) {
-            _iconPacks.value = core.iconPacks.installedPacks()
+            try {
+                _iconPacks.value = core.iconPacks.installedPacks()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A third-party icon pack can be mid-update or malformed. Keep
+                // whatever was already listed rather than blanking a working
+                // picker, and keep rendering with the current treatment.
+                LumaLog.e("Installed icon packs could not be listed", e)
+            }
         }
     }
 
@@ -256,7 +307,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     stream.bufferedWriter(Charsets.UTF_8).use { it.write(encoded) }
                 }
                 getApplication<Application>().getString(R.string.backup_exported)
-            } catch (_: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The user sees that the export failed; the log carries why.
+                // Silently reporting "failed" with no cause is not a diagnostic.
+                LumaLog.e("Backup export failed", e)
                 getApplication<Application>().getString(R.string.backup_export_failed)
             }
             _backupState.value = BackupUiState(message = message)
@@ -294,7 +350,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
             } catch (_: BackupTooLargeException) {
                 getApplication<Application>().getString(R.string.backup_too_large)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                LumaLog.e("Backup import failed", e)
                 getApplication<Application>().getString(
                     R.string.backup_restore_failed, e.message ?: e.javaClass.simpleName
                 )
@@ -384,28 +443,51 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshHistory() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _historyLoading.value = true
-            try {
-                _events.value = core.diagnostics.recentEvents(limit = 30)
-                _startupStats.value = StartupStats.from(core.diagnostics.startupHistory(limit = 20))
-            } finally {
-                _historyLoading.value = false
+        historyCoalescer.request()
+    }
+
+    /**
+     * One history pass. Read failures arrive here as [DiagnosticsHistory.Unavailable]
+     * rather than as an exception, so the dashboard can distinguish "empty" from
+     * "unreadable" without either case reaching the coroutine exception handler.
+     */
+    private suspend fun loadHistoryOnce() {
+        when (val history = core.diagnostics.loadHistory(eventsLimit = 30, startupLimit = 20)) {
+            is DiagnosticsHistory.Loaded -> {
+                _events.value = history.events
+                _startupStats.value = StartupStats.from(history.startup)
+                _historyError.value = null
             }
+            is DiagnosticsHistory.Unavailable -> _historyError.value = history.cause
         }
     }
 
     fun runAction(actionId: String) {
+        // Ignore a second tap while the same action is running: two concurrent
+        // runs of one action would both trim the same caches and record two
+        // events for what the user did once.
+        if (actionId in _isRunning.value) return
         viewModelScope.launch {
             _isRunning.value = _isRunning.value + actionId
-            val result = core.optimizer.run(
-                actionId = actionId,
-                trigger = "manual",
-                profile = core.intelligence.state.value.profile
-            )
-            _lastResults.value = _lastResults.value + (actionId to result)
-            _isRunning.value = _isRunning.value - actionId
-            _statusMessage.value = result.detail
+            try {
+                val result = core.optimizer.run(
+                    actionId = actionId,
+                    trigger = "manual",
+                    profile = core.intelligence.state.value.profile
+                )
+                _lastResults.value = _lastResults.value + (actionId to result)
+                _statusMessage.value = result.detail
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The Optimizer already reports its own failures as a result;
+                // this only covers something escaping it. It must not reach the
+                // coroutine exception handler, which would end the process.
+                LumaLog.e("Optimization '$actionId' failed", e)
+                _statusMessage.value = "Failed: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                _isRunning.value = _isRunning.value - actionId
+            }
             refreshHistory()
         }
     }
@@ -413,9 +495,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun emergencyReset() {
         viewModelScope.launch {
             _isRunning.value = _isRunning.value + Optimizer.ACTION_APPLY_PROFILE
-            val result = core.optimizer.emergencyReset()
-            _statusMessage.value = result.detail
-            _isRunning.value = emptySet()
+            try {
+                val result = core.optimizer.emergencyReset()
+                _statusMessage.value = result.detail
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Emergency reset failed", e)
+                _statusMessage.value = "Failed: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                _isRunning.value = emptySet()
+            }
             refreshHistory()
         }
     }
