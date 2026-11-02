@@ -4,7 +4,7 @@ A standalone, lightweight Android launcher and performance platform for older
 and low-resource phones.
 
 LumaOS Pro runs its own launcher logic, resource monitoring and optimization
-routines. It does not depend on Brave, another launcher, or a third-party
+routines. It does not depend on another launcher, or a third-party
 optimizer to function.
 
 Its current visual identity is **Luma Glass**: a restrained Liquid Glass /
