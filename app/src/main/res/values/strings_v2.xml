@@ -141,6 +141,14 @@
     <string name="studio_theme_additional">Retained palettes</string>
     <string name="studio_color_option_description">Color %1$s</string>
     <string name="studio_apply">Apply</string>
+    <string name="studio_undo">Undo</string>
+    <string name="studio_redo">Redo</string>
+    <string name="studio_save_preset">Save as preset</string>
+    <string name="studio_restore_preset">Restore preset</string>
+    <string name="studio_preset_note">Session preset — Apply to keep it after restarting LumaOS Pro. Export a backup from Settings for a portable copy.</string>
+    <string name="studio_config_title">Current configuration</string>
+    <string name="studio_config_state_saved">Applied configuration</string>
+    <string name="studio_config_state_preview">Preview — not applied</string>
     <string name="studio_revert">Revert</string>
     <string name="studio_reset">Reset Studio defaults</string>
     <string name="studio_applied">Applied</string>

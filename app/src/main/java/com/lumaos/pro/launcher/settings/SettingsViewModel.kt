@@ -141,6 +141,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
     }.stateIn<StudioConfiguration?>(viewModelScope, SharingStarted.Eagerly, null)
 
+    /**
+     * Session-only Studio preset: a candidate configuration the user can save,
+     * leave, and restore while Studio is alive. Deliberately NOT persisted —
+     * keeping a configuration across restarts goes through Apply (existing
+     * prefs) or the backup export, so no new stored schema is introduced.
+     */
+    private val _studioPreset = MutableStateFlow<StudioConfiguration?>(null)
+    val studioPreset: StateFlow<StudioConfiguration?> = _studioPreset.asStateFlow()
+
+    fun saveStudioPreset(configuration: StudioConfiguration) {
+        _studioPreset.value = configuration
+    }
+
+    fun clearStudioPreset() {
+        _studioPreset.value = null
+    }
+
     private val _studioApplyState = MutableStateFlow(StudioApplyState.IDLE)
     val studioApplyState: StateFlow<StudioApplyState> = _studioApplyState.asStateFlow()
 

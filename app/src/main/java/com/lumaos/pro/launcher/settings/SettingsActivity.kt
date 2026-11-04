@@ -29,6 +29,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
@@ -126,6 +129,7 @@ class SettingsActivity : ComponentActivity() {
                             LumaGlassTopBar(
                                 theme = theme,
                                 title = "LumaOS Pro",
+                                subtitle = tabs[tab],
                                 modifier = Modifier.padding(
                                     horizontal = com.lumaos.pro.launcher.ui.LumaSpacing.screenHorizontal,
                                     vertical = com.lumaos.pro.launcher.ui.LumaSpacing.xs
@@ -140,7 +144,22 @@ class SettingsActivity : ComponentActivity() {
                                     Tab(
                                         selected = tab == index,
                                         onClick = { tab = index },
-                                        text = { Text(title) }
+                                        modifier = Modifier.semantics {
+                                            contentDescription = title
+                                            this.selected = tab == index
+                                        },
+                                        text = {
+                                            Text(
+                                                title,
+                                                // One line always: "Diagnostics" must never wrap
+                                                // and grow the header on narrow/large-font devices.
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                fontWeight = if (tab == index) androidx.compose.ui.text.font.FontWeight.SemiBold
+                                                else androidx.compose.ui.text.font.FontWeight.Normal
+                                            )
+                                        }
                                     )
                                 }
                             }
