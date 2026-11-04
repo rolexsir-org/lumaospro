@@ -130,6 +130,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     val effectsDecision by viewModel.effectsState.collectAsState()
     val packs by viewModel.iconPacks.collectAsState()
     val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
+    val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(56)
     val resolved = remember(draft.theme, environment) { ThemeEngine.resolve(draft.theme, environment) }
     val previewDepth = when (draft.effects) {
         EffectsPreference.MINIMAL -> false
@@ -142,14 +143,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         draft.iconPack,
         draft.livingIconsEnabled,
         draft.theme.iconStyle,
-        previewDepth
+        previewDepth,
+        iconSizeDp
     ) {
         value = viewModel.loadPreviewIcons(
             theme = resolved,
             iconPack = draft.iconPack,
             depth = previewDepth,
             livingIconsEnabled = draft.livingIconsEnabled,
-            explicitTint = draft.theme.iconStyle == IconStyle.TINTED
+            explicitTint = draft.theme.iconStyle == IconStyle.TINTED,
+            iconSizeDp = iconSizeDp
         )
     }
     val context = LocalContext.current
@@ -428,6 +431,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Pure Launcher Effects: Composition & Dock Architecture ---
         StudioSectionHeader("SPATIAL COMPOSITION & DOCK")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(homePreset = saved.homePreset, dockStyle = saved.dockStyle)) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Column(Modifier.padding(12.dp)) {
                 Text(
@@ -478,6 +489,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Pure Launcher Effects: Optical Material, Blur & Physics ---
         StudioSectionHeader("OPTICAL REFRACTION & MOTION PHYSICS")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(effects = saved.effects, motion = saved.motion, theme = draft.theme.copy(backdrop = saved.theme.backdrop))) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Column(Modifier.padding(12.dp)) {
                 Row(
@@ -556,6 +575,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Iconography & Glyph Treatment ---
         StudioSectionHeader("ICONOGRAPHY & GLYPH TREATMENT")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(iconPack = saved.iconPack, livingIconsEnabled = saved.livingIconsEnabled, theme = draft.theme.copy(iconShape = saved.theme.iconShape, iconStyle = saved.theme.iconStyle))) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Row(
                 Modifier

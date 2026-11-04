@@ -3,10 +3,24 @@ package com.lumaos.pro.launcher.ui.theme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LumaTokensAndThemeManagerTest {
+
+    @Test
+    fun paletteDecodeRejectsTruncatedCacheInsteadOfCrashing() {
+        // Regression: an 11-field cached palette (truncated write / corruption)
+        // used to pass the size guard and then crash reading the grid hex.
+        assertNull(LumaWallpaperPalette.decode("v1|1|2|3|4|0.5|0.0|0.5|0.5|8|16"))
+        assertNull(LumaWallpaperPalette.decode("v1|1|2"))
+        assertNull(LumaWallpaperPalette.decode("not-a-palette"))
+        assertNull(LumaWallpaperPalette.decode(null))
+        assertNull(LumaWallpaperPalette.decode(""))
+        // A complete round-trip still decodes.
+        assertNotNull(LumaWallpaperPalette.decode(LumaWallpaperPalette.DEFAULT.encode()))
+    }
 
     @Test
     fun tokensMatchUnifiedApplePrecisionSpecification() {

@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
@@ -201,7 +200,10 @@ data class LumaWallpaperPalette(
         fun decode(raw: String?): LumaWallpaperPalette? {
             if (raw.isNullOrBlank()) return null
             val parts = raw.split('|')
-            if (parts.size < 11 || parts[0] != "v1") return null
+            // encode() writes 12 fields; parts[11] (the grid hex) is read below,
+            // so anything shorter is truncated/corrupt and must be rejected,
+            // not indexed into (previously an 11-part string crashed here).
+            if (parts.size < 12 || parts[0] != "v1") return null
             val dom = parts[1].toIntOrNull() ?: return null
             val acc = parts[2].toIntOrNull() ?: return null
             val warmCol = parts[3].toIntOrNull() ?: return null
@@ -339,7 +341,11 @@ class LumaThemeManager(
     private val prefs: LumaPrefs,
     private val scope: CoroutineScope
 ) {
-    private val _palette = MutableStateFlow(loadInitialCachedPalette())
+    // Starts at DEFAULT: the cached palette is loaded asynchronously in
+    // start(). The previous implementation used runBlocking on a DataStore
+    // read here, i.e. a blocking disk read on the main thread during
+    // Application.onCreate (cold-start jank / StrictMode / ANR risk).
+    private val _palette = MutableStateFlow(LumaWallpaperPalette.DEFAULT)
     val palette: StateFlow<LumaWallpaperPalette> = _palette.asStateFlow()
 
     @Volatile
@@ -356,12 +362,6 @@ class LumaThemeManager(
             }
         }
     }
-
-    private fun loadInitialCachedPalette(): LumaWallpaperPalette =
-        runCatching {
-            val raw = runBlocking { prefs.cachedLumaPaletteRaw.first() }
-            LumaWallpaperPalette.decode(raw)
-        }.getOrNull() ?: LumaWallpaperPalette.DEFAULT
 
     fun start() {
         if (started) return
@@ -386,6 +386,17 @@ class LumaThemeManager(
                     },
                     Handler(Looper.getMainLooper())
                 )
+            }
+        }
+
+        scope.launch {
+            // Async warm-start: show last session's palette until fresh
+            // extraction lands. Never overwrites an extracted value.
+            val cached = runCatching {
+                LumaWallpaperPalette.decode(prefs.cachedLumaPaletteRaw.first())
+            }.getOrNull()
+            if (cached != null && _palette.value == LumaWallpaperPalette.DEFAULT) {
+                _palette.value = cached
             }
         }
 

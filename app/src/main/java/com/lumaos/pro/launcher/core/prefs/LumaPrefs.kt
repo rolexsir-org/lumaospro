@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
@@ -44,8 +45,24 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
+/**
+ * Recovery for a preferences file DataStore can no longer parse (interrupted
+ * write, storage fault). Reads already degraded to defaults via `catch`, but
+ * without a corruption handler every `edit` keeps throwing
+ * CorruptionException — settings could never persist again and unguarded
+ * write call sites could crash. The handler is only invoked on an actually
+ * unparseable file (never on a healthy one), so no readable user data is
+ * ever discarded by it; the alternative is a permanently read-only launcher.
+ * Internal so the recovery test exercises exactly this handler.
+ */
+internal val lumaosPrefsCorruptionHandler = ReplaceFileCorruptionHandler {
+    LumaLog.e("Preferences file was corrupt and has been reset to defaults", it)
+    emptyPreferences()
+}
+
 private val Context.lumaosDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "lumaos_settings"
+    name = "lumaos_settings",
+    corruptionHandler = lumaosPrefsCorruptionHandler
 )
 
 /**

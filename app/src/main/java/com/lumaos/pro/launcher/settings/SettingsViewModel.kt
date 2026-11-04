@@ -389,7 +389,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         iconPack: String?,
         depth: Boolean,
         livingIconsEnabled: Boolean = true,
-        explicitTint: Boolean = false
+        explicitTint: Boolean = false,
+        iconSizeDp: Int = 52
     ): StudioPreviewIcons = withContext(Dispatchers.IO) {
         val context = getApplication<Application>()
         val profile = prefs.activeContextProfile.first()
@@ -398,7 +399,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val homeKeys = layout.page(0).filterIsInstance<HomeItem.App>().take(12).map { it.key }
         val dockKeys = layout.dock.filterIsInstance<HomeItem.App>().take(4).map { it.key }
         val metrics = context.resources.displayMetrics
-        val size = (52 * metrics.density).toInt().coerceIn(48, 156)
+        // Render at the user's actual icon-size preference so the preview is
+        // honest about scale; clamped to the same sane band as before.
+        val size = (iconSizeDp * metrics.density).toInt().coerceIn(48, 156)
         val spec = IconRenderSpec.from(
             theme = theme,
             sizePx = size,
