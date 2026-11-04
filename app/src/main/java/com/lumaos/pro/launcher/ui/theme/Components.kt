@@ -125,7 +125,8 @@ object LumaComponents {
             ThemeId.OBSIDIAN -> SurfaceTokens(alpha = 1f, borderAlpha = 0.16f, elevationDp = 0f, shadowAlpha = 0.20f, glowAlpha = 0f)
             // v3.2 identities are answered by the token branch above; this arm only
             // exists so the `when` stays exhaustive if a token set is ever missing.
-            ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH ->
+            ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH,
+            ThemeId.LUMA_GLASS, ThemeId.LUMA_MONO ->
                 SurfaceTokens(alpha = 1f, borderAlpha = 0.16f, elevationDp = 0f, shadowAlpha = 0.20f, glowAlpha = 0f)
         }
     }

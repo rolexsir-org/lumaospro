@@ -345,7 +345,11 @@ class DrawerController(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, if (!theme.usesBlur) 10.5f else LumaTypeScale.labelLargeSp)
                 typeface = Typefaces.label(theme.typography)
                 letterSpacing = theme.typography.labelTracking
-                isAllCaps = !theme.usesBlur && theme.typography.readoutCaps
+                // Casing follows the label voice (mono-faced labels are set in
+                // caps, as in the Luma Mono reference), never the blur material:
+                // changing a blur token must not silently re-case the drawer.
+                isAllCaps = theme.typography.readoutCaps &&
+                    theme.typography.label.family == com.lumaos.pro.launcher.ui.theme.FontFamilyId.SYSTEM_MONO
                 val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
                 val chipColors = if (chosen) chipSpec.states.selected else chipSpec.rest
                 setTextColor(chipColors.content)

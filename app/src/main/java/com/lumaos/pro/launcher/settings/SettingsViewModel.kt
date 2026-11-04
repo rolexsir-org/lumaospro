@@ -141,6 +141,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
     }.stateIn<StudioConfiguration?>(viewModelScope, SharingStarted.Eagerly, null)
 
+    /**
+     * Session-only Studio preset: a candidate configuration the user can save,
+     * leave, and restore while Studio is alive. Deliberately NOT persisted —
+     * keeping a configuration across restarts goes through Apply (existing
+     * prefs) or the backup export, so no new stored schema is introduced.
+     */
+    private val _studioPreset = MutableStateFlow<StudioConfiguration?>(null)
+    val studioPreset: StateFlow<StudioConfiguration?> = _studioPreset.asStateFlow()
+
+    fun saveStudioPreset(configuration: StudioConfiguration) {
+        _studioPreset.value = configuration
+    }
+
+    fun clearStudioPreset() {
+        _studioPreset.value = null
+    }
+
     private val _studioApplyState = MutableStateFlow(StudioApplyState.IDLE)
     val studioApplyState: StateFlow<StudioApplyState> = _studioApplyState.asStateFlow()
 
@@ -372,7 +389,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         iconPack: String?,
         depth: Boolean,
         livingIconsEnabled: Boolean = true,
-        explicitTint: Boolean = false
+        explicitTint: Boolean = false,
+        iconSizeDp: Int = 52
     ): StudioPreviewIcons = withContext(Dispatchers.IO) {
         val context = getApplication<Application>()
         val profile = prefs.activeContextProfile.first()
@@ -381,7 +399,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val homeKeys = layout.page(0).filterIsInstance<HomeItem.App>().take(12).map { it.key }
         val dockKeys = layout.dock.filterIsInstance<HomeItem.App>().take(4).map { it.key }
         val metrics = context.resources.displayMetrics
-        val size = (52 * metrics.density).toInt().coerceIn(48, 156)
+        // Render at the user's actual icon-size preference so the preview is
+        // honest about scale; clamped to the same sane band as before.
+        val size = (iconSizeDp * metrics.density).toInt().coerceIn(48, 156)
         val spec = IconRenderSpec.from(
             theme = theme,
             sizePx = size,

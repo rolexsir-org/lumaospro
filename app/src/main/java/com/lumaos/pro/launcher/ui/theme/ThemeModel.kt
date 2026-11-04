@@ -38,7 +38,11 @@ enum class ThemeId(val storageKey: String) {
     VECTOR("vector"),
     AURORA("aurora"),
     PORCELAIN("porcelain"),
-    CHROMA("chroma");
+    CHROMA("chroma"),
+    /** Deep-navy liquid glass (2026-11 reference). Appended: existing keys/order untouched. */
+    LUMA_GLASS("luma_glass"),
+    /** Warm peach duotone on charcoal-brown (2026-11 reference). */
+    LUMA_MONO("luma_mono");
 
     companion object {
         fun fromStorageKey(raw: String?): ThemeId? = entries.firstOrNull { it.storageKey == raw }
@@ -632,14 +636,64 @@ object ThemePresets {
         tokens = LumaDesignTokens.MONOLITH
     )
 
+    /** Luma Glass: deep navy, liquid glass, glossy natural icons over the wallpaper. */
+    val LUMA_GLASS_THEME = ThemeSpec(
+        id = ThemeId.LUMA_GLASS,
+        displayName = "Luma Glass",
+        tagline = "Deep navy liquid glass: glossy icons, floating dock, glass context pill.",
+        dark = true, amoled = false,
+        background = 0xFF050D1F.toInt(),
+        accent = 0xFF5FB8FF.toInt(),
+        secondary = 0xFF7FE7DC.toInt(),
+        neutralTint = 0xFF5FB8FF.toInt(),
+        neutralChroma = 0.020,
+        typography = TypeStyle.AMBIENT,
+        motionCharacter = MotionCharacter.CINEMATIC,
+        iconShape = IconShape.SQUIRCLE,
+        iconStyle = IconStyle.NATURAL,
+        atmosphere = Atmosphere.AURORA,
+        surfaceStyle = SurfaceStyle.GLASS,
+        defaultBackdrop = Backdrop.WALLPAPER,
+        cornerScale = 1.125f,
+        tokens = LumaDesignTokens.GLASS
+    )
+
+    /** Luma Mono: warm peach duotone glyphs on charcoal-brown plates, no blur. */
+    val LUMA_MONO_THEME = ThemeSpec(
+        id = ThemeId.LUMA_MONO,
+        displayName = "Luma Mono",
+        tagline = "Warm peach duotone on charcoal brown: one ink, geometric plates, no blur.",
+        dark = true, amoled = false,
+        background = 0xFF161110.toInt(),
+        accent = 0xFFF0BE9A.toInt(),
+        secondary = 0xFFC98F6A.toInt(),
+        neutralTint = 0xFFF0BE9A.toInt(),
+        neutralChroma = 0.012,
+        typography = TypeStyle.MONOGRAPH,
+        motionCharacter = MotionCharacter.EXACT,
+        iconShape = IconShape.ROUNDED,
+        iconStyle = IconStyle.TINTED,
+        atmosphere = Atmosphere.NONE,
+        surfaceStyle = SurfaceStyle.SOLID,
+        defaultBackdrop = Backdrop.THEME,
+        cornerScale = 0.875f,
+        tokens = LumaDesignTokens.MONO
+    )
+
     /** The v3.2 identities, in the order Studio shows them. */
     val SIGNATURE: List<ThemeSpec> = listOf(SIGNATURE_THEME, ATMOSPHERE_THEME, MONOLITH_THEME)
+
+    /** The 2026-11 reference identities, shown alongside (never instead of) the v3.2 three. */
+    val SCREENSHOT: List<ThemeSpec> = listOf(LUMA_GLASS_THEME, LUMA_MONO_THEME)
+
+    /** Every flagship identity Studio/Settings offer as one-tap packages. */
+    val FEATURED: List<ThemeSpec> = SIGNATURE + SCREENSHOT
 
     /**
      * Palettes retained from before v3.2. Same IDs, seeds and geometry as the day
      * they shipped: an upgrade must not move a user's home screen.
      */
-    val ADDITIONAL: List<ThemeSpec> = listOf(AURORA, ZEN, VOID, OBSIDIAN, GRAPHITE, CHROMA)
+    val ADDITIONAL: List<ThemeSpec> = listOf(AURORA, ZEN, VOID, OBSIDIAN, GRAPHITE, CHROMA, LUMA_GLASS_THEME, LUMA_MONO_THEME)
 
     /** All selectable presets, including the retained specialist palettes. */
     val ALL: List<ThemeSpec> = SIGNATURE + ADDITIONAL
@@ -659,6 +713,8 @@ object ThemePresets {
         0xFF69E2F2.toInt(), // Void cyan
         0xFFE28BCB.toInt(), // Void magenta
         0xFF526B60.toInt(), // Zen sage
+        0xFF5FB8FF.toInt(), // Luma Glass sky
+        0xFFF0BE9A.toInt(), // Luma Mono peach
         0xFF3DF2E0.toInt(), // signal cyan
         0xFF6EE7B7.toInt(), // aurora green
         0xFF8AB4F8.toInt(), // sky
@@ -675,6 +731,8 @@ object ThemePresets {
         0xFF06070B.toInt(), // Signature midnight (v3.2)
         0xFF04131A.toInt(), // Atmosphere deep teal (v3.2)
         0xFF0B0B0A.toInt(), // Monolith stone (v3.2)
+        0xFF050D1F.toInt(), // Luma Glass deep navy
+        0xFF161110.toInt(), // Luma Mono charcoal brown
         0xFF000000.toInt(),
         0xFF080D1A.toInt(), // Aurora midnight
         0xFF080815.toInt(), // Void indigo

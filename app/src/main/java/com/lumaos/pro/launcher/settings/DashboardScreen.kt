@@ -64,6 +64,8 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
     val results by viewModel.lastResults.collectAsState()
     val running by viewModel.isRunning.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val resolvedTheme by viewModel.themes.theme.collectAsState()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -76,6 +78,41 @@ fun DashboardRoot(viewModel: SettingsViewModel) {
                     Text(statusMessage!!, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
                     TextButton(onClick = { viewModel.consumeStatusMessage() }) { Text("Dismiss") }
                 }
+            }
+        }
+
+        // System & LumaOS — factual, read live from the running system
+        SectionLabel(stringResource(R.string.diag_system_title))
+        CleanCard {
+            Column {
+                CompactMetricRow(
+                    label = stringResource(R.string.diag_version),
+                    value = com.lumaos.pro.launcher.BuildConfig.VERSION_NAME,
+                    detail = com.lumaos.pro.launcher.BuildConfig.APPLICATION_ID
+                )
+                ThinDivider()
+                CompactMetricRow(
+                    label = stringResource(R.string.diag_android),
+                    value = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+                    detail = null
+                )
+                ThinDivider()
+                CompactMetricRow(
+                    label = stringResource(R.string.diag_display),
+                    value = stringResource(
+                        R.string.diag_display_value,
+                        configuration.screenWidthDp,
+                        configuration.screenHeightDp,
+                        String.format(Locale.US, "%.2f", configuration.densityDpi / 160f)
+                    ),
+                    detail = null
+                )
+                ThinDivider()
+                CompactMetricRow(
+                    label = stringResource(R.string.diag_theme),
+                    value = resolvedTheme.displayName,
+                    detail = resolvedTheme.id.storageKey
+                )
             }
         }
 

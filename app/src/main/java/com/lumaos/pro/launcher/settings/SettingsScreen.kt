@@ -604,6 +604,46 @@ private fun ActiveThemeBanner(
                     }
                 }
             }
+            // 2026-11 reference identities (Luma Glass / Luma Mono), same one-tap package path.
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ThemePresets.SCREENSHOT.forEach { spec ->
+                    val isSelected = resolved.id == spec.id
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.weight(1f).border(
+                            if (isSelected) 1.2.dp else 0.5.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            MaterialTheme.shapes.small
+                        ).clickable {
+                            scope.launch {
+                                try { viewModel.prefs.applyThemePackage(spec.id) }
+                                catch (e: Exception) { Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show() }
+                            }
+                        }
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(spec.accent)))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = spec.displayName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium),
+                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+            }
 
             Spacer(Modifier.height(10.dp))
 

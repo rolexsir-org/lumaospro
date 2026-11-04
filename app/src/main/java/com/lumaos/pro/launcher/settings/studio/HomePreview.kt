@@ -84,7 +84,9 @@ fun HomePreview(
             val centered = when (theme.id) {
                 com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock == ClockStyle.HERO
                 com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE,
-                com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH -> false
+                com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH,
+                com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_GLASS,
+                com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO -> false
                 else -> preset.clock == ClockStyle.HERO
             }
             val top = when {

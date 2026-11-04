@@ -67,6 +67,7 @@ import com.lumaos.pro.launcher.launcher.model.DockStyle
 import com.lumaos.pro.launcher.launcher.model.HomePreset
 import com.lumaos.pro.launcher.motion.MotionPreference
 import com.lumaos.pro.launcher.settings.SettingsViewModel
+import com.lumaos.pro.launcher.settings.StudioConfiguration
 import com.lumaos.pro.launcher.settings.StudioApplyState
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
 import com.lumaos.pro.launcher.ui.theme.Backdrop
@@ -98,13 +99,27 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         }
         return
     }
-    var draft by remember { mutableStateOf(saved) }
+    // Staged draft: controls edit ONLY this value; Apply is the single path to
+    // persistence, so previewing can never overwrite the applied configuration.
+    val history = remember { StudioHistory(saved) }
+    var draft by remember { mutableStateOf(history.current) }
     var lastSaved by remember { mutableStateOf(saved) }
+    fun edit(next: StudioConfiguration) {
+        history.edit(next)
+        draft = history.current
+    }
+    fun resetDraft(value: StudioConfiguration) {
+        history.reset(value)
+        draft = value
+    }
     LaunchedEffect(saved) {
         val wasClean = draft == lastSaved
         lastSaved = saved
-        if (wasClean) draft = saved
+        // Clean draft, or our own Apply just landed: start a fresh history so
+        // Undo cannot resurrect an already-applied configuration as "unsaved".
+        if (wasClean || draft == saved) resetDraft(saved)
     }
+    val studioPreset by viewModel.studioPreset.collectAsState()
     val dirty = draft != saved
     val applyState by viewModel.studioApplyState.collectAsState()
     val applying = applyState == StudioApplyState.APPLYING
@@ -115,6 +130,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     val effectsDecision by viewModel.effectsState.collectAsState()
     val packs by viewModel.iconPacks.collectAsState()
     val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
+    val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(56)
     val resolved = remember(draft.theme, environment) { ThemeEngine.resolve(draft.theme, environment) }
     val previewDepth = when (draft.effects) {
         EffectsPreference.MINIMAL -> false
@@ -127,14 +143,16 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         draft.iconPack,
         draft.livingIconsEnabled,
         draft.theme.iconStyle,
-        previewDepth
+        previewDepth,
+        iconSizeDp
     ) {
         value = viewModel.loadPreviewIcons(
             theme = resolved,
             iconPack = draft.iconPack,
             depth = previewDepth,
             livingIconsEnabled = draft.livingIconsEnabled,
-            explicitTint = draft.theme.iconStyle == IconStyle.TINTED
+            explicitTint = draft.theme.iconStyle == IconStyle.TINTED,
+            iconSizeDp = iconSizeDp
         )
     }
     val context = LocalContext.current
@@ -242,11 +260,39 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .clickable(enabled = history.canUndo && !applying) { draft = history.undo() }
+                        .semantics { contentDescription = "Undo" }
+                ) {
+                    Text(
+                        stringResource(R.string.studio_undo),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                        color = if (history.canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .clickable(enabled = history.canRedo && !applying) { draft = history.redo() }
+                        .semantics { contentDescription = "Redo" }
+                ) {
+                    Text(
+                        stringResource(R.string.studio_redo),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                        color = if (history.canRedo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    )
+                }
                 if (dirty) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.clickable(enabled = !applying) { draft = saved }
+                        modifier = Modifier.clickable(enabled = !applying) { resetDraft(saved) }
                     ) {
                         Text(
                             stringResource(R.string.studio_revert),
@@ -270,6 +316,45 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 }
             }
         }
+        // Session preset: save the candidate, wander off, restore it. Applying
+        // remains separate and is what survives a restart (see strings note).
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.clickable(enabled = !applying) { viewModel.saveStudioPreset(draft) }
+            ) {
+                Text(
+                    stringResource(R.string.studio_save_preset),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+            if (studioPreset != null) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.clickable(enabled = !applying) { edit(studioPreset!!) }
+                ) {
+                    Text(
+                        stringResource(R.string.studio_restore_preset),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+                Text(
+                    stringResource(R.string.studio_preset_note),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
         if (applyState == StudioApplyState.FAILED) {
             Text(
                 stringResource(R.string.studio_apply_failed),
@@ -295,28 +380,65 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     modifier = Modifier.weight(1f),
                     onClick = {
                         val updated = draft.withThemePackage(spec.id)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
+        }
+        Spacer(Modifier.height(10.dp))
+        StudioSectionHeader("REFERENCE IDENTITIES · LUMA GLASS & MONO")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemePresets.SCREENSHOT.forEach { spec ->
+                val selected = draft.theme.themeId == spec.id
+                FlagshipThemeTile(
+                    spec = spec,
+                    selected = selected,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        val updated = draft.withThemePackage(spec.id)
+                        edit(updated)
+                    }
+                )
+            }
+            Spacer(Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(10.dp))
 
         // --- Active Launcher Effects Readout ---
+        Text(
+            stringResource(if (dirty) R.string.studio_config_state_preview else R.string.studio_config_state_saved) +
+                " · " + stringResource(R.string.studio_config_title),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+            color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 6.dp)
+        )
         LauncherEffectsReadoutCard(
             theme = resolved,
             preset = draft.homePreset,
             dock = draft.dockStyle ?: draft.homePreset.dock,
             effects = draft.effects,
-            livingIcons = draft.livingIconsEnabled
+            livingIcons = draft.livingIconsEnabled,
+            backdropText = backdropLabel(draft.theme.backdrop, resolved.id, WallpaperArt.forTheme(resolved.id) != null || activeWallpaper != null),
+            iconPackText = packs.firstOrNull { it.packageName == draft.iconPack }?.label
+                ?: draft.iconPack ?: stringResource(R.string.studio_icon_pack_none)
         )
 
         Spacer(Modifier.height(16.dp))
 
         // --- Pure Launcher Effects: Composition & Dock Architecture ---
         StudioSectionHeader("SPATIAL COMPOSITION & DOCK")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(homePreset = saved.homePreset, dockStyle = saved.dockStyle)) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Column(Modifier.padding(12.dp)) {
                 Text(
@@ -335,8 +457,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selected = draft.homePreset,
                     onSelected = { preset ->
                         val updated = draft.copy(homePreset = preset, dockStyle = preset.dock)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
@@ -358,8 +479,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selected = effectiveDock,
                     onSelected = { style ->
                         val updated = draft.copy(dockStyle = style)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
@@ -369,6 +489,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Pure Launcher Effects: Optical Material, Blur & Physics ---
         StudioSectionHeader("OPTICAL REFRACTION & MOTION PHYSICS")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(effects = saved.effects, motion = saved.motion, theme = draft.theme.copy(backdrop = saved.theme.backdrop))) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Column(Modifier.padding(12.dp)) {
                 Row(
@@ -397,8 +525,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selected = draft.effects,
                     onSelected = { pref ->
                         val updated = draft.copy(effects = pref)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
@@ -419,8 +546,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selected = draft.motion,
                     onSelected = { motionPref ->
                         val updated = draft.copy(motion = motionPref)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
@@ -435,8 +561,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 labelFor = { backdropLabel(it, resolved.id, hasLumaArt) }
             ) { bd ->
                 val updated = draft.copy(theme = draft.theme.copy(backdrop = bd))
-                draft = updated
-                viewModel.applyStudio(updated)
+                edit(updated)
             }
             HorizontalDividerThin()
             CompactNavRow(
@@ -450,6 +575,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Iconography & Glyph Treatment ---
         StudioSectionHeader("ICONOGRAPHY & GLYPH TREATMENT")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                stringResource(R.string.studio_reset_section),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(iconPack = saved.iconPack, livingIconsEnabled = saved.livingIconsEnabled, theme = draft.theme.copy(iconShape = saved.theme.iconShape, iconStyle = saved.theme.iconStyle))) }.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
         StudioCard {
             Row(
                 Modifier
@@ -472,8 +605,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     checked = draft.livingIconsEnabled,
                     onCheckedChange = { enabled ->
                         val updated = draft.copy(livingIconsEnabled = enabled)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     },
                     colors = SwitchDefaults.colors(
                         checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -489,8 +621,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 labelFor = { it?.let { shapeLabel(it) } ?: stringResource(R.string.studio_theme_default) }
             ) { shape ->
                 val updated = draft.copy(theme = draft.theme.copy(iconShape = shape))
-                draft = updated
-                viewModel.applyStudio(updated)
+                edit(updated)
             }
             HorizontalDividerThin()
             CompactChoiceRow(
@@ -500,8 +631,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 labelFor = { it?.let { iconStyleLabel(it) } ?: stringResource(R.string.studio_theme_default) }
             ) { style ->
                 val updated = draft.copy(theme = draft.theme.copy(iconStyle = style))
-                draft = updated
-                viewModel.applyStudio(updated)
+                edit(updated)
             }
             if (packs.isNotEmpty() || draft.iconPack != null) {
                 HorizontalDividerThin()
@@ -519,8 +649,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     }
                 ) { pack ->
                     val updated = draft.copy(iconPack = pack)
-                    draft = updated
-                    viewModel.applyStudio(updated)
+                    edit(updated)
                 }
             }
         }
@@ -570,8 +699,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                                     if (enabled) it.copy(accentOverride = null, backgroundOverride = null) else it
                                 }
                             )
-                            draft = updated
-                            viewModel.applyStudio(updated)
+                            edit(updated)
                         },
                         colors = SwitchDefaults.colors(
                             checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -586,8 +714,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                         selected = draft.theme.accentOverride,
                         onSelected = { acc ->
                             val updated = draft.copy(theme = draft.theme.copy(accentOverride = acc))
-                            draft = updated
-                            viewModel.applyStudio(updated)
+                            edit(updated)
                         }
                     )
                 }
@@ -603,8 +730,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     labelFor = { it?.let { typeLabel(it) } ?: stringResource(R.string.studio_theme_default) }
                 ) { typo ->
                     val updated = draft.copy(theme = draft.theme.copy(typography = typo))
-                    draft = updated
-                    viewModel.applyStudio(updated)
+                    edit(updated)
                 }
             }
 
@@ -617,8 +743,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     selectedId = draft.theme.themeId,
                     onSelected = { id ->
                         val updated = draft.withThemePackage(id)
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 )
             }
@@ -638,8 +763,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                         val m = draft.theme.profileThemes.toMutableMap()
                         if (id == null) m.remove(profile) else m[profile] = id
                         val updated = draft.copy(theme = draft.theme.copy(profileThemes = m))
-                        draft = updated
-                        viewModel.applyStudio(updated)
+                        edit(updated)
                     }
                 }
             }
@@ -812,6 +936,31 @@ private fun FlagshipThemeTile(
                                 style = Stroke(1f)
                             )
                         }
+                        ThemeId.LUMA_GLASS -> {
+                            // Deep navy gradient, left clock bar, glossy squircle tiles, floating glass dock.
+                            drawRect(Brush.verticalGradient(listOf(Color(0xFF0A1D38), Color(0xFF050D1F))))
+                            drawCircle(Brush.radialGradient(listOf(Color(0x555FB8FF), Color.Transparent), center = Offset(w * 0.8f, h * 0.2f), radius = w * 0.6f), radius = w * 0.6f, center = Offset(w * 0.8f, h * 0.2f))
+                            drawRoundRect(Color(0xFFF2F7FF).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.36f, h * 0.10f), cornerRadius = CornerRadius(4f))
+                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
+                            for (i in 0 until 4) {
+                                val tx = startX + i * (tileS + gap)
+                                drawRoundRect(Color(0xFF12325E), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f))
+                                drawRoundRect(Color(0x665FB8FF), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f), style = Stroke(1f))
+                            }
+                            drawRoundRect(Color(0xFF0C1B31).copy(alpha = 0.85f), topLeft = Offset(w * 0.10f, h * 0.72f), size = Size(w * 0.80f, h * 0.18f), cornerRadius = CornerRadius(h * 0.09f))
+                        }
+                        ThemeId.LUMA_MONO -> {
+                            // Charcoal-brown field, peach duotone tiles, ruled readout, bezel dock.
+                            drawRect(Color(0xFF161110))
+                            drawRoundRect(Color(0xFFF7E8DC).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.38f, h * 0.10f), cornerRadius = CornerRadius(3f))
+                            drawLine(Color(0xFFF0BE9A), Offset(w * 0.10f, h * 0.32f), Offset(w * 0.34f, h * 0.32f), strokeWidth = 1.5f)
+                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
+                            for (i in 0 until 4) {
+                                val tx = startX + i * (tileS + gap)
+                                drawRoundRect(if (i % 2 == 0) Color(0xFFF0BE9A) else Color(0xFF241B16), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.3f))
+                            }
+                            drawRect(Color(0xFF1D1714), topLeft = Offset(0f, h * 0.78f), size = Size(w, h * 0.22f))
+                        }
                         else -> {
                             // Monolith: warm stone, orthogonal grid, bold left clock, 1dp amber rule, full-width bezel dock
                             drawRect(Color(0xFF090908))
@@ -895,7 +1044,8 @@ private fun FlagshipThemeTile(
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Box(
                     Modifier
@@ -928,7 +1078,9 @@ private fun LauncherEffectsReadoutCard(
     preset: HomePreset,
     dock: DockStyle,
     effects: EffectsPreference,
-    livingIcons: Boolean
+    livingIcons: Boolean,
+    backdropText: String,
+    iconPackText: String
 ) {
     val blurText = if (!theme.usesBlur || effects == EffectsPreference.MINIMAL) {
         "0dp Solid Stone"
@@ -974,6 +1126,18 @@ private fun LauncherEffectsReadoutCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                EffectBadge(
+                    label = "BACKDROP",
+                    value = backdropText,
+                    modifier = Modifier.weight(1f)
+                )
+                EffectBadge(
+                    label = "ICON PACK",
+                    value = iconPackText,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1005,7 +1169,7 @@ private fun EffectBadge(label: String, value: String, modifier: Modifier = Modif
                 fontWeight = FontWeight.Medium
             ),
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -1200,6 +1364,11 @@ private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, on
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onSelected(value) }
+                    .semantics {
+                        role = Role.RadioButton
+                        this.selected = sel
+                        contentDescription = label
+                    }
             ) {
                 Text(
                     label,

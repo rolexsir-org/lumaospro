@@ -1856,13 +1856,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val c = t.colors
         val d = resources.displayMetrics.density
         when (t.id) {
-            ThemeId.ATMOSPHERE -> {
+            ThemeId.ATMOSPHERE, ThemeId.LUMA_GLASS -> {
                 val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL].copy(radiusDp = LumaTokens.radiusFull)
                 homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false)
                 homeContext.setPadding(dp(12), dp(5), dp(12), dp(5))
                 homeContext.setTextColor(chipSpec.rest.content)
             }
-            ThemeId.MONOLITH -> {
+            ThemeId.MONOLITH, ThemeId.LUMA_MONO -> {
                 val ruleHeight = dp(1).coerceAtLeast(1)
                 val tickWidth = dp(20)
                 val ruleColor = ColorMath.opaque(c.outline)
@@ -1943,9 +1943,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeDate.letterSpacing = style.readoutTracking
         homeDate.isAllCaps = style.readoutCaps
         homeDate.textSize = when (t.id) {
-            ThemeId.MONOLITH -> 10.5f
+            ThemeId.MONOLITH, ThemeId.LUMA_MONO -> 10.5f
             ThemeId.SIGNATURE -> 11.5f
             ThemeId.ATMOSPHERE -> 13.5f
+            ThemeId.LUMA_GLASS -> 13f
             else -> EditModeDesign.dateSp
         }
         val datePattern = when {
@@ -1959,8 +1960,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeContext.letterSpacing = if (isMonolith) 0.16f else style.readoutTracking * 0.5f
         homeContext.isAllCaps = style.readoutCaps
         homeContext.textSize = when (t.id) {
-            ThemeId.MONOLITH -> 10.5f
-            ThemeId.ATMOSPHERE -> 11.5f
+            ThemeId.MONOLITH, ThemeId.LUMA_MONO -> 10.5f
+            ThemeId.ATMOSPHERE, ThemeId.LUMA_GLASS -> 11.5f
             else -> LumaTokens.typeMicroSp
         }
         homeEmpty.typeface = Typefaces.body(style)
@@ -2172,7 +2173,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         homeClock.visibility = if (showClock) View.VISIBLE else View.GONE
         homeDate.visibility = if (showClock && preset.showDate) View.VISIBLE else View.GONE
 
-        val showDial = showClock && preset.clock == ClockStyle.DIAL && theme.id != ThemeId.MONOLITH
+        val showDial = showClock && preset.clock == ClockStyle.DIAL && theme.id != ThemeId.MONOLITH && theme.id != ThemeId.LUMA_MONO
         dial.visibility = if (showDial) View.VISIBLE else View.GONE
         headerActions.visibility = View.GONE
         homeContext.visibility = if (showClock && preset.showContextLine) View.VISIBLE else View.GONE
@@ -2181,6 +2182,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             theme.id == ThemeId.MONOLITH -> theme.clockSp
             theme.id == ThemeId.ATMOSPHERE -> theme.clockSp
             theme.id == ThemeId.SIGNATURE -> theme.clockSp
+            theme.id == ThemeId.LUMA_GLASS -> theme.clockSp
+            theme.id == ThemeId.LUMA_MONO -> theme.clockSp
             preset.clock == ClockStyle.COMPACT -> theme.clockSp * 0.82f
             else -> theme.clockSp
         }
@@ -2188,7 +2191,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         // Signature centers the editorial clock; Atmosphere, Monolith, Horizon, and Grid align left.
         val centered = when (theme.id) {
             ThemeId.SIGNATURE -> preset.clock == ClockStyle.HERO
-            ThemeId.ATMOSPHERE, ThemeId.MONOLITH -> false
+            // Both 2026-11 references set the clock at the leading edge.
+            ThemeId.ATMOSPHERE, ThemeId.MONOLITH, ThemeId.LUMA_GLASS, ThemeId.LUMA_MONO -> false
             else -> preset.clock == ClockStyle.HERO
         }
         val horizGravity = if (centered) Gravity.CENTER_HORIZONTAL else Gravity.START
@@ -2205,6 +2209,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             ThemeId.SIGNATURE -> dp(18)
             ThemeId.ATMOSPHERE -> dp(6)
             ThemeId.MONOLITH -> dp(2)
+            ThemeId.LUMA_GLASS -> dp(10)
+            ThemeId.LUMA_MONO -> dp(4)
             else -> dp(12)
         }
         homeHeader.setPadding(homeHeader.paddingLeft, topPad, homeHeader.paddingRight, homeHeader.paddingBottom)
