@@ -301,6 +301,27 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
         }
+        Spacer(Modifier.height(10.dp))
+        StudioSectionHeader("REFERENCE IDENTITIES · LUMA GLASS & MONO")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemePresets.SCREENSHOT.forEach { spec ->
+                val selected = draft.theme.themeId == spec.id
+                FlagshipThemeTile(
+                    spec = spec,
+                    selected = selected,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        val updated = draft.withThemePackage(spec.id)
+                        draft = updated
+                        viewModel.applyStudio(updated)
+                    }
+                )
+            }
+            Spacer(Modifier.weight(1f))
+        }
 
         Spacer(Modifier.height(10.dp))
 
@@ -811,6 +832,31 @@ private fun FlagshipThemeTile(
                                 cornerRadius = CornerRadius(h * 0.09f),
                                 style = Stroke(1f)
                             )
+                        }
+                        ThemeId.LUMA_GLASS -> {
+                            // Deep navy gradient, left clock bar, glossy squircle tiles, floating glass dock.
+                            drawRect(Brush.verticalGradient(listOf(Color(0xFF0A1D38), Color(0xFF050D1F))))
+                            drawCircle(Brush.radialGradient(listOf(Color(0x555FB8FF), Color.Transparent), center = Offset(w * 0.8f, h * 0.2f), radius = w * 0.6f), radius = w * 0.6f, center = Offset(w * 0.8f, h * 0.2f))
+                            drawRoundRect(Color(0xFFF2F7FF).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.36f, h * 0.10f), cornerRadius = CornerRadius(4f))
+                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
+                            for (i in 0 until 4) {
+                                val tx = startX + i * (tileS + gap)
+                                drawRoundRect(Color(0xFF12325E), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f))
+                                drawRoundRect(Color(0x665FB8FF), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f), style = Stroke(1f))
+                            }
+                            drawRoundRect(Color(0xFF0C1B31).copy(alpha = 0.85f), topLeft = Offset(w * 0.10f, h * 0.72f), size = Size(w * 0.80f, h * 0.18f), cornerRadius = CornerRadius(h * 0.09f))
+                        }
+                        ThemeId.LUMA_MONO -> {
+                            // Charcoal-brown field, peach duotone tiles, ruled readout, bezel dock.
+                            drawRect(Color(0xFF161110))
+                            drawRoundRect(Color(0xFFF7E8DC).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.38f, h * 0.10f), cornerRadius = CornerRadius(3f))
+                            drawLine(Color(0xFFF0BE9A), Offset(w * 0.10f, h * 0.32f), Offset(w * 0.34f, h * 0.32f), strokeWidth = 1.5f)
+                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
+                            for (i in 0 until 4) {
+                                val tx = startX + i * (tileS + gap)
+                                drawRoundRect(if (i % 2 == 0) Color(0xFFF0BE9A) else Color(0xFF241B16), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.3f))
+                            }
+                            drawRect(Color(0xFF1D1714), topLeft = Offset(0f, h * 0.78f), size = Size(w, h * 0.22f))
                         }
                         else -> {
                             // Monolith: warm stone, orthogonal grid, bold left clock, 1dp amber rule, full-width bezel dock

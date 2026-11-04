@@ -61,21 +61,28 @@ data class IconRenderSpec(
             val plateColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
                 ThemeId.ATMOSPHERE -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.16f)
+                ThemeId.LUMA_GLASS -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.12f)
+                ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
                 else -> if (theme.isDark) c.surface2 else ColorMath.WHITE
             }
             val rimColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.outline)
                 ThemeId.ATMOSPHERE -> c.outlineStrong
+                ThemeId.LUMA_MONO -> ColorMath.opaque(c.outline)
                 else -> ColorMath.withAlpha(if (theme.isDark) c.outlineStrong else c.outline, 0.9f)
             }
             val tintPlateColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.10f)
+                // Luma Mono plates stay deep charcoal-brown so the single peach ink reads on every tile.
+                ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
                 else -> c.accentContainer
             }
             val tintColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.28f)
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.22f)
+                // The duotone ink itself: warm peach, never a near-white that would wash out on the plate.
+                ThemeId.LUMA_MONO -> ColorMath.lerp(ColorMath.opaque(c.accent), ColorMath.opaque(c.onSurface), 0.18f)
                 else -> c.onAccentContainer
             }
             return IconRenderSpec(
@@ -133,7 +140,7 @@ class IconRenderer {
             IconStyle.NATURAL -> !fromIconPack && adaptive == null && spec.shape != IconShape.SYSTEM && !isOpaqueSquare(source)
         }
 
-        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH
+        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH && spec.themeId != ThemeId.LUMA_MONO
         if (allowDepth && (plateNeeded || adaptive != null || spec.shape != IconShape.SYSTEM)) {
             drawShadow(canvas, mask, size)
         }
@@ -337,7 +344,7 @@ class IconRenderer {
         spec: IconRenderSpec
     ) {
         if (living.bitmap.isRecycled) return
-        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH
+        val allowDepth = spec.depth && spec.themeId != ThemeId.MONOLITH && spec.themeId != ThemeId.LUMA_MONO
         val targetRect = if (allowDepth) rect else inset(rect, 0.94f)
         if (spec.style == IconStyle.TINTED && spec.explicitTint) {
             val mask = maskPath(spec.shape, null, targetRect)

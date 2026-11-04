@@ -256,6 +256,79 @@ object LumaDesignTokens {
         appLabelSp = 9f,
     )
 
+    /**
+     * Luma Glass — deep navy liquid glass (reference home/drawer, 2026-11).
+     * Post-v3.2 addition: deliberately NOT in [ALL], which remains the exact
+     * v3.2 JSON-parity set compared by `DesignTokensParityTest`.
+     */
+    val GLASS = ThemeTokens(
+        key = "luma_glass",
+        version = VERSION,
+        colors = TokenColors(
+            background0 = 0xFF050D1F.toInt(),
+            background1 = 0xFF071426.toInt(),
+            background2 = 0xFF0A1D38.toInt(),
+            surface1 = translucent(0xFFBFE0FF.toInt(), 0.055f),
+            surface2 = translucent(0xFFBFE0FF.toInt(), 0.09f),
+            surface3 = translucent(0xFFBFE0FF.toInt(), 0.14f),
+            surfaceSolid = 0xFF0C1B31.toInt(),
+            stroke1 = translucent(0xFF9FD0FF.toInt(), 0.14f),
+            stroke2 = translucent(0xFF9FD0FF.toInt(), 0.28f),
+            text1 = 0xFFF2F7FF.toInt(),
+            text2 = 0xFFA9C2DC.toInt(),
+            text3 = 0xFF718CA8.toInt(),
+            accent = 0xFF5FB8FF.toInt(),
+            accent2 = 0xFF7FE7DC.toInt(),
+            accentSoft = translucent(0xFF5FB8FF.toInt(), 0.16f),
+            ok = 0xFF4FD1A5.toInt(),
+            warn = 0xFFF0C25C.toInt(),
+            danger = 0xFFFF7070.toInt()
+        ),
+        shape = TokenShape(extraLarge = 36f, large = 28f, medium = 18f, small = 12f, extraSmall = 8f, dockRadius = 34f, tileRadius = 24f, tileSize = 60f),
+        material = TokenMaterial(
+            blurDp = 28f, saturation = 1.4f,
+            shadow2 = "0 14px 34px -12px rgba(0,4,16,.8), inset 0 1px 0 rgba(190,225,255,.16)",
+            shadow3 = "0 30px 64px -24px rgba(0,2,12,.9), inset 0 1px 0 rgba(190,225,255,.2)"
+        ),
+        type = TYPE_SCALE, clockSp = 72f, appLabelSp = 11f
+    )
+
+    /**
+     * Luma Mono — warm peach duotone on deep charcoal-brown (reference drawer, 2026-11).
+     * Zero blur by design, like Monolith; also excluded from the v3.2 parity set [ALL].
+     */
+    val MONO = ThemeTokens(
+        key = "luma_mono",
+        version = VERSION,
+        colors = TokenColors(
+            background0 = 0xFF161110.toInt(),
+            background1 = 0xFF1D1714.toInt(),
+            background2 = 0xFF261D18.toInt(),
+            surface1 = translucent(0xFFF0BE9A.toInt(), 0.055f),
+            surface2 = translucent(0xFFF0BE9A.toInt(), 0.09f),
+            surface3 = translucent(0xFFF0BE9A.toInt(), 0.14f),
+            surfaceSolid = 0xFF241B16.toInt(),
+            stroke1 = translucent(0xFFF0BE9A.toInt(), 0.14f),
+            stroke2 = translucent(0xFFF0BE9A.toInt(), 0.26f),
+            text1 = 0xFFF7E8DC.toInt(),
+            text2 = 0xFFC9A98F.toInt(),
+            text3 = 0xFF93765F.toInt(),
+            accent = 0xFFF0BE9A.toInt(),
+            accent2 = 0xFFC98F6A.toInt(),
+            accentSoft = translucent(0xFFF0BE9A.toInt(), 0.15f),
+            ok = 0xFFB7CE8B.toInt(),
+            warn = 0xFFF2C14E.toInt(),
+            danger = 0xFFFF8A6B.toInt()
+        ),
+        shape = TokenShape(extraLarge = 22f, large = 18f, medium = 14f, small = 10f, extraSmall = 6f, dockRadius = 22f, tileRadius = 18f, tileSize = 58f),
+        material = TokenMaterial(
+            blurDp = 0f, saturation = 1f,
+            shadow2 = "0 2px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,230,200,.07)",
+            shadow3 = "0 24px 60px -28px rgba(0,0,0,.9)"
+        ),
+        type = TYPE_SCALE, clockSp = 62f, appLabelSp = 10f
+    )
+
     val ALL: List<ThemeTokens> = listOf(SIGNATURE, ATMOSPHERE, MONOLITH)
 
     fun forKey(key: String?): ThemeTokens? = ALL.firstOrNull { it.key == key }

@@ -192,7 +192,41 @@ data class ThemeLauncherPackage(
             effectsSummary = "Zero-Blur Stone · Edge Bezel · Monograph 84sp"
         )
 
+        val LUMA_GLASS = ThemeLauncherPackage(
+            themeId = ThemeId.LUMA_GLASS,
+            subtitle = "Deep Navy Liquid Glass",
+            preset = HomePreset.HORIZON,
+            dock = DockStyle.FLOAT,
+            backdrop = Backdrop.WALLPAPER,
+            effects = EffectsPreference.FULL,
+            motion = MotionPreference.FULL,
+            iconShape = IconShape.SQUIRCLE,
+            iconStyle = IconStyle.NATURAL,
+            typography = null,
+            dynamicWallpaperColors = false,
+            livingIcons = true,
+            effectsSummary = "28dp Liquid Glass · Floating Dock · Glossy Icons"
+        )
+
+        val LUMA_MONO = ThemeLauncherPackage(
+            themeId = ThemeId.LUMA_MONO,
+            subtitle = "Peach Duotone Charcoal",
+            preset = HomePreset.GRID,
+            dock = DockStyle.BEZEL,
+            backdrop = Backdrop.THEME,
+            effects = EffectsPreference.MINIMAL,
+            motion = MotionPreference.FULL,
+            iconShape = IconShape.ROUNDED,
+            iconStyle = IconStyle.TINTED,
+            typography = null,
+            dynamicWallpaperColors = false,
+            livingIcons = false,
+            effectsSummary = "Zero-Blur Duotone · Bezel Dock · Monograph"
+        )
+
         fun forTheme(id: ThemeId): ThemeLauncherPackage = when (id) {
+            ThemeId.LUMA_GLASS -> LUMA_GLASS
+            ThemeId.LUMA_MONO -> LUMA_MONO
             ThemeId.SIGNATURE -> SIGNATURE
             ThemeId.ATMOSPHERE -> ATMOSPHERE
             ThemeId.MONOLITH -> MONOLITH
