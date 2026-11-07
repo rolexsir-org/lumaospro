@@ -12,6 +12,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# AGP 8+ throws AndroidLocationsException if both ANDROID_PREFS_ROOT and ANDROID_USER_HOME are set.
+unset ANDROID_PREFS_ROOT
+
 TOOLS="$HOME/.cache/lumaos-toolchain"
 
 if [ ! -f "$TOOLS/env.sh" ]; then
@@ -56,16 +59,27 @@ export ROBOLECTRIC_DEPENDENCY_DIR="$ROBOLECTRIC_DIR"
 # explicitly so builds work from any shell.
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 
+# Map bare 'test' to 'testDebugUnitTest' so the JVM unit + Robolectric suite runs
+# against the unminified debug variant.
+args=()
+for arg in "$@"; do
+  if [ "$arg" = "test" ]; then
+    args+=("testDebugUnitTest")
+  else
+    args+=("$arg")
+  fi
+done
+
 echo "==> JAVA_HOME=$JAVA_HOME"
 echo "==> ANDROID_HOME=$ANDROID_HOME"
-echo "==> gradle $*"
+echo "==> gradle ${args[*]}"
 
 # Prefer the exact provisioned Gradle so the wrapper does not download a
 # second copy. Otherwise use a complete wrapper, then a Gradle on PATH.
 if [ -x "$TOOLS/gradle-8.13/bin/gradle" ]; then
-    exec "$TOOLS/gradle-8.13/bin/gradle" --no-daemon "$@"
+    exec "$TOOLS/gradle-8.13/bin/gradle" --no-daemon "${args[@]}"
 elif [ -x "./gradlew" ] && [ -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-    exec ./gradlew --no-daemon "$@"
+    exec ./gradlew --no-daemon "${args[@]}"
 else
-    exec gradle --no-daemon "$@"
+    exec gradle --no-daemon "${args[@]}"
 fi

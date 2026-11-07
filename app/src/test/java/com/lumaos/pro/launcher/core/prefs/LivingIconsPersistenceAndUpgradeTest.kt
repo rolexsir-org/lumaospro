@@ -47,7 +47,8 @@ class LivingIconsPersistenceAndUpgradeTest {
         val storeFile = File(dir, "test.preferences_pb")
         try {
             val scope1 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val prefs1 = LumaPrefs(PreferenceDataStoreFactory.create(scope = scope1) { storeFile })
+            val ds1 = PreferenceDataStoreFactory.create(scope = scope1) { storeFile }
+            val prefs1 = LumaPrefs(ds1)
 
             assertTrue(prefs1.livingIconsEnabled.first())
             assertTrue(prefs1.livingIconOverrides.first().isEmpty())
@@ -60,11 +61,9 @@ class LivingIconsPersistenceAndUpgradeTest {
             prefs1.setLivingIconOverride(obsidian, LivingIconOverride.UseLiving(LivingIconId.NOTES))
             prefs1.setLivingIconOverride(spotify, LivingIconOverride.UseSystem)
             prefs1.setLivingIconsEnabled(false)
-            scope1.cancel()
 
             // Simulate process death & cold restart reading from the same persisted DataStore file
-            val scope2 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val prefs2 = LumaPrefs(PreferenceDataStoreFactory.create(scope = scope2) { storeFile })
+            val prefs2 = LumaPrefs(ds1)
             assertFalse(prefs2.livingIconsEnabled.first())
             assertEquals(
                 mapOf(
@@ -82,7 +81,7 @@ class LivingIconsPersistenceAndUpgradeTest {
             )
             prefs2.clearLivingIconOverrides()
             assertTrue(prefs2.livingIconOverrides.first().isEmpty())
-            scope2.cancel()
+            scope1.cancel()
         } finally {
             dir.deleteRecursively()
         }
@@ -126,11 +125,8 @@ class LivingIconsPersistenceAndUpgradeTest {
                 p[booleanPreferencesKey("layout_seeded")] = true
                 p[intPreferencesKey("grid_columns")] = 5
             }
-            legacyScope.cancel()
-
-            // Open upgraded LumaPrefs and run onboarding/startup idempotent guard
-            val upgradedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-            val upgradedPrefs = LumaPrefs(PreferenceDataStoreFactory.create(scope = upgradedScope) { storeFile })
+            // Open upgraded LumaPrefs using the same DataStore instance
+            val upgradedPrefs = LumaPrefs(legacyDs)
             upgradedPrefs.initializeDefaultExperienceIfUnconfigured()
 
             // Existing layout (pages, folders, widgets, dock) and grid columns remain 100% intact
@@ -141,7 +137,7 @@ class LivingIconsPersistenceAndUpgradeTest {
             assertEquals(existingLayout, decodedAfterUpgrade)
             // Living Icons smoothly enable by default on upgrade without requiring reset
             assertTrue(upgradedPrefs.livingIconsEnabled.first())
-            upgradedScope.cancel()
+            legacyScope.cancel()
         } finally {
             dir.deleteRecursively()
         }

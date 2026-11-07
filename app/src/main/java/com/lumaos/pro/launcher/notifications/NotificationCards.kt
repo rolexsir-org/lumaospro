@@ -382,17 +382,15 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
                 gravity = Gravity.CENTER
                 minimumHeight = dp(LumaTokens.minTouchTarget * 0.75f)
                 setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
-                setTextColor(colors.content)
+                setTextColor(GlassViews.chipText(theme, selected = false))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
                 typeface = Typefaces.label(theme.typography)
-                background = ThemedDrawables.ripple(
-                    colors.ripple,
-                    ThemedDrawables.surface(
-                        ColorMath.withAlpha(colors.content, 0.10f),
-                        LumaTokens.radiusSmall * density
-                    ),
-                    LumaTokens.radiusSmall * density
+                // Same pill grammar as every other chip in the launcher.
+                background = GlassViews.chip(
+                    theme, selected = false, density = density,
+                    touchHeightDp = LumaTokens.minTouchTarget * 0.75f, visualHeightDp = 30f
                 )
+                setPadding(dp(LumaTokens.spaceMD), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceMD), dp(LumaTokens.spaceXXS))
                 isClickable = true
                 isFocusable = true
                 contentDescription = label

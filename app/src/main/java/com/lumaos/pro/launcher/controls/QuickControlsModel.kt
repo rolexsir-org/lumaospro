@@ -44,7 +44,7 @@ data class SwitchState(
     companion object {
         val UNKNOWN = SwitchState(on = null, capability = Capability.UNAVAILABLE)
 
-        fun direct(on: Boolean, detail: String? = null) = SwitchState(on, Capability.DIRECT, detail)
+        fun direct(on: Boolean?, detail: String? = null) = SwitchState(on, Capability.DIRECT, detail)
         fun systemRoute(on: Boolean?, detail: String? = null) = SwitchState(on, Capability.SYSTEM_ROUTE, detail)
         fun needsGrant(on: Boolean?, detail: String? = null) = SwitchState(on, Capability.NEEDS_GRANT, detail)
         fun unavailable(detail: String? = null) = SwitchState(on = null, capability = Capability.UNAVAILABLE, detail = detail)

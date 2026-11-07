@@ -466,6 +466,7 @@ class LumaThemeManager(
 
             // 2. Try live WallpaperManager drawable (when permitted by the OS/role).
             val wm = runCatching { WallpaperManager.getInstance(context) }.getOrNull()
+            @Suppress("MissingPermission")
             val liveBitmap = runCatching {
                 val drawable = wm?.drawable ?: return@runCatching null
                 if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {

@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.LinearLayout.LayoutParams
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -310,20 +311,20 @@ class LumaShade(
             }
         )
 
-        sheetView.addView(buildHeader(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        sheetView.addView(buildHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val controlsView = QuickControlsView(context, this)
         quickControls = controlsView
         sheetView.addView(
             controlsView,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceSM)
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
             }
         )
 
-        sheetView.addView(buildNotificationHeader(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        sheetView.addView(buildNotificationHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(LumaTokens.spaceMD)
             marginStart = dp(LumaTokens.spaceSM)
             marginEnd = dp(LumaTokens.spaceSM)
@@ -335,7 +336,7 @@ class LumaShade(
         stateView = stateContainer
         sheetView.addView(
             stateContainer,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
             }
@@ -355,7 +356,7 @@ class LumaShade(
         listView.adapter = cardAdapter
         sheetView.addView(
             listView,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceXS)
                 marginStart = dp(LumaTokens.spaceSM)
                 marginEnd = dp(LumaTokens.spaceSM)
@@ -519,7 +520,7 @@ class LumaShade(
         sheet?.let {
             GlassViews.apply(
                 it, panelSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthShade,
-                radiusOverrideDp = theme.corner(LumaTokens.radiusXLarge)
+                radiusOverrideDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.EXTRA_LARGE)
             )
         }
         headerTitle?.setTextColor(panelSpec.rest.content)
@@ -529,16 +530,19 @@ class LumaShade(
                 ColorMath.withAlpha(panelSpec.rest.content, 0.12f), LumaTokens.radiusFull * density
             )
         }
-        notificationHeader?.setTextColor(
-            ColorMath.withAlpha(panelSpec.rest.content, LumaTokens.typeSectionHeaderAlpha + 0.25f)
-        )
-        notificationHeader?.typeface = Typefaces.label(theme.typography)
+        // Section heading in the title voice; Clear all as a quiet pill, the
+        // same chip grammar the drawer and widget picker use.
+        notificationHeader?.setTextColor(panelSpec.rest.content)
+        notificationHeader?.typeface = Typefaces.title(theme.typography)
+        notificationHeader?.letterSpacing = theme.typography.titleTracking
         clearAll?.let { clear ->
-            clear.setTextColor(panelSpec.rest.content)
+            clear.setTextColor(com.lumaos.pro.launcher.ui.glass.GlassViews.chipText(theme, selected = false))
             clear.typeface = Typefaces.label(theme.typography)
-            clear.background = ThemedDrawables.ripple(
-                panelSpec.rest.ripple, null, LumaTokens.radiusSmall * density
+            clear.background = com.lumaos.pro.launcher.ui.glass.GlassViews.chip(
+                theme, selected = false, density = density,
+                touchHeightDp = LumaTokens.minTouchTarget * 0.75f, visualHeightDp = 30f
             )
+            clear.setPadding(dp(LumaTokens.spaceMD), clear.paddingTop, dp(LumaTokens.spaceMD), clear.paddingBottom)
         }
         quickControls?.rebuild(lastControls, controls.torchCapable)
         renderNotificationState()
@@ -549,12 +553,8 @@ class LumaShade(
     private fun refreshEverything() {
         applyInsets()
         controls.refresh()
-        // When the grant is live, re-read Android's snapshot; when it is not,
-        // ask the system to rebind the listener so a revocation or a killed
-        // service is reflected instead of showing stale cards.
-        if (NotificationAccess.isGranted(context)) {
-            NotificationHub.refreshAccessState(context)
-        } else {
+        NotificationHub.refreshAccessState(context)
+        if (NotificationHub.state.value.access == NotificationAccessState.DISCONNECTED) {
             NotificationAccess.requestRebindIfGranted(context)
         }
     }
@@ -687,7 +687,7 @@ class LumaShade(
         }
         container.addView(
             button,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(LumaTokens.spaceSM)
             }
         )

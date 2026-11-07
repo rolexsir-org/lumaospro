@@ -1,7 +1,7 @@
 package com.lumaos.pro.launcher.settings.studio
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -66,7 +66,7 @@ fun HomePreview(
         theme,
         GlassCapabilities(translucency = true, blur = theme.usesBlur, depth = true)
     )
-    BoxWithConstraints(
+    Box(
         modifier.semantics {
             contentDescription = "Preview of ${theme.displayName} with the ${preset.displayName} layout"
         }
@@ -82,12 +82,12 @@ fun HomePreview(
             val isMonolith = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH
             val isAtmosphere = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE
             val centered = when (theme.id) {
-                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock == ClockStyle.HERO
+                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock != ClockStyle.COMPACT
                 com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE,
                 com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH,
                 com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_GLASS,
                 com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO -> false
-                else -> preset.clock == ClockStyle.HERO
+                else -> preset.clock != ClockStyle.COMPACT
             }
             val top = when {
                 isMonolith -> h * 0.045f
@@ -125,7 +125,7 @@ fun HomePreview(
             drawContext.canvas.nativeCanvas.drawText(timeText, x, clockBaseline, clockPaint)
             drawContext.canvas.nativeCanvas.drawText(dateFormatted, x, dateBaseline, readPaint)
 
-            if (preset.showContextLine && readout.isNotBlank()) {
+            if (readout.isNotBlank()) {
                 val contextFormatted = if (theme.typography.readoutCaps) readout.uppercase() else readout
                 when {
                     isMonolith -> {
@@ -186,19 +186,25 @@ fun HomePreview(
                 }
             }
 
-            // Clean, aligned icon grid.
+            // Clean, aligned icon grid. Rows are laid out only in the space
+            // between the readout and the search field, so an icon (and its
+            // label) can never be drawn underneath the search pill.
             val muted = Color(c.homeMuted)
             val columns = 4
+            val pillTop = h - unit * 34f
             val rows = if (preset.showGrid) min(preset.defaultRows, 4) else 0
             val gridTop = dateBaseline + unit * 13f
             val cellW = (w - gutter * 2f) / columns
             val iconSize = min(cellW * 0.58f, unit * 14f)
+            val rowPitch = iconSize + unit * 8.5f
+            val gridBottom = pillTop - unit * 3f
             var index = 0
             for (r in 0 until rows) for (col in 0 until columns) {
                 val img = icons.getOrNull(index++) ?: continue
                 val ix = gutter + col * cellW + (cellW - iconSize) / 2f
-                val iy = gridTop + r * (iconSize + unit * 8.5f)
-                if (iy + iconSize > h * 0.73f) continue
+                val iy = gridTop + r * rowPitch
+                // Icon plus its label bar must clear the search field.
+                if (iy + iconSize + unit * 3.2f > gridBottom) continue
                 drawImageFit(img, ix, iy, iconSize)
                 drawRoundRect(
                     muted.copy(alpha = 0.55f),
@@ -212,7 +218,7 @@ fun HomePreview(
             val searchSpec = palette[GlassRole.SEARCH]
             val search = searchSpec.rest
             val pillH = unit * 10f
-            val pillY = h - unit * 34f
+            val pillY = pillTop
             val searchRadius = (searchSpec.radiusDp / GlassGeometry.SEARCH_HEIGHT_DP * pillH).coerceAtMost(pillH / 2f)
             drawRoundRect(
                 Brush.verticalGradient(listOf(Color(search.fillTop), Color(search.fillBottom))),
@@ -357,7 +363,23 @@ private fun DrawScope.drawBackdrop(
             .map { Color(it) }
         drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
     }
-    for (layer in AtmospherePlan.layers(theme, 0.18f, true)) when (layer) {
+    drawAtmosphere(theme, 0.18f)
+    val scrim = GlassBackdrop.scrim(theme)
+    drawRect(
+        Brush.verticalGradient(
+            listOf(Color(scrim.top), Color(scrim.center), Color(scrim.bottom))
+        )
+    )
+}
+
+/**
+ * Paints [AtmospherePlan] for [theme] - the exact layers the home screen draws -
+ * so Studio previews and theme cards can never disagree with the launcher.
+ */
+internal fun DrawScope.drawAtmosphere(theme: ResolvedTheme, phase: Float) {
+    val w = size.width
+    val h = size.height
+    for (layer in AtmospherePlan.layers(theme, phase, true)) when (layer) {
         is AtmosphereLayer.Solid -> drawRect(Color(layer.color))
         is AtmosphereLayer.Glow -> {
             val r = layer.radius * max(w, h)
@@ -377,10 +399,4 @@ private fun DrawScope.drawBackdrop(
             }
         }
     }
-    val scrim = GlassBackdrop.scrim(theme)
-    drawRect(
-        Brush.verticalGradient(
-            listOf(Color(scrim.top), Color(scrim.center), Color(scrim.bottom))
-        )
-    )
 }

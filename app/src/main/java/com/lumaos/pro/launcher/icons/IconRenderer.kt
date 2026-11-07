@@ -63,12 +63,16 @@ data class IconRenderSpec(
                 ThemeId.ATMOSPHERE -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.16f)
                 ThemeId.LUMA_GLASS -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.12f)
                 ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
+                // Premium: graphite plate on Obsidian, an orchid-washed glass plate on Aurora.
+                ThemeId.OBSIDIAN -> ColorMath.opaque(c.surface2)
+                ThemeId.AURORA -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.14f)
                 else -> if (theme.isDark) c.surface2 else ColorMath.WHITE
             }
             val rimColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.outline)
                 ThemeId.ATMOSPHERE -> c.outlineStrong
                 ThemeId.LUMA_MONO -> ColorMath.opaque(c.outline)
+                ThemeId.OBSIDIAN -> ColorMath.opaque(c.outline)
                 else -> ColorMath.withAlpha(if (theme.isDark) c.outlineStrong else c.outline, 0.9f)
             }
             val tintPlateColor = when (theme.id) {
@@ -76,6 +80,8 @@ data class IconRenderSpec(
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.10f)
                 // Luma Mono plates stay deep charcoal-brown so the single peach ink reads on every tile.
                 ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
+                ThemeId.OBSIDIAN -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.08f)
+                ThemeId.IVORY -> ColorMath.lerp(ColorMath.WHITE, ColorMath.opaque(c.accent), 0.07f)
                 else -> c.accentContainer
             }
             val tintColor = when (theme.id) {
@@ -83,6 +89,9 @@ data class IconRenderSpec(
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.22f)
                 // The duotone ink itself: warm peach, never a near-white that would wash out on the plate.
                 ThemeId.LUMA_MONO -> ColorMath.lerp(ColorMath.opaque(c.accent), ColorMath.opaque(c.onSurface), 0.18f)
+                // Champagne ink on graphite; sapphire ink on paper.
+                ThemeId.OBSIDIAN -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.55f)
+                ThemeId.IVORY -> ColorMath.opaque(c.accent)
                 else -> c.onAccentContainer
             }
             return IconRenderSpec(

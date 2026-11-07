@@ -225,13 +225,14 @@ class DesignSystemTest {
     // ----------------------------------------------------------- identity
 
     @Test fun `each retained theme keeps its voice, material and motion`() {
+        // Aurora is now the premium expressive theme: ambient voice, cinematic motion.
         val aurora = ThemePresets.AURORA
         val zen = ThemePresets.ZEN
         val void = ThemePresets.VOID
-        assertEquals(TypeStyle.PRECISION, aurora.typography)
+        assertEquals(TypeStyle.AMBIENT, aurora.typography)
         assertEquals(TypeStyle.SERENE, zen.typography)
         assertEquals(TypeStyle.GROTESK, void.typography)
-        assertEquals(MotionCharacter.SUBTLE, aurora.motionCharacter)
+        assertEquals(MotionCharacter.CINEMATIC, aurora.motionCharacter)
         assertEquals(MotionCharacter.QUIET, zen.motionCharacter)
         assertEquals(MotionCharacter.EXPRESSIVE, void.motionCharacter)
         // Zen is paper (solid), Aurora and Void are layered light (glass).

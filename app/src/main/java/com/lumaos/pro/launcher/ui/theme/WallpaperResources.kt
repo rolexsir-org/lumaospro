@@ -76,7 +76,7 @@ object WallpaperArtResources {
         return availableRes(context, resId)
     }
 
-    private fun availableRes(context: Context, @DrawableRes resId: Int): Boolean = runCatching {
+    private fun availableRes(context: Context, @androidx.annotation.AnyRes resId: Int): Boolean = runCatching {
         context.resources.openRawResource(resId).use { it.read() }
         true
     }.getOrDefault(false)

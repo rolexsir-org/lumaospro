@@ -38,5 +38,9 @@
 -keepattributes KotlinMetadata
 -keep class kotlin.Metadata { *; }
 
-# Warn而不是 fail if a rule references a class that shrinking removed.
+# Keep Compose test tags and semantics for UI test rules
+-keep class androidx.compose.ui.semantics.** { *; }
+-keepclassmembers class androidx.compose.ui.semantics.** { *; }
+
+# Warn rather than fail if a rule references a class that shrinking removed.
 -dontnote kotlinx.coroutines.**

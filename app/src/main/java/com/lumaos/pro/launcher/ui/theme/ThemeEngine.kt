@@ -65,13 +65,11 @@ data class ThemeSettings(
     val themeId: ThemeId = ThemeId.SIGNATURE,
     val switching: ThemeSwitching = ThemeSwitching.SYSTEM,
     /**
-     * Light mode keeps the retained Zen palette as the light adaptation of the
-     * single Luma Glass system. The palette IDs are compatibility anchors, not
-     * separate design systems; the glass material layer supplies one geometry,
-     * one surface grammar and one motion vocabulary in both modes.
+     * Light mode uses the authored premium Ivory theme. (Zen remains selectable
+     * under its `porcelain` key; a stored light choice is never rewritten.)
      */
-    val lightThemeId: ThemeId = ThemeId.PORCELAIN,
-    val darkThemeId: ThemeId = ThemeId.SIGNATURE,
+    val lightThemeId: ThemeId = ThemePresets.DEFAULT_LIGHT,
+    val darkThemeId: ThemeId = ThemePresets.DEFAULT_DARK,
     val darkWindow: DarkWindow = DarkWindow.DEFAULT,
     val accentOverride: Int? = null,
     val backgroundOverride: Int? = null,
@@ -178,14 +176,20 @@ object ThemeEngine {
                 min(Oklch.fromArgb(background).c, 0.03)
             } else base.neutralChroma
         )
-        // Authored v3.2 roles are used whenever dynamic wallpaper derivation is off
-        // and the user has not replaced the theme's own accent or background;
-        // dynamic or custom colours use the seed-derived path, which guarantees
-        // contrast for arbitrary inputs while keeping the theme's geometry/blur tokens.
+        // Authored roles are used whenever dynamic wallpaper derivation is off and
+        // the user has not replaced the theme's background. A custom *accent*
+        // stays on the authored path: the designed surfaces, text and hairlines
+        // are kept and only the accent family is re-seeded (the shared guarantee
+        // tail still enforces its contrast). Dynamic or custom backgrounds use the
+        // seed-derived path, which guarantees contrast for arbitrary inputs while
+        // keeping the theme's geometry/blur tokens.
         val tokens = base.tokens
-        val curated = !dynamicActive && settings.accentOverride == null && settings.backgroundOverride == null
+        val curated = !dynamicActive && settings.backgroundOverride == null
         val colors = if (tokens != null && curated) {
-            authoredColors(spec, tokens, backdrop, env.wallpaper, env.hasSelectedArtwork)
+            authoredColors(
+                spec, tokens, backdrop, env.wallpaper, env.hasSelectedArtwork,
+                accentOverride = settings.accentOverride?.let { ColorMath.opaque(it) }
+            )
         } else {
             deriveColors(spec, backdrop, env.wallpaper, env.hasSelectedArtwork)
         }
@@ -314,7 +318,8 @@ object ThemeEngine {
         tokens: ThemeTokens,
         backdrop: Backdrop,
         wallpaper: WallpaperSeeds?,
-        hasSelectedArtwork: Boolean = false
+        hasSelectedArtwork: Boolean = false,
+        accentOverride: Int? = null
     ): ThemeColors {
         val t = tokens.colors
         val surface0 = ColorMath.opaque(t.background1)
@@ -323,6 +328,17 @@ object ThemeEngine {
         val surface1 = ColorMath.composite(t.surface1, surface0)
         val surface2 = ColorMath.composite(t.surface2, surface0)
         val surface3 = ColorMath.composite(t.surface3, surface0)
+        // A user accent replaces the accent family only; accent-soft keeps the
+        // authored strength so selection fills stay as quiet as designed.
+        val accentSeed = accentOverride ?: ColorMath.opaque(t.accent)
+        val accentSoft = if (accentOverride == null) t.accentSoft
+        else ColorMath.withAlpha(accentOverride, ColorMath.alpha(t.accentSoft) / 255f)
+        // Interaction layers follow polarity: a white veil on dark glass, a
+        // warm-ink veil on light paper (Ivory), never white-on-white.
+        val pressed = if (spec.dark) ColorMath.withAlpha(ColorMath.WHITE, 0.10f)
+        else ColorMath.withAlpha(ColorMath.opaque(t.text1), 0.07f)
+        val scrim = if (spec.dark) ColorMath.withAlpha(ColorMath.BLACK, 0.42f)
+        else ColorMath.withAlpha(ColorMath.opaque(t.text1), 0.30f)
         return assemble(
             spec = spec,
             backdrop = backdrop,
@@ -331,15 +347,15 @@ object ThemeEngine {
             neutral = neutralFn(spec),
             surfaces = intArrayOf(surface0, surface1, surface2, surface3),
             text = RawText(ColorMath.opaque(t.text1), ColorMath.opaque(t.text2), ColorMath.opaque(t.text3)),
-            accentSeed = ColorMath.opaque(t.accent),
+            accentSeed = accentSeed,
             secondarySeed = ColorMath.opaque(t.accent2),
             dangerSeed = ColorMath.opaque(t.danger),
             outline = ColorMath.composite(t.stroke1, surface0),
             outlineStrong = ColorMath.composite(t.stroke2, surface0),
-            scrim = ColorMath.withAlpha(ColorMath.BLACK, 0.42f),
-            pressed = ColorMath.withAlpha(ColorMath.WHITE, 0.10f),
+            scrim = scrim,
+            pressed = pressed,
             // Authored selection: the accent-soft role, made opaque for a fill.
-            selectedFill = ColorMath.composite(t.accentSoft, surface0),
+            selectedFill = ColorMath.composite(accentSoft, surface0),
             successSeed = ColorMath.opaque(t.ok),
             warningSeed = ColorMath.opaque(t.warn)
         )

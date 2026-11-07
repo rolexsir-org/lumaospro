@@ -39,7 +39,7 @@ class ExperienceProfileTest {
         val ids = ExperienceProfile.entries.map { it.themeId }.toSet()
         assertEquals(3, ids.size)
         assertEquals(
-            setOf(ThemeId.PORCELAIN, ThemeId.SIGNATURE, ThemeId.ATMOSPHERE),
+            setOf(ThemeId.IVORY, ThemeId.SIGNATURE, ThemeId.ATMOSPHERE),
             ids
         )
     }
@@ -48,7 +48,8 @@ class ExperienceProfileTest {
     fun `pure is the calm solid light identity without blur`() {
         val pure = ExperienceProfile.PURE
         assertFalse(pure.dark)
-        assertEquals(ThemeId.PORCELAIN, pure.themeId)
+        // Pure now carries the authored premium light theme.
+        assertEquals(ThemeId.IVORY, pure.themeId)
         assertEquals(EffectsPreference.MINIMAL, pure.effects)
         assertEquals(DockStyle.MINIMAL, pure.dock)
     }

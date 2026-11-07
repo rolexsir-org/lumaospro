@@ -131,8 +131,8 @@ class SettingsActivity : ComponentActivity() {
                                 title = "LumaOS Pro",
                                 subtitle = tabs[tab],
                                 modifier = Modifier.padding(
-                                    horizontal = com.lumaos.pro.launcher.ui.LumaSpacing.screenHorizontal,
-                                    vertical = com.lumaos.pro.launcher.ui.LumaSpacing.xs
+                                    horizontal = com.lumaos.pro.launcher.ui.theme.LumaTokens.Compose.screenMarginHorizontal,
+                                    vertical = com.lumaos.pro.launcher.ui.theme.LumaTokens.Compose.spaceXS
                                 )
                             )
                             PrimaryTabRow(

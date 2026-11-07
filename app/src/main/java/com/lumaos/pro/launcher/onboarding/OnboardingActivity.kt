@@ -56,7 +56,6 @@ import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.icons.LivingIconId
-import com.lumaos.pro.launcher.settings.ExperienceProfileController
 import com.lumaos.pro.launcher.settings.LumaOSTheme
 import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
 import com.lumaos.pro.launcher.ui.theme.GlassRole
@@ -239,7 +238,7 @@ class OnboardingActivity : ComponentActivity() {
                                 selected = profile == selectedProfile,
                                 onSelected = {
                                     lifecycleScope.launch {
-                                        safelyUpdateAppearance { ExperienceProfileController.apply(prefs, profile) }
+                                        safelyUpdateAppearance { prefs.applyExperienceProfile(profile) }
                                     }
                                 }
                             )

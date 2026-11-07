@@ -128,6 +128,43 @@ object AtmospherePlan {
             return out
         }
 
+        // ---- premium collection: each identity has one authored composition.
+        if (theme.backdrop == Backdrop.THEME) when (theme.id) {
+            ThemeId.OBSIDIAN -> {
+                // Pure black stays pure black: OLED pixels off, lowest power.
+                // Depth comes from the graphite glass surfaces, not the field.
+                return out
+            }
+            ThemeId.IVORY -> {
+                // Daylight on paper: a soft white lift from the upper left, a
+                // warm bronze whisper low right, and a barely-there floor tone
+                // under the dock. No hue washes over the surface.
+                out += AtmosphereLayer.Glow(0.14f, -0.02f, 1.05f, ColorMath.withAlpha(ColorMath.WHITE, 0.70f), 0.75f)
+                out += AtmosphereLayer.Glow(0.94f, 0.96f, 0.72f, ColorMath.withAlpha(c.secondary, 0.07f), 0.7f)
+                out += AtmosphereLayer.VerticalFade(0.70f, 1f, ColorMath.withAlpha(c.secondary, 0f),
+                    ColorMath.withAlpha(c.secondary, 0.05f))
+                return out
+            }
+            ThemeId.AURORA -> {
+                // The one expressive backdrop: an indigo-violet sky with two slow
+                // aurora ribbons (teal, orchid) and a rose seam where they meet.
+                // The lower third settles back to night so the dock stays legible.
+                val rose = ColorMath.lerp(c.accent, 0xFFFF7EB6.toInt(), 0.55f)
+                out += AtmosphereLayer.VerticalFade(0f, 0.62f, ColorMath.withAlpha(0xFF1C1250.toInt(), 0.85f),
+                    ColorMath.withAlpha(c.background, 0f))
+                out += AtmosphereLayer.Glow(0.20f + 0.05f * sin(t), 0.16f + 0.02f * cos(t), 0.82f,
+                    ColorMath.withAlpha(c.secondary, 0.22f), 0.40f)
+                out += AtmosphereLayer.Glow(0.84f - 0.05f * sin(t + 1.7f), 0.30f + 0.02f * sin(t * 2), 0.74f,
+                    ColorMath.withAlpha(c.accent, 0.24f), 0.46f)
+                out += AtmosphereLayer.Glow(0.52f + 0.04f * cos(t + 0.6f), 0.44f + 0.025f * sin(t + 2.2f), 0.90f,
+                    ColorMath.withAlpha(rose, 0.12f), 0.30f)
+                out += AtmosphereLayer.VerticalFade(0.60f, 1f, ColorMath.withAlpha(c.background, 0f),
+                    ColorMath.withAlpha(c.background, 0.88f))
+                return out
+            }
+            else -> Unit
+        }
+
         when (theme.atmosphere) {
             Atmosphere.NONE -> Unit
             Atmosphere.HORIZON -> {

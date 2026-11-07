@@ -28,13 +28,13 @@ enum class ExperienceProfile(
     val dark: Boolean
 ) {
     /**
-     * Quiet sophistication: the light Zen identity, solid legible surfaces,
-     * no blur, restrained motion and an undecorated dock.
+     * Quiet sophistication: the premium Ivory light identity, legible paper
+     * surfaces, minimal effects, restrained motion and an undecorated dock.
      */
     PURE(
         storageKey = "pure",
-        themeId = ThemeId.PORCELAIN,
-        backdrop = Backdrop.LUMA,
+        themeId = ThemeId.IVORY,
+        backdrop = Backdrop.THEME,
         effects = EffectsPreference.MINIMAL,
         motion = MotionPreference.FULL,
         dock = DockStyle.MINIMAL,
@@ -146,7 +146,7 @@ data class ThemeLauncherPackage(
     companion object {
         val SIGNATURE = ThemeLauncherPackage(
             themeId = ThemeId.SIGNATURE,
-            subtitle = "Obsidian Glass",
+            subtitle = "Midnight Glass",
             preset = HomePreset.INSTRUMENT,
             dock = DockStyle.FLOAT,
             backdrop = Backdrop.THEME,
@@ -224,27 +224,66 @@ data class ThemeLauncherPackage(
             effectsSummary = "Zero-Blur Duotone · Bezel Dock · Monograph"
         )
 
+        /** Premium dark: pure-black field, graphite glass, real app icons. */
+        val OBSIDIAN = ThemeLauncherPackage(
+            themeId = ThemeId.OBSIDIAN,
+            subtitle = "Premium OLED Dark",
+            preset = HomePreset.HORIZON,
+            dock = DockStyle.FLOAT,
+            backdrop = Backdrop.THEME,
+            effects = EffectsPreference.AUTO,
+            motion = MotionPreference.FULL,
+            iconShape = IconShape.SQUIRCLE,
+            iconStyle = IconStyle.NATURAL,
+            typography = null,
+            dynamicWallpaperColors = false,
+            livingIcons = true,
+            effectsSummary = "Pure Black · Graphite Glass · Champagne"
+        )
+
+        /** Premium light: warm paper, white glass cards, soft shadows. */
+        val IVORY = ThemeLauncherPackage(
+            themeId = ThemeId.IVORY,
+            subtitle = "Elegant Light",
+            preset = HomePreset.HORIZON,
+            dock = DockStyle.FLOAT,
+            backdrop = Backdrop.THEME,
+            effects = EffectsPreference.AUTO,
+            motion = MotionPreference.FULL,
+            iconShape = IconShape.SQUIRCLE,
+            iconStyle = IconStyle.NATURAL,
+            typography = null,
+            dynamicWallpaperColors = false,
+            livingIcons = true,
+            effectsSummary = "Warm Paper · White Glass · Sapphire Ink"
+        )
+
+        /** Expressive gradient: indigo night, drifting aurora, deep glass. */
+        val AURORA = ThemeLauncherPackage(
+            themeId = ThemeId.AURORA,
+            subtitle = "Expressive Gradient",
+            preset = HomePreset.HORIZON,
+            dock = DockStyle.FLOAT,
+            backdrop = Backdrop.THEME,
+            effects = EffectsPreference.AUTO,
+            motion = MotionPreference.FULL,
+            iconShape = IconShape.SQUIRCLE,
+            iconStyle = IconStyle.NATURAL,
+            typography = null,
+            dynamicWallpaperColors = false,
+            livingIcons = true,
+            effectsSummary = "Aurora Gradient · 32dp Glass · Cinematic"
+        )
+
         fun forTheme(id: ThemeId): ThemeLauncherPackage = when (id) {
+            ThemeId.OBSIDIAN -> OBSIDIAN
+            ThemeId.IVORY -> IVORY
+            ThemeId.AURORA -> AURORA
             ThemeId.LUMA_GLASS -> LUMA_GLASS
             ThemeId.LUMA_MONO -> LUMA_MONO
             ThemeId.SIGNATURE -> SIGNATURE
             ThemeId.ATMOSPHERE -> ATMOSPHERE
             ThemeId.MONOLITH -> MONOLITH
-            ThemeId.AURORA -> ThemeLauncherPackage(
-                themeId = ThemeId.AURORA,
-                subtitle = "Midnight Aurora",
-                preset = HomePreset.INSTRUMENT,
-                dock = DockStyle.FLOAT,
-                backdrop = Backdrop.THEME,
-                effects = EffectsPreference.FULL,
-                motion = MotionPreference.FULL,
-                iconShape = IconShape.SQUIRCLE,
-                iconStyle = null,
-                typography = null,
-                dynamicWallpaperColors = false,
-                livingIcons = true,
-                effectsSummary = "26dp Glass · Floating Dock · Aurora Glow"
-            )
             ThemeId.PORCELAIN -> ThemeLauncherPackage(
                 themeId = ThemeId.PORCELAIN,
                 subtitle = "Warm Paper",
@@ -274,21 +313,6 @@ data class ThemeLauncherPackage(
                 dynamicWallpaperColors = false,
                 livingIcons = false,
                 effectsSummary = "Chamfer Grid · Bezel Dock · Technical Mono"
-            )
-            ThemeId.OBSIDIAN -> ThemeLauncherPackage(
-                themeId = ThemeId.OBSIDIAN,
-                subtitle = "True-Black OLED",
-                preset = HomePreset.ZEN,
-                dock = DockStyle.MINIMAL,
-                backdrop = Backdrop.THEME,
-                effects = EffectsPreference.MINIMAL,
-                motion = MotionPreference.REDUCED,
-                iconShape = IconShape.SQUIRCLE,
-                iconStyle = IconStyle.TINTED,
-                typography = null,
-                dynamicWallpaperColors = false,
-                livingIcons = false,
-                effectsSummary = "True-Black AMOLED · Zero Blur · Minimal"
             )
             ThemeId.GRAPHITE -> ThemeLauncherPackage(
                 themeId = ThemeId.GRAPHITE,

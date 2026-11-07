@@ -140,7 +140,7 @@ data class LumaGlassAccent(
     val name: String,
     val color: Int,
     val darkAnchor: ThemeId = ThemeId.SIGNATURE,
-    val lightAnchor: ThemeId = ThemeId.PORCELAIN
+    val lightAnchor: ThemeId = ThemePresets.DEFAULT_LIGHT
 ) {
     /**
      * Applies one unified appearance to stored [ThemeSettings]. Accents change
@@ -305,13 +305,26 @@ object GlassMaterials {
                 role = role,
                 radiusDp = theme.radius(recipe.radiusRole),
                 blurDp = if (blurAvailable) (themeBlur * recipe.blurFactor).coerceIn(0f, 34f) else 0f,
-                elevationDp = if (capabilities.depth && theme.usesBlur) recipe.elevationDp else 0f,
+                elevationDp = if (capabilities.depth && theme.usesBlur) elevationFor(theme, recipe.elevationDp) else 0f,
                 borderDp = GlassGeometry.BORDER_DP,
                 topOnly = recipe.topOnly,
                 states = states
             )
         }
         return GlassPalette(specs)
+    }
+
+    /**
+     * Maps a recipe's elevation tier onto the theme's authored elevation tokens
+     * when it has them (premium themes); otherwise the shared tier is kept.
+     */
+    private fun elevationFor(theme: ResolvedTheme, recipeDp: Float): Float {
+        val e = theme.tokens?.elevation ?: return recipeDp
+        return when (recipeDp) {
+            LumaTokens.shadowFloatingElevation -> e.floatingDp
+            LumaTokens.shadowCardElevation -> e.cardDp
+            else -> recipeDp.coerceAtMost(e.cardDp)
+        }
     }
 
     private fun states(

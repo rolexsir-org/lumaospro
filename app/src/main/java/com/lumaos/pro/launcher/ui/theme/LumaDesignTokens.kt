@@ -329,6 +329,123 @@ object LumaDesignTokens {
         type = TYPE_SCALE, clockSp = 62f, appLabelSp = 10f
     )
 
+    // ------------------------------------------------------- premium collection
+    //
+    // Obsidian (dark), Ivory (light) and Aurora (expressive gradient). Authored
+    // after v3.2, so - like Glass and Mono - they are deliberately NOT in [ALL],
+    // which stays the exact JSON-parity set. Each one carries an explicit
+    // [TokenElevation] so shadows are a theme decision rather than a constant:
+    // Ivory's light surfaces need far softer shadows than Obsidian's black field.
+
+    /** Obsidian — premium OLED dark. Pure black field, graphite glass, champagne. */
+    val OBSIDIAN = ThemeTokens(
+        key = "obsidian",
+        version = VERSION,
+        colors = TokenColors(
+            // background1 is the panel base (settings, drawer, sheets): true
+            // black too, so OLED pixels stay off; glass rows lift from it.
+            background0 = 0xFF000000.toInt(),
+            background1 = 0xFF000000.toInt(),
+            background2 = 0xFF0B0B0D.toInt(),
+            surface1 = translucent(0xFFFFFFFF.toInt(), 0.05f),
+            surface2 = translucent(0xFFFFFFFF.toInt(), 0.08f),
+            surface3 = translucent(0xFFFFFFFF.toInt(), 0.12f),
+            surfaceSolid = 0xFF161619.toInt(),
+            stroke1 = translucent(0xFFFFFFFF.toInt(), 0.08f),
+            stroke2 = translucent(0xFFFFFFFF.toInt(), 0.15f),
+            text1 = 0xFFF5F3EF.toInt(),
+            text2 = 0xFFAAA7A1.toInt(),
+            text3 = 0xFF79766F.toInt(),
+            accent = 0xFFD9BC8C.toInt(),
+            accent2 = 0xFFB9C3D3.toInt(),
+            accentSoft = translucent(0xFFD9BC8C.toInt(), 0.14f),
+            ok = 0xFF7AD3A6.toInt(),
+            warn = 0xFFE9C46A.toInt(),
+            danger = 0xFFFF7A6E.toInt()
+        ),
+        shape = TokenShape(extraLarge = 30f, large = 22f, medium = 16f, small = 10f, extraSmall = 6f, dockRadius = 30f, tileRadius = 22f, tileSize = 58f),
+        material = TokenMaterial(
+            blurDp = 20f, saturation = 1.1f,
+            shadow2 = "0 12px 30px -12px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06)",
+            shadow3 = "0 26px 56px -22px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.08)"
+        ),
+        type = TYPE_SCALE, clockSp = 68f, appLabelSp = 11f,
+        elevation = TokenElevation(cardDp = 2f, floatingDp = 8f, shadowAlpha = 0.34f)
+    )
+
+    /** Ivory — elegant light. Warm paper field, white cards, sapphire ink, bronze. */
+    val IVORY = ThemeTokens(
+        key = "ivory",
+        version = VERSION,
+        colors = TokenColors(
+            background0 = 0xFFF6F3EC.toInt(),
+            background1 = 0xFFFBF9F5.toInt(),
+            background2 = 0xFFEFEBE2.toInt(),
+            // Light glass: rows are near-white, controls and active states are a
+            // whisper of warm ink - never grey slabs.
+            surface1 = translucent(0xFFFFFFFF.toInt(), 0.82f),
+            surface2 = translucent(0xFF1D1B17.toInt(), 0.045f),
+            surface3 = translucent(0xFF1D1B17.toInt(), 0.085f),
+            surfaceSolid = 0xFFFFFFFF.toInt(),
+            stroke1 = translucent(0xFF1D1B17.toInt(), 0.08f),
+            stroke2 = translucent(0xFF1D1B17.toInt(), 0.15f),
+            text1 = 0xFF1B1A17.toInt(),
+            text2 = 0xFF5D5950.toInt(),
+            text3 = 0xFF8A857A.toInt(),
+            accent = 0xFF2E5AAC.toInt(),
+            accent2 = 0xFF8E6E42.toInt(),
+            accentSoft = translucent(0xFF2E5AAC.toInt(), 0.11f),
+            ok = 0xFF2E7D57.toInt(),
+            warn = 0xFFA86A12.toInt(),
+            danger = 0xFFC0392B.toInt()
+        ),
+        shape = TokenShape(extraLarge = 30f, large = 22f, medium = 16f, small = 10f, extraSmall = 6f, dockRadius = 30f, tileRadius = 22f, tileSize = 58f),
+        material = TokenMaterial(
+            blurDp = 22f, saturation = 1.15f,
+            shadow2 = "0 10px 28px -14px rgba(60,48,30,.22), inset 0 1px 0 rgba(255,255,255,.9)",
+            shadow3 = "0 24px 52px -24px rgba(60,48,30,.28), inset 0 1px 0 rgba(255,255,255,.95)"
+        ),
+        type = TYPE_SCALE, clockSp = 66f, appLabelSp = 11f,
+        elevation = TokenElevation(cardDp = 1f, floatingDp = 6f, shadowAlpha = 0.10f)
+    )
+
+    /** Aurora — expressive gradient. Indigo night, orchid accent, teal aurora. */
+    val AURORA = ThemeTokens(
+        key = "aurora",
+        version = VERSION,
+        colors = TokenColors(
+            background0 = 0xFF070A1C.toInt(),
+            background1 = 0xFF0B1026.toInt(),
+            background2 = 0xFF121838.toInt(),
+            surface1 = translucent(0xFFC9C2FF.toInt(), 0.06f),
+            surface2 = translucent(0xFFC9C2FF.toInt(), 0.095f),
+            surface3 = translucent(0xFFC9C2FF.toInt(), 0.14f),
+            surfaceSolid = 0xFF141A3A.toInt(),
+            stroke1 = translucent(0xFFBDB4FF.toInt(), 0.14f),
+            stroke2 = translucent(0xFFBDB4FF.toInt(), 0.27f),
+            text1 = 0xFFF3F1FF.toInt(),
+            text2 = 0xFFB3B0D6.toInt(),
+            text3 = 0xFF7F7CA8.toInt(),
+            accent = 0xFFB48CFF.toInt(),
+            accent2 = 0xFF4FE3C1.toInt(),
+            accentSoft = translucent(0xFFB48CFF.toInt(), 0.16f),
+            ok = 0xFF4FE3C1.toInt(),
+            warn = 0xFFFFC870.toInt(),
+            danger = 0xFFFF7A90.toInt()
+        ),
+        shape = TokenShape(extraLarge = 36f, large = 28f, medium = 20f, small = 12f, extraSmall = 8f, dockRadius = 34f, tileRadius = 24f, tileSize = 58f),
+        material = TokenMaterial(
+            blurDp = 32f, saturation = 1.5f,
+            shadow2 = "0 16px 40px -16px rgba(4,2,24,.85), inset 0 1px 0 rgba(210,200,255,.16)",
+            shadow3 = "0 32px 66px -24px rgba(4,2,24,.9), inset 0 1px 0 rgba(210,200,255,.2)"
+        ),
+        type = TYPE_SCALE, clockSp = 64f, appLabelSp = 11f,
+        elevation = TokenElevation(cardDp = 3f, floatingDp = 10f, shadowAlpha = 0.32f)
+    )
+
+    /** The premium collection, in presentation order. */
+    val PREMIUM: List<ThemeTokens> = listOf(OBSIDIAN, IVORY, AURORA)
+
     val ALL: List<ThemeTokens> = listOf(SIGNATURE, ATMOSPHERE, MONOLITH)
 
     fun forKey(key: String?): ThemeTokens? = ALL.firstOrNull { it.key == key }
@@ -428,5 +545,25 @@ data class ThemeTokens(
     /** Clock size for this theme (64 / 58 / 84 in v3.2). */
     val clockSp: Float,
     /** App-label size for this theme (10.5 / 11 / 9 in v3.2). */
-    val appLabelSp: Float
+    val appLabelSp: Float,
+    /**
+     * Elevation and shadow strength, or null for the v3.2/reference sets whose
+     * elevation is still derived from their blur budget. Declared last and
+     * defaulted so every existing token set stays source-compatible.
+     */
+    val elevation: TokenElevation? = null
+)
+
+/**
+ * Elevation tokens: how far cards and floating surfaces (dock, menus, folders,
+ * sheets) lift, and how dark their shadow is. Light themes need much softer
+ * shadows than dark ones to read as the same depth.
+ */
+data class TokenElevation(
+    /** Resting cards, rows and widget frames. */
+    val cardDp: Float,
+    /** Dock, menus, folders and sheets. */
+    val floatingDp: Float,
+    /** Shadow opacity, 0..1. */
+    val shadowAlpha: Float
 )

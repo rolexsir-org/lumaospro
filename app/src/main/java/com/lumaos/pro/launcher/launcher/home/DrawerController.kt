@@ -350,10 +350,11 @@ class DrawerController(
                 // changing a blur token must not silently re-case the drawer.
                 isAllCaps = theme.typography.readoutCaps &&
                     theme.typography.label.family == com.lumaos.pro.launcher.ui.theme.FontFamilyId.SYSTEM_MONO
-                val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
-                val chipColors = if (chosen) chipSpec.states.selected else chipSpec.rest
-                setTextColor(chipColors.content)
-                background = GlassViews.drawable(chipSpec, density, ripple = true)
+                // One chip grammar across the launcher: quiet pill at rest,
+                // accent-filled when selected (see GlassViews.chip).
+                setTextColor(GlassViews.chipText(theme, chosen))
+                background = GlassViews.chip(theme, chosen, density)
+                if (chosen) typeface = Typefaces.title(theme.typography)
                 isSelected = chosen
                 contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, label) else label
                 setOnClickListener { host.onFilterSelected(filter) }
@@ -390,7 +391,9 @@ class DrawerController(
         GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
         GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
         // Keep home screen visible and progressively blurred behind the glass drawer sheet.
-        scrim.setBackgroundColor(ColorMath.withAlpha(0xFF000000.toInt(), 0.28f))
+        // The theme's own scrim tone: black on dark themes, warm ink on Ivory,
+        // so a light drawer never sits over a muddy grey veil.
+        scrim.setBackgroundColor(ColorMath.withAlpha(ColorMath.opaque(c.scrim), if (theme.isDark) 0.28f else 0.16f))
         handle.background = GradientDrawable().apply {
             setColor(sheetColors.edgeTop)
             cornerRadius = dp(2f).toFloat()

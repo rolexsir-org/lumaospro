@@ -124,8 +124,10 @@ internal object NotificationExtractor {
      * for it.
      */
     private fun replyIsAllowed(action: Notification.Action): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            !runCatching { action.isAuthenticationRequired }.getOrDefault(false)
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> !runCatching { action.isAuthenticationRequired }.getOrDefault(false)
+            else -> true
+        }
 
     private fun semanticReply(action: Notification.Action): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
@@ -141,9 +143,6 @@ internal object NotificationExtractor {
             val text = runCatching { message.text?.toString().orEmpty() }.getOrDefault("")
             if (text.isBlank()) continue
             val sender = runCatching {
-                // The accessor is getSenderPerson(), added in API 28; there is no
-                // getPerson() on MessagingStyle.Message. Below 28 fall back to the
-                // deprecated CharSequence sender.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) message.senderPerson?.name?.toString()
                 else @Suppress("DEPRECATION") message.sender?.toString()
             }.getOrNull()?.takeIf { it.isNotBlank() }

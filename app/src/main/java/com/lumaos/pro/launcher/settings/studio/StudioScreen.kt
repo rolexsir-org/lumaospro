@@ -72,14 +72,17 @@ import com.lumaos.pro.launcher.settings.StudioApplyState
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
+import com.lumaos.pro.launcher.ui.theme.DarkWindow
 import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
+import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 import com.lumaos.pro.launcher.ui.theme.ThemeCardPalette
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSpec
+import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.wallpaper.WallpaperActivity
@@ -131,7 +134,17 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     val packs by viewModel.iconPacks.collectAsState()
     val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(56)
-    val resolved = remember(draft.theme, environment) { ThemeEngine.resolve(draft.theme, environment) }
+    // With automatic light/dark switching the draft holds two themes. The
+    // preview shows the one the user last touched (falling back to whichever
+    // the environment selects right now), so tapping Ivory on a dark phone
+    // previews Ivory instead of silently showing the dark slot.
+    var previewFocus by remember { mutableStateOf<ThemeId?>(null) }
+    val focus = previewFocus?.takeIf {
+        draft.theme.switching != ThemeSwitching.FIXED &&
+            (it == draft.theme.lightThemeId || it == draft.theme.darkThemeId)
+    }
+    val previewSettings = if (focus != null) draft.theme.copy(themeId = focus, switching = ThemeSwitching.FIXED) else draft.theme
+    val resolved = remember(previewSettings, environment) { ThemeEngine.resolve(previewSettings, environment) }
     val previewDepth = when (draft.effects) {
         EffectsPreference.MINIMAL -> false
         EffectsPreference.BALANCED, EffectsPreference.FULL -> true
@@ -310,7 +323,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     Text(
                         stringResource(R.string.studio_apply),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (dirty && !applying) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (dirty && !applying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
@@ -366,55 +379,196 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         Spacer(Modifier.height(18.dp))
 
-        // --- Flagship v3.2 Themes (Full Launcher Effects Packages) ---
-        StudioSectionHeader("FLAGSHIP LAUNCHER IDENTITIES · V3.2")
+        // --- Themes: the premium collection first, every other identity after ---
+        StudioSectionHeader(stringResource(R.string.studio_section_themes))
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(LumaDesignTokens.SP_4.dp)
         ) {
-            ThemePresets.SIGNATURE.forEach { spec ->
-                val selected = draft.theme.themeId == spec.id
-                FlagshipThemeTile(
+            ThemePresets.PREMIUM.forEach { spec ->
+                PremiumThemeCard(
                     spec = spec,
-                    selected = selected,
+                    theme = rememberShippedTheme(spec, environment),
+                    selected = resolved.id == spec.id,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        val updated = draft.withThemePackage(spec.id)
-                        edit(updated)
+                        previewFocus = spec.id
+                        edit(draft.withThemeSelection(spec.id))
                     }
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
-        StudioSectionHeader("REFERENCE IDENTITIES · LUMA GLASS & MONO")
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ThemePresets.SCREENSHOT.forEach { spec ->
-                val selected = draft.theme.themeId == spec.id
-                FlagshipThemeTile(
-                    spec = spec,
-                    selected = selected,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        val updated = draft.withThemePackage(spec.id)
-                        edit(updated)
-                    }
+        Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
+        StudioSectionHeader(stringResource(R.string.studio_section_more_themes))
+        MoreThemesRow(
+            specs = ThemePresets.SIGNATURE + ThemePresets.SCREENSHOT,
+            environment = environment,
+            selectedId = resolved.id,
+            onSelected = { id ->
+                previewFocus = id
+                edit(draft.withThemeSelection(id))
+            }
+        )
+
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
+
+        // --- Appearance: one theme always, or a light/dark pair ---
+        StudioSectionHeader(stringResource(R.string.studio_section_appearance))
+        StudioCard {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
+                SegmentedControl(
+                    options = listOf(
+                        ThemeSwitching.FIXED to stringResource(R.string.appearance_fixed),
+                        ThemeSwitching.SYSTEM to stringResource(R.string.appearance_system),
+                        ThemeSwitching.SCHEDULE to stringResource(R.string.appearance_schedule)
+                    ),
+                    selected = draft.theme.switching,
+                    onSelected = { mode -> edit(draft.withAppearance(mode)) }
+                )
+                Spacer(Modifier.height(LumaDesignTokens.SP_3.dp))
+                Text(
+                    stringResource(
+                        when (draft.theme.switching) {
+                            ThemeSwitching.FIXED -> R.string.appearance_fixed_desc
+                            ThemeSwitching.SYSTEM -> R.string.appearance_system_desc
+                            ThemeSwitching.SCHEDULE -> R.string.appearance_schedule_desc
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.weight(1f))
+            if (draft.theme.switching != ThemeSwitching.FIXED) {
+                HorizontalDividerThin()
+                val lightOptions = remember { ThemePresets.ALL.filter { !it.dark }.map { it.id } }
+                val darkOptions = remember { ThemePresets.ALL.filter { it.dark }.map { it.id } }
+                CompactChoiceRow(
+                    label = stringResource(R.string.appearance_light_theme),
+                    selected = ThemePresets.of(draft.theme.lightThemeId).displayName,
+                    options = lightOptions,
+                    labelFor = { ThemePresets.of(it).displayName }
+                ) { id ->
+                    previewFocus = id
+                    edit(draft.copy(theme = draft.theme.copy(lightThemeId = id)))
+                }
+                HorizontalDividerThin()
+                CompactChoiceRow(
+                    label = stringResource(R.string.appearance_dark_theme),
+                    selected = ThemePresets.of(draft.theme.darkThemeId).displayName,
+                    options = darkOptions,
+                    labelFor = { ThemePresets.of(it).displayName }
+                ) { id ->
+                    previewFocus = id
+                    edit(draft.copy(theme = draft.theme.copy(darkThemeId = id)))
+                }
+                if (draft.theme.switching == ThemeSwitching.SCHEDULE) {
+                    HorizontalDividerThin()
+                    val windows = remember {
+                        listOf(
+                            DarkWindow.DEFAULT,
+                            DarkWindow(18 * 60, 6 * 60),
+                            DarkWindow(20 * 60, 7 * 60),
+                            DarkWindow(21 * 60, 7 * 60),
+                            DarkWindow(22 * 60, 6 * 60)
+                        )
+                    }
+                    val windowLabel: (DarkWindow) -> String = { it.encode().replace("-", " – ") }
+                    CompactChoiceRow(
+                        label = stringResource(R.string.appearance_dark_window),
+                        selected = windowLabel(draft.theme.darkWindow),
+                        options = (windows + draft.theme.darkWindow).distinct(),
+                        labelFor = { windowLabel(it) }
+                    ) { window -> edit(draft.copy(theme = draft.theme.copy(darkWindow = window))) }
+                }
+                // Which half of the pair the preview above is showing.
+                Text(
+                    stringResource(
+                        R.string.appearance_previewing,
+                        "${resolved.displayName} · " + stringResource(
+                            if (resolved.isDark) R.string.appearance_mode_dark else R.string.appearance_mode_light
+                        )
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = LumaDesignTokens.SP_5.dp, end = LumaDesignTokens.SP_5.dp,
+                        top = LumaDesignTokens.SP_2.dp, bottom = LumaDesignTokens.SP_4.dp
+                    )
+                )
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
+
+        // --- Accent: curated for the theme being edited ---
+        StudioSectionHeader(stringResource(R.string.studio_accent))
+        StudioCard {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
+                val accentSpec = ThemePresets.of(resolved.id)
+                Text(
+                    if (draft.theme.accentOverride == null && !draft.theme.dynamicWallpaperColors)
+                        stringResource(R.string.accent_theme_default, accentSpec.displayName)
+                    else stringResource(R.string.accent_custom),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(LumaDesignTokens.SP_4.dp))
+                AccentSwatchRow(
+                    themeId = resolved.id,
+                    accentOverride = draft.theme.accentOverride,
+                    onSelected = { acc ->
+                        edit(
+                            draft.copy(
+                                theme = draft.theme.copy(accentOverride = acc).let {
+                                    if (acc != null) it.withDynamicWallpaperColors(false) else it
+                                }
+                            )
+                        )
+                    }
+                )
+            }
+            HorizontalDividerThin()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = LumaDesignTokens.SP_5.dp, vertical = LumaDesignTokens.SP_4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.accent_dynamic), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.accent_dynamic_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(LumaDesignTokens.SP_4.dp))
+                Switch(
+                    checked = draft.theme.dynamicWallpaperColors,
+                    onCheckedChange = { enabled ->
+                        edit(
+                            draft.copy(
+                                theme = draft.theme.withDynamicWallpaperColors(enabled).let {
+                                    if (enabled) it.copy(accentOverride = null, backgroundOverride = null) else it
+                                }
+                            )
+                        )
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+            }
+        }
+
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
 
         // --- Active Launcher Effects Readout ---
-        Text(
-            stringResource(if (dirty) R.string.studio_config_state_preview else R.string.studio_config_state_saved) +
-                " · " + stringResource(R.string.studio_config_title),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
-            color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 6.dp)
+        StudioSectionHeader(
+            stringResource(R.string.studio_section_summary),
+            status = stringResource(if (dirty) R.string.studio_config_state_preview else R.string.studio_config_state_saved),
+            statusHighlighted = dirty
         )
         LauncherEffectsReadoutCard(
             theme = resolved,
@@ -427,25 +581,21 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 ?: draft.iconPack ?: stringResource(R.string.studio_icon_pack_none)
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
 
         // --- Pure Launcher Effects: Composition & Dock Architecture ---
-        StudioSectionHeader("SPATIAL COMPOSITION & DOCK")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(
-                stringResource(R.string.studio_reset_section),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(homePreset = saved.homePreset, dockStyle = saved.dockStyle)) }.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
+        StudioSectionHeader(
+            stringResource(R.string.studio_section_layout),
+            actionLabel = stringResource(R.string.studio_reset_short),
+            actionEnabled = !applying
+        ) { edit(draft.copy(homePreset = saved.homePreset, dockStyle = saved.dockStyle)) }
         StudioCard {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_layout),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = LumaDesignTokens.SP_3.dp)
                 )
                 SegmentedControl(
                     options = listOf(
@@ -462,12 +612,12 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
             HorizontalDividerThin()
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_dock_style),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = LumaDesignTokens.SP_3.dp)
                 )
                 val effectiveDock = draft.dockStyle ?: draft.homePreset.dock
                 SegmentedControl(
@@ -485,33 +635,29 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
 
         // --- Pure Launcher Effects: Optical Material, Blur & Physics ---
-        StudioSectionHeader("OPTICAL REFRACTION & MOTION PHYSICS")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(
-                stringResource(R.string.studio_reset_section),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(effects = saved.effects, motion = saved.motion, theme = draft.theme.copy(backdrop = saved.theme.backdrop))) }.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
+        StudioSectionHeader(
+            stringResource(R.string.studio_section_effects),
+            actionLabel = stringResource(R.string.studio_reset_short),
+            actionEnabled = !applying
+        ) { edit(draft.copy(effects = saved.effects, motion = saved.motion, theme = draft.theme.copy(backdrop = saved.theme.backdrop))) }
         StudioCard {
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    Modifier.fillMaxWidth().padding(bottom = LumaDesignTokens.SP_3.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = stringResource(R.string.studio_effects),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = stringResource(R.string.studio_effects_now, effectsLevelLabel(effectsDecision.level)),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -530,12 +676,12 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
             HorizontalDividerThin()
-            Column(Modifier.padding(12.dp)) {
+            Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_motion),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = LumaDesignTokens.SP_3.dp)
                 )
                 SegmentedControl(
                     options = listOf(
@@ -571,36 +717,33 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
 
         // --- Iconography & Glyph Treatment ---
-        StudioSectionHeader("ICONOGRAPHY & GLYPH TREATMENT")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(
-                stringResource(R.string.studio_reset_section),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(enabled = !applying) { edit(draft.copy(iconPack = saved.iconPack, livingIconsEnabled = saved.livingIconsEnabled, theme = draft.theme.copy(iconShape = saved.theme.iconShape, iconStyle = saved.theme.iconStyle))) }.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
+        StudioSectionHeader(
+            stringResource(R.string.studio_section_icons),
+            actionLabel = stringResource(R.string.studio_reset_short),
+            actionEnabled = !applying
+        ) { edit(draft.copy(iconPack = saved.iconPack, livingIconsEnabled = saved.livingIconsEnabled, theme = draft.theme.copy(iconShape = saved.theme.iconShape, iconStyle = saved.theme.iconStyle))) }
         StudioCard {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = LumaDesignTokens.SP_5.dp, vertical = LumaDesignTokens.SP_4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         stringResource(R.string.pref_living_icons),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
                         stringResource(R.string.pref_living_icons_desc),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Spacer(Modifier.width(LumaDesignTokens.SP_4.dp))
                 Switch(
                     checked = draft.livingIconsEnabled,
                     onCheckedChange = { enabled ->
@@ -609,7 +752,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     },
                     colors = SwitchDefaults.colors(
                         checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        checkedThumbColor = Color.White
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary
                     )
                 )
             }
@@ -654,7 +797,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
 
         // --- Optional Fine-Tune Overrides (Collapsible) ---
         var advancedOpen by rememberSaveable { mutableStateOf(false) }
@@ -665,15 +808,15 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 .fillMaxWidth()
                 .clickable { advancedOpen = !advancedOpen }
         ) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(LumaDesignTokens.SP_5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         stringResource(if (advancedOpen) R.string.studio_advanced_hide else R.string.studio_advanced_show),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                        style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Accent overrides, typography voice, retained palettes & context themes",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        stringResource(R.string.advanced_summary_premium),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -682,45 +825,26 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         }
 
         if (advancedOpen) {
-            Spacer(Modifier.height(12.dp))
-            StudioSectionHeader(stringResource(R.string.studio_accent))
+            Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
+            StudioSectionHeader(stringResource(R.string.accent_all))
             StudioCard {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Dynamic wallpaper accent",
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp)
-                    )
-                    Switch(
-                        checked = draft.theme.dynamicWallpaperColors,
-                        onCheckedChange = { enabled ->
-                            val updated = draft.copy(
-                                theme = draft.theme.withDynamicWallpaperColors(enabled).let {
-                                    if (enabled) it.copy(accentOverride = null, backgroundOverride = null) else it
-                                }
-                            )
-                            edit(updated)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedThumbColor = Color.White
-                        )
-                    )
-                }
-                HorizontalDividerThin()
-                Box(Modifier.padding(12.dp)) {
+                Box(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                     SwatchCompact(
                         colors = ThemePresets.ACCENT_SWATCHES,
                         selected = draft.theme.accentOverride,
                         onSelected = { acc ->
-                            val updated = draft.copy(theme = draft.theme.copy(accentOverride = acc))
+                            val updated = draft.copy(
+                                theme = draft.theme.copy(accentOverride = acc).let {
+                                    if (acc != null) it.withDynamicWallpaperColors(false) else it
+                                }
+                            )
                             edit(updated)
                         }
                     )
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_typography))
             StudioCard {
                 CompactChoiceRow(
@@ -734,7 +858,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_theme_additional))
             StudioCard {
                 CompactThemeRow(
@@ -742,13 +866,13 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     presets = ThemePresets.ADDITIONAL,
                     selectedId = draft.theme.themeId,
                     onSelected = { id ->
-                        val updated = draft.withThemePackage(id)
-                        edit(updated)
+                        previewFocus = id
+                        edit(draft.withThemeSelection(id))
                     }
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_profile_themes))
             StudioCard {
                 ContextProfile.entries.forEachIndexed { idx, profile ->
@@ -770,301 +894,6 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         }
 
         Spacer(Modifier.height(28.dp))
-    }
-}
-
-/**
- * Rich v3.2 flagship theme card with custom miniature composition preview
- * matching `design-src/v3.2/LumaOS-Design-System.html`.
- */
-@Composable
-private fun FlagshipThemeTile(
-    spec: ThemeSpec,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val pkg = remember(spec.id) { ThemeLauncherPackage.forTheme(spec.id) }
-    val cardShape = RoundedCornerShape(if (spec.id == ThemeId.MONOLITH) 6.dp else 16.dp)
-    val borderColor = if (selected) Color(spec.accent) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    val borderWidth = if (selected) 1.6.dp else 0.8.dp
-
-    Surface(
-        shape = cardShape,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        modifier = modifier
-            .clip(cardShape)
-            .border(borderWidth, borderColor, cardShape)
-            .clickable { onClick() }
-            .semantics {
-                role = Role.RadioButton
-                this.selected = selected
-                contentDescription = "${spec.displayName} · ${pkg.subtitle}"
-            }
-    ) {
-        Column(Modifier.padding(9.dp)) {
-            // Miniature Home Composition Canvas
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .clip(RoundedCornerShape(if (spec.id == ThemeId.MONOLITH) 3.dp else 10.dp))
-                    .border(
-                        0.6.dp,
-                        Color.White.copy(alpha = if (spec.id == ThemeId.MONOLITH) 0.14f else 0.10f),
-                        RoundedCornerShape(if (spec.id == ThemeId.MONOLITH) 3.dp else 10.dp)
-                    )
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val w = size.width
-                    val h = size.height
-                    when (spec.id) {
-                        ThemeId.SIGNATURE -> {
-                            drawRect(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF0A0D18), Color(0xFF07080C))
-                                )
-                            )
-                            drawCircle(
-                                Brush.radialGradient(
-                                    listOf(Color(0x556E7BFF), Color.Transparent),
-                                    center = Offset(w * 0.5f, h * 0.12f),
-                                    radius = w * 0.65f
-                                ),
-                                radius = w * 0.65f,
-                                center = Offset(w * 0.5f, h * 0.12f)
-                            )
-                            // Centered editorial clock bar
-                            drawRoundRect(
-                                Color(0xFFF3F5FA).copy(alpha = 0.90f),
-                                topLeft = Offset(w * 0.30f, h * 0.16f),
-                                size = Size(w * 0.40f, h * 0.11f),
-                                cornerRadius = CornerRadius(3f)
-                            )
-                            // 4 squircle tiles
-                            val tileS = h * 0.16f
-                            val gap = w * 0.05f
-                            val rowW = tileS * 4 + gap * 3
-                            val startX = (w - rowW) / 2f
-                            for (i in 0 until 4) {
-                                val tx = startX + i * (tileS + gap)
-                                drawRoundRect(
-                                    Color(0xFF1A2035),
-                                    topLeft = Offset(tx, h * 0.42f),
-                                    size = Size(tileS, tileS),
-                                    cornerRadius = CornerRadius(tileS * 0.38f)
-                                )
-                            }
-                            // Floating translucent dock
-                            drawRoundRect(
-                                Color(0xFF171A26).copy(alpha = 0.85f),
-                                topLeft = Offset(w * 0.12f, h * 0.72f),
-                                size = Size(w * 0.76f, h * 0.18f),
-                                cornerRadius = CornerRadius(h * 0.09f)
-                            )
-                            drawRoundRect(
-                                Color(0x446E7BFF),
-                                topLeft = Offset(w * 0.12f, h * 0.72f),
-                                size = Size(w * 0.76f, h * 0.18f),
-                                cornerRadius = CornerRadius(h * 0.09f),
-                                style = Stroke(1f)
-                            )
-                        }
-                        ThemeId.ATMOSPHERE -> {
-                            drawRect(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF0A1B2E), Color(0xFF12102E), Color(0xFF060A12))
-                                )
-                            )
-                            drawCircle(
-                                Brush.radialGradient(
-                                    listOf(Color(0x6638E4AE), Color.Transparent),
-                                    center = Offset(w * 0.2f, h * 0.2f),
-                                    radius = w * 0.6f
-                                ),
-                                radius = w * 0.6f,
-                                center = Offset(w * 0.2f, h * 0.2f)
-                            )
-                            drawCircle(
-                                Brush.radialGradient(
-                                    listOf(Color(0x557AA2FF), Color.Transparent),
-                                    center = Offset(w * 0.85f, h * 0.3f),
-                                    radius = w * 0.55f
-                                ),
-                                radius = w * 0.55f,
-                                center = Offset(w * 0.85f, h * 0.3f)
-                            )
-                            // Left-aligned clock + glass context pill
-                            drawRoundRect(
-                                Color(0xFFF6FAFF).copy(alpha = 0.92f),
-                                topLeft = Offset(w * 0.10f, h * 0.14f),
-                                size = Size(w * 0.36f, h * 0.10f),
-                                cornerRadius = CornerRadius(4f)
-                            )
-                            drawRoundRect(
-                                Color(0x3338E4AE),
-                                topLeft = Offset(w * 0.10f, h * 0.28f),
-                                size = Size(w * 0.28f, h * 0.07f),
-                                cornerRadius = CornerRadius(8f)
-                            )
-                            // 4 circular glass tiles
-                            val tileS = h * 0.16f
-                            val gap = w * 0.05f
-                            val rowW = tileS * 4 + gap * 3
-                            val startX = (w - rowW) / 2f
-                            for (i in 0 until 4) {
-                                val cx = startX + i * (tileS + gap) + tileS / 2f
-                                drawCircle(
-                                    Color.White.copy(alpha = 0.18f),
-                                    radius = tileS / 2f,
-                                    center = Offset(cx, h * 0.51f)
-                                )
-                            }
-                            // Floating cyan glass dock
-                            drawRoundRect(
-                                Color(0xFF14243A).copy(alpha = 0.82f),
-                                topLeft = Offset(w * 0.10f, h * 0.72f),
-                                size = Size(w * 0.80f, h * 0.18f),
-                                cornerRadius = CornerRadius(h * 0.09f)
-                            )
-                            drawRoundRect(
-                                Color(0x6638E4AE),
-                                topLeft = Offset(w * 0.10f, h * 0.72f),
-                                size = Size(w * 0.80f, h * 0.18f),
-                                cornerRadius = CornerRadius(h * 0.09f),
-                                style = Stroke(1f)
-                            )
-                        }
-                        ThemeId.LUMA_GLASS -> {
-                            // Deep navy gradient, left clock bar, glossy squircle tiles, floating glass dock.
-                            drawRect(Brush.verticalGradient(listOf(Color(0xFF0A1D38), Color(0xFF050D1F))))
-                            drawCircle(Brush.radialGradient(listOf(Color(0x555FB8FF), Color.Transparent), center = Offset(w * 0.8f, h * 0.2f), radius = w * 0.6f), radius = w * 0.6f, center = Offset(w * 0.8f, h * 0.2f))
-                            drawRoundRect(Color(0xFFF2F7FF).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.36f, h * 0.10f), cornerRadius = CornerRadius(4f))
-                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
-                            for (i in 0 until 4) {
-                                val tx = startX + i * (tileS + gap)
-                                drawRoundRect(Color(0xFF12325E), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f))
-                                drawRoundRect(Color(0x665FB8FF), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.38f), style = Stroke(1f))
-                            }
-                            drawRoundRect(Color(0xFF0C1B31).copy(alpha = 0.85f), topLeft = Offset(w * 0.10f, h * 0.72f), size = Size(w * 0.80f, h * 0.18f), cornerRadius = CornerRadius(h * 0.09f))
-                        }
-                        ThemeId.LUMA_MONO -> {
-                            // Charcoal-brown field, peach duotone tiles, ruled readout, bezel dock.
-                            drawRect(Color(0xFF161110))
-                            drawRoundRect(Color(0xFFF7E8DC).copy(alpha = 0.92f), topLeft = Offset(w * 0.10f, h * 0.14f), size = Size(w * 0.38f, h * 0.10f), cornerRadius = CornerRadius(3f))
-                            drawLine(Color(0xFFF0BE9A), Offset(w * 0.10f, h * 0.32f), Offset(w * 0.34f, h * 0.32f), strokeWidth = 1.5f)
-                            val tileS = h * 0.16f; val gap = w * 0.05f; val rowW = tileS * 4 + gap * 3; val startX = (w - rowW) / 2f
-                            for (i in 0 until 4) {
-                                val tx = startX + i * (tileS + gap)
-                                drawRoundRect(if (i % 2 == 0) Color(0xFFF0BE9A) else Color(0xFF241B16), topLeft = Offset(tx, h * 0.42f), size = Size(tileS, tileS), cornerRadius = CornerRadius(tileS * 0.3f))
-                            }
-                            drawRect(Color(0xFF1D1714), topLeft = Offset(0f, h * 0.78f), size = Size(w, h * 0.22f))
-                        }
-                        else -> {
-                            // Monolith: warm stone, orthogonal grid, bold left clock, 1dp amber rule, full-width bezel dock
-                            drawRect(Color(0xFF090908))
-                            val step = w / 5f
-                            for (i in 1..4) {
-                                drawLine(
-                                    Color(0x14FFFFFF),
-                                    Offset(i * step, 0f),
-                                    Offset(i * step, h),
-                                    strokeWidth = 0.8f
-                                )
-                            }
-                            // Bold left clock block
-                            drawRect(
-                                Color(0xFFF4F1EA),
-                                topLeft = Offset(w * 0.10f, h * 0.12f),
-                                size = Size(w * 0.44f, h * 0.14f)
-                            )
-                            // 1dp rule + signal amber tick
-                            drawLine(
-                                Color(0xFF262522),
-                                Offset(w * 0.10f, h * 0.32f),
-                                Offset(w * 0.90f, h * 0.32f),
-                                strokeWidth = 1f
-                            )
-                            drawLine(
-                                Color(0xFFE5A43B),
-                                Offset(w * 0.10f, h * 0.32f),
-                                Offset(w * 0.32f, h * 0.32f),
-                                strokeWidth = 1.5f
-                            )
-                            // 4 sharp square stone tiles
-                            val tileS = h * 0.15f
-                            val gap = w * 0.05f
-                            val rowW = tileS * 4 + gap * 3
-                            val startX = (w - rowW) / 2f
-                            for (i in 0 until 4) {
-                                val tx = startX + i * (tileS + gap)
-                                drawRoundRect(
-                                    Color(0xFF161614),
-                                    topLeft = Offset(tx, h * 0.44f),
-                                    size = Size(tileS, tileS),
-                                    cornerRadius = CornerRadius(2f)
-                                )
-                                drawRoundRect(
-                                    Color(0xFF2E2C28),
-                                    topLeft = Offset(tx, h * 0.44f),
-                                    size = Size(tileS, tileS),
-                                    cornerRadius = CornerRadius(2f),
-                                    style = Stroke(0.8f)
-                                )
-                            }
-                            // Edge-anchored solid stone bezel dock
-                            drawRect(
-                                Color(0xFF111110),
-                                topLeft = Offset(0f, h * 0.78f),
-                                size = Size(w, h * 0.22f)
-                            )
-                            drawLine(
-                                Color(0xFF262522),
-                                Offset(0f, h * 0.78f),
-                                Offset(w, h * 0.78f),
-                                strokeWidth = 1f
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = spec.displayName,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Box(
-                    Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (selected) Color(spec.accent)
-                            else MaterialTheme.colorScheme.outlineVariant
-                        )
-                )
-            }
-            Text(
-                text = pkg.subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
 
@@ -1152,13 +981,8 @@ private fun EffectBadge(label: String, value: String, modifier: Modifier = Modif
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.sp,
-                letterSpacing = 0.8.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
         )
         Spacer(Modifier.height(2.dp))
@@ -1177,21 +1001,57 @@ private fun EffectBadge(label: String, value: String, modifier: Modifier = Modif
 
 // ---------- Clean primitives for Studio ----------
 
+/**
+ * Section heading: sentence-case title in the theme's title voice, with an
+ * optional trailing action (Reset) or status on the same baseline, so no
+ * section spends a whole row on a lone link.
+ */
 @Composable
-private fun StudioSectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 10.5.sp,
-            letterSpacing = 0.9.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold
-        ),
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-        modifier = Modifier
+private fun StudioSectionHeader(
+    title: String,
+    actionLabel: String? = null,
+    actionEnabled: Boolean = true,
+    status: String? = null,
+    statusHighlighted: Boolean = false,
+    onAction: (() -> Unit)? = null
+) {
+    Row(
+        Modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, bottom = 6.dp, top = 4.dp)
-    )
+            .padding(
+                start = LumaDesignTokens.SP_2.dp,
+                end = LumaDesignTokens.SP_1.dp,
+                top = LumaDesignTokens.SP_2.dp,
+                bottom = LumaDesignTokens.SP_3.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (status != null) {
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (statusHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        if (actionLabel != null && onAction != null) {
+            Text(
+                actionLabel,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = if (actionEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(enabled = actionEnabled, onClick = onAction)
+                    .padding(horizontal = LumaDesignTokens.SP_3.dp, vertical = LumaDesignTokens.SP_2.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -1347,6 +1207,11 @@ private fun CompactNavRow(title: String, subtitle: String, onClick: () -> Unit) 
 
 @Composable
 private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    // The selected segment must read at a glance: a raised white pill on
+    // light paper, a lifted onSurface veil on dark glass (surface-on-surface
+    // was nearly invisible on the dark themes).
+    val dark = com.lumaos.pro.launcher.settings.LocalLumaTheme.current.isDark
+    val selectedFill = if (dark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f) else Color.White
     Row(
         Modifier
             .fillMaxWidth()
@@ -1359,8 +1224,8 @@ private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, on
             val sel = value == selected
             Surface(
                 shape = MaterialTheme.shapes.small,
-                color = if (sel) MaterialTheme.colorScheme.surface else Color.Transparent,
-                shadowElevation = if (sel) 1.dp else 0.dp,
+                color = if (sel) selectedFill else Color.Transparent,
+                shadowElevation = if (sel && !dark) 1.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
                     .clickable { onSelected(value) }
@@ -1375,8 +1240,7 @@ private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, on
                     modifier = Modifier
                         .padding(vertical = 8.dp, horizontal = 4.dp)
                         .fillMaxWidth(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
+                    style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium
                     ),
                     color = if (sel) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,

@@ -28,6 +28,7 @@ import com.lumaos.pro.launcher.ui.theme.IconShape
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
@@ -152,7 +153,7 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 ThemeMode.SYSTEM -> p[Keys.THEME_SWITCHING] = ThemeSwitching.SYSTEM.storageKey
                 ThemeMode.LIGHT, ThemeMode.DARK -> {
                     val pairKey = if (mode == ThemeMode.LIGHT) Keys.THEME_LIGHT_ID else Keys.THEME_DARK_ID
-                    val fallback = if (mode == ThemeMode.LIGHT) ThemeId.PORCELAIN else ThemeId.SIGNATURE
+                    val fallback = if (mode == ThemeMode.LIGHT) ThemePresets.DEFAULT_LIGHT else ThemePresets.DEFAULT_DARK
                     val id = ThemeId.fromStorageKey(p[pairKey]) ?: fallback
                     p[Keys.THEME_ID] = id.storageKey
                     p[Keys.THEME_SWITCHING] = ThemeSwitching.FIXED.storageKey
@@ -222,8 +223,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         return ThemeSettings(
             themeId = themeId,
             switching = switching,
-            lightThemeId = ThemeId.fromStorageKey(p[Keys.THEME_LIGHT_ID]) ?: ThemeId.PORCELAIN,
-            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemeId.SIGNATURE,
+            lightThemeId = ThemeId.fromStorageKey(p[Keys.THEME_LIGHT_ID]) ?: ThemePresets.DEFAULT_LIGHT,
+            darkThemeId = ThemeId.fromStorageKey(p[Keys.THEME_DARK_ID]) ?: ThemePresets.DEFAULT_DARK,
             darkWindow = DarkWindow.decode(p[Keys.THEME_DARK_WINDOW]),
             accentOverride = p[Keys.ACCENT_OVERRIDE],
             backgroundOverride = p[Keys.BACKGROUND_OVERRIDE],
@@ -351,7 +352,9 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         }
         p[Keys.THEME_MODE] = when (settings.switching) {
             ThemeSwitching.SYSTEM, ThemeSwitching.SCHEDULE -> ThemeMode.SYSTEM.storageKey
-            ThemeSwitching.FIXED -> if (settings.themeId == ThemeId.PORCELAIN) ThemeMode.LIGHT.storageKey
+            // Any light preset (Ivory, Zen, ...) maps to the legacy LIGHT value,
+            // not only the historic porcelain key.
+            ThemeSwitching.FIXED -> if (!ThemePresets.of(settings.themeId).dark) ThemeMode.LIGHT.storageKey
             else ThemeMode.DARK.storageKey
         }
     }

@@ -346,8 +346,13 @@ class QuickControlsView(
             content.minimumHeight = dp(LumaTokens.quickTileHeight)
             content.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
 
-            icon.layoutParams = LinearLayout.LayoutParams(dp(LumaTokens.iconAction), dp(LumaTokens.iconAction))
+            // Glyph sits in a circular badge, so a tile reads as "control +
+            // label" at a glance (on: a soft onAccent disc over the accent fill;
+            // off: a whisper of the content colour).
+            icon.layoutParams = LinearLayout.LayoutParams(dp(BADGE_DP), dp(BADGE_DP))
             icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            val badgeInset = dp((BADGE_DP - LumaTokens.iconAction) / 2f)
+            icon.setPadding(badgeInset, badgeInset, badgeInset, badgeInset)
             icon.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             content.addView(icon)
 
@@ -377,8 +382,10 @@ class QuickControlsView(
 
         fun applyMaterial(theme: ResolvedTheme, palette: GlassPalette) {
             val spec = palette[GlassRole.SETTINGS_CONTROL]
-            radiusPx = theme.corner(LumaTokens.radiusLarge) * density
-            GlassViews.apply(this, spec, density, ripple = true, radiusOverrideDp = theme.corner(LumaTokens.radiusLarge))
+            // The theme's authored LARGE corner, so tiles match every other card.
+            val radiusDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.LARGE)
+            radiusPx = radiusDp * density
+            GlassViews.apply(this, spec, density, ripple = true, radiusOverrideDp = radiusDp)
             label.text = context.getString(labelRes(id))
             label.typeface = Typefaces.label(theme.typography)
             label.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
@@ -404,6 +411,13 @@ class QuickControlsView(
 
             val contentColor = if (active) theme.colors.onAccent else colors.content
             icon.setImageDrawable(tinted(iconRes(id), contentColor))
+            icon.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(
+                    if (active) ColorMath.withAlpha(ColorMath.opaque(theme.colors.onAccent), 0.16f)
+                    else ColorMath.withAlpha(ColorMath.opaque(colors.content), if (theme.isDark) 0.09f else 0.06f)
+                )
+            }
             icon.alpha = if (unavailable) DISABLED_ALPHA else 1f
             label.setTextColor(contentColor)
             label.alpha = when {
@@ -549,6 +563,7 @@ class QuickControlsView(
     companion object {
         private const val ARTWORK_DP = 44f
         private const val MARKER_DP = 12f
+        private const val BADGE_DP = 36f
         private const val DISABLED_ALPHA = 0.4f
 
         fun labelRes(id: TileId): Int = when (id) {
