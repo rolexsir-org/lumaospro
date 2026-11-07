@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -53,7 +54,10 @@ class PreferencesCorruptionRecoveryTest {
             PreferenceDataStoreFactory.create(corruptionHandler = lumaosPrefsCorruptionHandler, scope = scope1) { storeFile }
         )
         prefs1.setGridColumns(7)
-        scope1.cancel()
+        // Wait for the first store to actually close: cancel() alone returns
+        // before its file connection is released, and opening a second store on
+        // the same file in that window throws "multiple DataStores active".
+        scope1.coroutineContext[kotlinx.coroutines.Job]!!.cancelAndJoin()
 
         val scope2 = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {

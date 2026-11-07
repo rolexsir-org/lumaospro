@@ -95,3 +95,31 @@ object DeviceCapabilityClassifier {
         )
     }
 }
+
+/**
+ * Gathers the raw inputs for [DeviceCapabilityClassifier] from public APIs.
+ */
+object DeviceCapabilityProvider {
+
+    fun snapshot(context: android.content.Context): DeviceCapability {
+        val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        val totalMemoryMb = memoryInfo.totalMem / (1024L * 1024L)
+
+        val isLowRam = activityManager.isLowRamDevice
+
+        val metrics = context.resources.displayMetrics
+        val longEdgePx = kotlin.math.max(metrics.widthPixels, metrics.heightPixels)
+        val longEdgeDp = (longEdgePx * 160f / metrics.densityDpi).toInt()
+
+        return DeviceCapabilityClassifier.classify(
+            totalMemoryMb = totalMemoryMb,
+            isLowRamDevice = isLowRam,
+            cpuCoreCount = Runtime.getRuntime().availableProcessors(),
+            screenLongEdgeDp = longEdgeDp
+        )
+    }
+}
+

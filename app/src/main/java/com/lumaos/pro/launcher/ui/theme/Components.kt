@@ -104,6 +104,9 @@ object LumaComponents {
         if (tokens != null) {
             val stroke = ColorMath.alpha(tokens.colors.stroke2) / 255f
             val blur = tokens.material.blurDp
+            // Premium themes author their elevation explicitly; older token
+            // sets keep deriving it from the blur budget exactly as before.
+            val elevation = tokens.elevation
             return SurfaceTokens(
                 alpha = when (theme.surfaceStyle) {
                     SurfaceStyle.SOLID -> 1f
@@ -111,12 +114,13 @@ object LumaComponents {
                     SurfaceStyle.GLASS -> 0.84f
                 },
                 borderAlpha = stroke,
-                elevationDp = if (blur <= 0f) 0f else (blur / 4f).coerceIn(4f, 10f),
-                shadowAlpha = if (blur <= 0f) 0.20f else 0.30f,
+                elevationDp = elevation?.floatingDp ?: if (blur <= 0f) 0f else (blur / 4f).coerceIn(4f, 10f),
+                shadowAlpha = elevation?.shadowAlpha ?: if (blur <= 0f) 0.20f else 0.30f,
                 glowAlpha = if (theme.surfaceStyle == SurfaceStyle.SOLID) 0f else (stroke * 0.6f).coerceIn(0f, 0.24f)
             )
         }
         return when (theme.id) {
+            // Obsidian, Ivory and Aurora are answered by the token branch above.
             ThemeId.AURORA -> SurfaceTokens(alpha = 0.86f, borderAlpha = 0.18f, elevationDp = 6f, shadowAlpha = 0.26f, glowAlpha = 0.10f)
             ThemeId.PORCELAIN -> SurfaceTokens(alpha = 1f, borderAlpha = 0.12f, elevationDp = 0f, shadowAlpha = 0.06f, glowAlpha = 0f)
             ThemeId.VECTOR -> SurfaceTokens(alpha = 0.80f, borderAlpha = 0.26f, elevationDp = 10f, shadowAlpha = 0.32f, glowAlpha = 0.22f)
@@ -126,7 +130,7 @@ object LumaComponents {
             // v3.2 identities are answered by the token branch above; this arm only
             // exists so the `when` stays exhaustive if a token set is ever missing.
             ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH,
-            ThemeId.LUMA_GLASS, ThemeId.LUMA_MONO ->
+            ThemeId.LUMA_GLASS, ThemeId.LUMA_MONO, ThemeId.IVORY ->
                 SurfaceTokens(alpha = 1f, borderAlpha = 0.16f, elevationDp = 0f, shadowAlpha = 0.20f, glowAlpha = 0f)
         }
     }

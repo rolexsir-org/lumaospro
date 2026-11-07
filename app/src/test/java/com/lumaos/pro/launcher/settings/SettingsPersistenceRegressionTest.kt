@@ -147,7 +147,7 @@ class SettingsPersistenceRegressionTest {
                 prefs.setHomeLayoutRaw("persisted-layout-v1")
                 prefs.setWidgetsEnabled(false)
 
-                ExperienceProfileController.apply(prefs, ExperienceProfile.MIDNIGHT)
+                prefs.applyExperienceProfile(ExperienceProfile.MIDNIGHT)
 
                 assertEquals(ExperienceProfile.MIDNIGHT, prefs.experienceProfile.first())
                 val theme = prefs.themeSettings.first()
@@ -251,7 +251,7 @@ class SettingsPersistenceRegressionTest {
             val prefs = LumaPrefs(dataStore(scope, temporaryFolder.newFile("experience-rows.preferences_pb")))
             prefs.setHomePreset(HomePreset.GRID)
             prefs.setGridRows(8)
-            ExperienceProfileController.apply(prefs, ExperienceProfile.PURE)
+            prefs.applyExperienceProfile(ExperienceProfile.PURE)
             assertEquals(8, prefs.gridRows.first())
             assertEquals(ExperienceProfile.PURE.preset, prefs.homePreset.first())
         } finally {
@@ -361,7 +361,7 @@ class SettingsPersistenceRegressionTest {
             }
         }
         try {
-            ExperienceProfileController.apply(LumaPrefs(failingStore), ExperienceProfile.MIDNIGHT)
+            LumaPrefs(failingStore).applyExperienceProfile(ExperienceProfile.MIDNIGHT)
             org.junit.Assert.fail("Expected the write failure")
         } catch (expected: IOException) {
             assertEquals("disk unavailable", expected.message)

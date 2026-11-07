@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Premium theme experience: Obsidian / Ivory / Aurora, appearance pairing, accents. -->
+<resources>
+    <string name="studio_section_themes">Themes</string>
+    <string name="studio_section_more_themes">More identities</string>
+    <string name="studio_section_appearance">Appearance</string>
+    <string name="studio_section_layout">Layout &amp; dock</string>
+    <string name="studio_section_effects">Effects &amp; motion</string>
+    <string name="studio_section_backdrop">Backdrop</string>
+    <string name="studio_section_icons">Icons</string>
+    <string name="studio_section_summary">At a glance</string>
+    <string name="studio_reset_short">Reset</string>
+
+    <string name="appearance_fixed">Always</string>
+    <string name="appearance_system">Auto</string>
+    <string name="appearance_schedule">Scheduled</string>
+    <string name="appearance_fixed_desc">Keep the selected theme day and night.</string>
+    <string name="appearance_system_desc">Follow the system light and dark setting. Tap a theme above to use it for its mode.</string>
+    <string name="appearance_schedule_desc">Switch to the dark theme during the window below. Tap a theme above to use it for its mode.</string>
+    <string name="appearance_light_theme">Light theme</string>
+    <string name="appearance_dark_theme">Dark theme</string>
+    <string name="appearance_dark_window">Dark hours</string>
+    <string name="appearance_previewing">Previewing %1$s</string>
+    <string name="appearance_mode_light">Light</string>
+    <string name="appearance_mode_dark">Dark</string>
+
+    <string name="accent_theme_default">%1$s default</string>
+    <string name="accent_custom">Custom accent</string>
+    <string name="accent_dynamic">Match wallpaper</string>
+    <string name="accent_dynamic_desc">Derive the accent and surfaces from your wallpaper.</string>
+    <string name="accent_all">All accents</string>
+    <string name="accent_cd">Accent %1$s</string>
+
+    <string name="theme_selected_cd">%1$s, selected</string>
+    <string name="theme_card_cd">%1$s theme. %2$s</string>
+    <string name="advanced_summary_premium">Every accent, typography voice, retained palettes and context themes</string>
+    <string name="settings_theme_premium">Premium</string>
+    <string name="settings_theme_more">More</string>
+</resources>

@@ -54,7 +54,14 @@ class AtmosphereTest {
             .filterIsInstance<AtmosphereLayer.Glow>()
             .maxOf { ColorMath.alpha(it.color) / 255f }
 
-        assertTrue("Aurora glow", strongestGlow(ThemeId.AURORA) <= 0.15f)
+        // Aurora is the premium collection's one expressive-gradient theme, so
+        // its ribbons may be brighter than the restrained themes - but still
+        // capped well below a bloom.
+        assertTrue("Aurora glow", strongestGlow(ThemeId.AURORA) <= 0.25f)
+        assertTrue("Ivory has no coloured glow", AtmospherePlan.layers(theme(ThemeId.IVORY), 0.18f, true)
+            .filterIsInstance<AtmosphereLayer.Glow>()
+            .filter { Oklch.fromArgb(ColorMath.opaque(it.color)).c > 0.03 }
+            .all { ColorMath.alpha(it.color) / 255f <= 0.08f })
         assertTrue("Zen glow", strongestGlow(ThemeId.PORCELAIN) <= 0.11f)
         assertTrue("Void glow", strongestGlow(ThemeId.VECTOR) <= 0.11f)
     }

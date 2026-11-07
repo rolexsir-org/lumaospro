@@ -65,6 +65,7 @@ ls "$ANDROID_HOME"
 
 # ---------- persist env for later shells ----------
 cat > "$TOOLS/env.sh" <<EOF
+unset ANDROID_PREFS_ROOT
 export JAVA_HOME="$TOOLS/jdk17"
 export ANDROID_HOME="$ANDROID_HOME"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"

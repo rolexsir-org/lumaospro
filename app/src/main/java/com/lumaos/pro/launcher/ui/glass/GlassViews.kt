@@ -80,6 +80,44 @@ object GlassViews {
         unwrapGlassDrawable(bg)?.let { attachRegionSampler(view, it) }
     }
 
+    /**
+     * A filter/segment chip: a calm pill whose visible height is [visualHeightDp]
+     * inside a taller touch target. At rest it is a whisper of the content
+     * colour; selected, it fills with the accent (text uses `onAccent`). Shared
+     * by the drawer filters, widget picker categories and other chip rows so
+     * every chip in the launcher has one shape and one selection grammar.
+     */
+    fun chip(
+        theme: ResolvedTheme,
+        selected: Boolean,
+        density: Float,
+        touchHeightDp: Float = LumaTokens.minTouchTarget,
+        visualHeightDp: Float = 34f
+    ): Drawable {
+        val c = theme.colors
+        val fill = if (selected) c.accent
+        else com.lumaos.pro.launcher.ui.theme.ColorMath.withAlpha(
+            com.lumaos.pro.launcher.ui.theme.ColorMath.opaque(c.onSurface),
+            if (theme.isDark) 0.09f else 0.06f
+        )
+        val radius = visualHeightDp / 2f * density
+        val pill = GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = radius
+        }
+        val mask = GradientDrawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = radius
+        }
+        val inset = (((touchHeightDp - visualHeightDp) / 2f).coerceAtLeast(0f) * density).toInt()
+        val ripple = RippleDrawable(ColorStateList.valueOf(c.ripple), pill, mask)
+        return android.graphics.drawable.InsetDrawable(ripple, 0, inset, 0, inset)
+    }
+
+    /** Text colour that belongs on [chip] for the given state. */
+    fun chipText(theme: ResolvedTheme, selected: Boolean): Int =
+        if (selected) theme.colors.onAccent else theme.colors.onSurface
+
     /** A quiet vertical veil that keeps text readable over light or dark artwork. */
     fun scrim(theme: ResolvedTheme): Drawable {
         val s = GlassBackdrop.scrim(theme)

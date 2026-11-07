@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.lumaos.pro.launcher.R
-import com.lumaos.pro.launcher.ui.LumaCorners
 import com.lumaos.pro.launcher.ui.glass.LocalGlassPalette
 import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
 import com.lumaos.pro.launcher.ui.theme.GlassMaterials
@@ -39,10 +38,12 @@ import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
 import com.lumaos.pro.launcher.ui.theme.LumaWallpaperPalette
 import com.lumaos.pro.launcher.ui.theme.MotionProfile
+import com.lumaos.pro.launcher.ui.theme.RadiusRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeId
+import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
 import com.lumaos.pro.launcher.ui.theme.TypeStyle
 
@@ -115,13 +116,7 @@ fun LumaOSTheme(
         MaterialTheme(
             colorScheme = colorSchemeFor(theme),
             typography = typographyFor(theme.typography),
-            shapes = Shapes(
-                extraSmall = RoundedCornerShape((LumaTokens.radiusSmall * 0.5f * theme.cornerScale).dp),
-                small = RoundedCornerShape(LumaCorners.small * theme.cornerScale),
-                medium = RoundedCornerShape(LumaCorners.medium * theme.cornerScale),
-                large = RoundedCornerShape(LumaCorners.card * theme.cornerScale),
-                extraLarge = RoundedCornerShape(LumaCorners.dialog * theme.cornerScale)
-            ),
+            shapes = shapesFor(theme),
             content = content
         )
     }
@@ -136,10 +131,34 @@ fun LumaOSTheme(
 ) {
     val dark = themeMode.resolveDark(isSystemInDarkTheme())
     val theme = ThemeEngine.resolve(
-        ThemeSettings().pinned(if (dark) ThemeId.SIGNATURE else ThemeId.PORCELAIN),
+        ThemeSettings().pinned(if (dark) ThemePresets.DEFAULT_DARK else ThemePresets.DEFAULT_LIGHT),
         ThemeEnvironment(systemDark = dark, minuteOfDay = 0)
     )
     LumaOSTheme(theme = theme, textScale = textScale, content = content)
+}
+
+/**
+ * Material shapes from the theme's corner roles. Authored themes (v3.2,
+ * reference and premium) answer with their designed radii, so a Settings card
+ * and a home-screen glass panel share one geometry; retained palettes keep the
+ * historical scaled ladder they always had.
+ */
+fun shapesFor(theme: ResolvedTheme): Shapes = if (theme.tokens != null) {
+    Shapes(
+        extraSmall = RoundedCornerShape(theme.radius(RadiusRole.EXTRA_SMALL).dp),
+        small = RoundedCornerShape(theme.radius(RadiusRole.SMALL).dp),
+        medium = RoundedCornerShape(theme.radius(RadiusRole.MEDIUM).dp),
+        large = RoundedCornerShape(theme.radius(RadiusRole.LARGE).dp),
+        extraLarge = RoundedCornerShape(theme.radius(RadiusRole.EXTRA_LARGE).dp)
+    )
+} else {
+    Shapes(
+        extraSmall = RoundedCornerShape((LumaTokens.radiusSmall * 0.5f * theme.cornerScale).dp),
+        small = RoundedCornerShape(LumaTokens.Compose.radiusSmall * theme.cornerScale),
+        medium = RoundedCornerShape(LumaTokens.Compose.radiusMedium * theme.cornerScale),
+        large = RoundedCornerShape(LumaTokens.Compose.radiusLarge * theme.cornerScale),
+        extraLarge = RoundedCornerShape(LumaTokens.Compose.radiusFolder * theme.cornerScale)
+    )
 }
 
 fun colorSchemeFor(theme: ResolvedTheme): ColorScheme {
@@ -235,7 +254,6 @@ fun typographyFor(style: TypeStyle): Typography {
     val body = fontFamilyFor(style.body)
     val title = fontFamilyFor(style.title)
     val label = fontFamilyFor(style.label)
-    val readout = fontFamilyFor(style.readout)
     val clock = fontFamilyFor(style.clock)
 
     fun line(size: Float, multiplier: Float) = LumaTypeScale.safeLineHeight(size, multiplier).sp
@@ -338,19 +356,23 @@ fun typographyFor(style: TypeStyle): Typography {
             lineHeight = line(LumaTypeScale.labelLargeSp, LumaTypeScale.labelLineHeight),
             letterSpacing = style.labelTracking.em
         ),
+        // UI labels speak in the label voice. The readout voice (wide caps
+        // tracking, sometimes monospace) belongs to the home date/context line
+        // drawn by the launcher, not to every chip and caption in Settings -
+        // applying it here letter-spaced ordinary words across the app.
         labelMedium = TextStyle(
-            fontFamily = readout,
-            fontWeight = style.readout.weight.toFontWeight(),
+            fontFamily = label,
+            fontWeight = style.label.weight.toFontWeight(),
             fontSize = LumaTypeScale.labelMediumSp.sp,
             lineHeight = line(LumaTypeScale.labelMediumSp, LumaTypeScale.labelLineHeight),
-            letterSpacing = style.readoutTracking.em
+            letterSpacing = (style.labelTracking + 0.01f).em
         ),
         labelSmall = TextStyle(
-            fontFamily = readout,
-            fontWeight = style.readout.weight.toFontWeight(),
+            fontFamily = label,
+            fontWeight = style.label.weight.toFontWeight(),
             fontSize = LumaTypeScale.labelSmallSp.sp,
             lineHeight = line(LumaTypeScale.labelSmallSp, LumaTypeScale.labelLineHeight),
-            letterSpacing = style.readoutTracking.em
+            letterSpacing = (style.labelTracking + 0.02f).em
         )
     )
 }

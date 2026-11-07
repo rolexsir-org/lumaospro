@@ -37,7 +37,9 @@ import com.lumaos.pro.launcher.optimizer.Optimizer
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
+import com.lumaos.pro.launcher.ui.theme.ThemePresets
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
+import com.lumaos.pro.launcher.ui.theme.ThemeSwitching
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -81,6 +83,49 @@ data class StudioConfiguration(
             dockStyle = pkg.dockStyle,
             effects = pkg.effects,
             motion = pkg.motion
+        )
+    }
+
+    /**
+     * Theme selection from Studio's theme cards.
+     *
+     * With a fixed appearance this is exactly [withThemePackage]. When the
+     * appearance follows the system or a schedule, the chosen theme fills the
+     * slot matching its own polarity (Ivory -> light, Obsidian -> dark) and the
+     * automatic switching, its window and per-context themes are kept, so
+     * picking a theme never silently turns automatic switching off.
+     */
+    fun withThemeSelection(id: ThemeId): StudioConfiguration {
+        val previous = theme
+        val packaged = withThemePackage(id)
+        if (previous.switching == ThemeSwitching.FIXED) return packaged
+        val dark = ThemePresets.of(id).dark
+        return packaged.copy(
+            theme = packaged.theme.copy(
+                switching = previous.switching,
+                darkWindow = previous.darkWindow,
+                profileThemes = previous.profileThemes,
+                lightThemeId = if (dark) previous.lightThemeId else id,
+                darkThemeId = if (dark) id else previous.darkThemeId
+            )
+        )
+    }
+
+    /**
+     * Changes how the theme is chosen over time. Entering an automatic mode
+     * seeds the matching slot with the current theme, so the home screen does
+     * not jump to an unrelated theme the moment the mode changes.
+     */
+    fun withAppearance(switching: ThemeSwitching): StudioConfiguration {
+        val t = theme
+        if (switching == ThemeSwitching.FIXED) return copy(theme = t.copy(switching = ThemeSwitching.FIXED))
+        val currentDark = ThemePresets.of(t.themeId).dark
+        return copy(
+            theme = t.copy(
+                switching = switching,
+                lightThemeId = if (currentDark) t.lightThemeId else t.themeId,
+                darkThemeId = if (currentDark) t.themeId else t.darkThemeId
+            )
         )
     }
 }

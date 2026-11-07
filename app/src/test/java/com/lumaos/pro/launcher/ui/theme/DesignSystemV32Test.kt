@@ -38,8 +38,10 @@ class DesignSystemV32Test {
         assertEquals(ThemeId.entries.toSet(), ThemePresets.ALL.map { it.id }.toSet())
         assertEquals(ThemePresets.ALL.size, ThemePresets.ALL.map { it.id }.distinct().size)
         assertTrue(ThemePresets.ADDITIONAL.map { it.id }.containsAll(
-            listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR, ThemeId.OBSIDIAN, ThemeId.GRAPHITE, ThemeId.CHROMA)
+            listOf(ThemeId.PORCELAIN, ThemeId.VECTOR, ThemeId.GRAPHITE, ThemeId.CHROMA)
         ))
+        // Obsidian and Aurora graduated to the premium collection, still selectable.
+        assertEquals(listOf(ThemeId.OBSIDIAN, ThemeId.IVORY, ThemeId.AURORA), ThemePresets.PREMIUM.map { it.id })
     }
 
     @Test fun `pre-3_2 storage keys still resolve`() {
@@ -84,15 +86,15 @@ class DesignSystemV32Test {
     @Test fun `retained palettes keep their exact pre-3_2 seeds`() {
         // Regression guards: these numbers are what shipped, and an upgrade must
         // not move a user's existing home screen.
-        assertEquals(0xFF080D1A.toInt(), ThemePresets.AURORA.background)
-        assertEquals(0xFF9AD3FF.toInt(), ThemePresets.AURORA.accent)
         assertEquals(0xFFF2F4F1.toInt(), ThemePresets.ZEN.background)
         assertEquals(0xFF080815.toInt(), ThemePresets.VOID.background)
         assertEquals(0.82f, ThemePresets.VOID.cornerScale, 0f)
         assertEquals("porcelain", ThemePresets.ZEN.id.storageKey)
         assertEquals("vector", ThemePresets.VOID.id.storageKey)
         // Retained palettes have no authored token set; v3.2 themes all do.
-        for (spec in ThemePresets.ADDITIONAL) assertNull("${spec.displayName} should not carry v3.2 tokens", spec.tokens)
+        for (spec in ThemePresets.ADDITIONAL.filter { it.id != ThemeId.LUMA_GLASS && it.id != ThemeId.LUMA_MONO }) {
+            assertNull("${spec.displayName} should not carry v3.2 tokens", spec.tokens)
+        }
         for (spec in ThemePresets.SIGNATURE) assertTrue("${spec.displayName} needs v3.2 tokens", spec.tokens != null)
     }
 
@@ -115,12 +117,16 @@ class DesignSystemV32Test {
         assertEquals(ColorMath.composite(tokens.stroke1, ColorMath.opaque(tokens.background1)), signature.colors.outline)
     }
 
-    @Test fun `a custom accent falls back to the contrast-safe derived path`() {
+    @Test fun `a custom accent keeps the authored surfaces and re-seeds only the accent`() {
+        // Accent customisation stays inside the designed palette: surfaces,
+        // text and hairlines are the authored roles; only the accent changes.
         val custom = 0xFFD9822B.toInt()
         val themed = resolve(ThemeId.SIGNATURE, settings = ThemeSettings(accentOverride = custom))
         val tokens = LumaDesignTokens.SIGNATURE.colors
         assertNotEquals(tokens.accent, themed.colors.accent)
-        assertNotEquals(tokens.text1, themed.colors.onSurface)
+        assertEquals(tokens.text1, themed.colors.onSurface)
+        assertEquals(ColorMath.opaque(tokens.background1), themed.colors.surface0)
+        assertTrue(ColorMath.contrast(themed.colors.accent, themed.colors.surface1) >= 3.0)
         // Overrides must never lower the guarantee.
         assertTrue(ColorMath.contrast(themed.colors.onSurface, themed.colors.surface1) >= 7.0)
     }
@@ -180,7 +186,9 @@ class DesignSystemV32Test {
         // Atmosphere is allowed to ask for more than the historical ceiling.
         assertTrue(resolve(ThemeId.ATMOSPHERE).blurFactor > 1f)
         // Retained palettes keep the historical material.
-        assertEquals(ResolvedTheme.LEGACY_BLUR_DP, resolve(ThemeId.AURORA).blurDp, 0f)
+        assertEquals(ResolvedTheme.LEGACY_BLUR_DP, resolve(ThemeId.VECTOR).blurDp, 0f)
+        // The premium collection authors its own material.
+        assertEquals(LumaDesignTokens.AURORA.material.blurDp, resolve(ThemeId.AURORA).blurDp, 0f)
     }
 
     @Test fun `saturation and label sizes are authored, not hard-coded`() {
@@ -245,12 +253,12 @@ class DesignSystemV32Test {
         }
     }
 
-    @Test fun `fresh installs land on Signature in dark and Zen in light`() {
+    @Test fun `fresh installs land on Signature in dark and Ivory in light`() {
         assertEquals(ThemeId.SIGNATURE, ThemeEngine.resolve(ThemeSettings(), envDark).id)
-        assertEquals(ThemeId.PORCELAIN, ThemeEngine.resolve(ThemeSettings(), envLight).id)
+        assertEquals(ThemeId.IVORY, ThemeEngine.resolve(ThemeSettings(), envLight).id)
         assertEquals(ThemeId.SIGNATURE, ThemeSettings().themeId)
         assertEquals(ThemeId.SIGNATURE, ThemeSettings().darkThemeId)
-        assertEquals(ThemeId.PORCELAIN, ThemeSettings().lightThemeId)
+        assertEquals(ThemeId.IVORY, ThemeSettings().lightThemeId)
     }
 
     @Test fun `a context profile can pin a v3_2 theme`() {

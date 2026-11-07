@@ -59,11 +59,14 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.settings.studio.rememberShippedTheme
+import com.lumaos.pro.launcher.settings.studio.PremiumThemeCard
+import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
+import androidx.compose.foundation.horizontalScroll
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.ui.LumaIcon
-import com.lumaos.pro.launcher.ui.LumaSpacing
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.intelligence.ProfileId
@@ -84,7 +87,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.border
 import androidx.compose.ui.text.font.FontFamily
-import com.lumaos.pro.launcher.settings.ExperienceProfileController
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
@@ -455,6 +457,12 @@ private fun HomeRoleHeader(
 
 // ---------- Active Theme Banner (v3.2 Reference) ----------
 
+/**
+ * The theme hub at the top of Settings: the active identity, the premium trio
+ * as live miniatures (one tap applies the full launcher package), the other
+ * identities as quiet chips, and the way into Studio for previewing and
+ * fine-tuning before applying.
+ */
 @Composable
 private fun ActiveThemeBanner(
     viewModel: SettingsViewModel,
@@ -462,139 +470,94 @@ private fun ActiveThemeBanner(
 ) {
     val context = LocalContext.current
     val resolved by viewModel.themes.theme.collectAsState()
+    val environment by viewModel.themes.environment.collectAsState()
     val pkg = remember(resolved.id) { ThemeLauncherPackage.forTheme(resolved.id) }
     val scope = rememberCoroutineScope()
+    fun apply(id: com.lumaos.pro.launcher.ui.theme.ThemeId) {
+        scope.launch {
+            try {
+                viewModel.prefs.applyThemePackage(id)
+            } catch (e: Exception) {
+                Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                0.8.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-                MaterialTheme.shapes.large
-            ),
+        modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "ACTIVE THEME",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        letterSpacing = 1.4.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Box(
-                            Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                        Text(
-                            text = "ACTIVE",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.5.sp,
-                                letterSpacing = 0.8.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(6.dp))
-
+        Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
             Text(
                 text = resolved.displayName,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = pkg.subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = pkg.effectsSummary,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                ),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                text = pkg.subtitle + "  ·  " + pkg.effectsSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(LumaDesignTokens.SP_5.dp))
 
-            // Quick 3-flagship theme switcher (applies full launcher effects package)
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(LumaDesignTokens.SP_4.dp)
             ) {
-                ThemePresets.SIGNATURE.forEach { spec ->
+                ThemePresets.PREMIUM.forEach { spec ->
+                    PremiumThemeCard(
+                        spec = spec,
+                        theme = rememberShippedTheme(spec, environment),
+                        selected = resolved.id == spec.id,
+                        miniatureHeight = 112.dp,
+                        modifier = Modifier.weight(1f),
+                        onClick = { apply(spec.id) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(LumaDesignTokens.SP_5.dp))
+
+            // Every other identity, one tap away, without competing with the trio.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(LumaDesignTokens.SP_3.dp)
+            ) {
+                (ThemePresets.SIGNATURE + ThemePresets.SCREENSHOT).forEach { spec ->
                     val isSelected = resolved.id == spec.id
                     Surface(
-                        shape = MaterialTheme.shapes.small,
+                        shape = CircleShape,
                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
-                            .weight(1f)
-                            .border(
-                                if (isSelected) 1.2.dp else 0.5.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                MaterialTheme.shapes.small
-                            )
-                            .clickable {
-                                scope.launch {
-                                    try {
-                                        viewModel.prefs.applyThemePackage(spec.id)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
-                                    }
-                                }
+                            .clip(CircleShape)
+                            .clickable { apply(spec.id) }
+                            .semantics {
+                                role = Role.RadioButton
+                                selected = isSelected
                             }
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                            Modifier.padding(horizontal = LumaDesignTokens.SP_4.dp, vertical = LumaDesignTokens.SP_3.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 Modifier
-                                    .size(7.dp)
+                                    .size(8.dp)
                                     .clip(CircleShape)
                                     .background(Color(spec.accent))
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(LumaDesignTokens.SP_3.dp))
                             Text(
                                 text = spec.displayName,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
+                                style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                                 ),
                                 color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -604,77 +567,24 @@ private fun ActiveThemeBanner(
                     }
                 }
             }
-            // 2026-11 reference identities (Luma Glass / Luma Mono), same one-tap package path.
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ThemePresets.SCREENSHOT.forEach { spec ->
-                    val isSelected = resolved.id == spec.id
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                        modifier = Modifier.weight(1f).border(
-                            if (isSelected) 1.2.dp else 0.5.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                            MaterialTheme.shapes.small
-                        ).clickable {
-                            scope.launch {
-                                try { viewModel.prefs.applyThemePackage(spec.id) }
-                                catch (e: Exception) { Toast.makeText(context, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show() }
-                            }
-                        }
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Box(Modifier.size(7.dp).clip(CircleShape).background(Color(spec.accent)))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = spec.displayName,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium),
-                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-            }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(LumaDesignTokens.SP_5.dp))
 
             Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), MaterialTheme.shapes.small)
+                    .clip(MaterialTheme.shapes.medium)
                     .clickable { onOpenStudio() }
             ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Open Theme Studio",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "→",
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                Text(
+                    text = "Open Theme Studio",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(vertical = LumaDesignTokens.SP_4.dp)
+                )
             }
         }
     }

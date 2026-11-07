@@ -142,6 +142,7 @@ class WallpaperColorSource(private val app: Application) {
      * `peekDrawable` may throw [SecurityException] without storage access; that is
      * expected and silently ignored in favour of [WallpaperColors].
      */
+    @Suppress("MissingPermission")
     private fun sampleAccessibleWallpaperBitmap(wm: WallpaperManager): WallpaperSeeds? =
         runCatching {
             val drawable = wm.peekDrawable() as? BitmapDrawable ?: return@runCatching null

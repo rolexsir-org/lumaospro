@@ -81,11 +81,26 @@ object HomeCellSizing {
 /**
  * Gives the configured number of home-grid rows the available viewport height,
  * respecting [LumaTokens.gridRowMinHeight] (`>= 84dp` at baseline).
+ *
+ * [maximumHeightPx] caps the row pitch: with few rows on a tall screen an even
+ * split produced ~185 dp rows and icons floating far apart. Capped rows keep a
+ * steady, compact rhythm from the top of the page and leave the spare height
+ * as calm space above the search field, as on iOS.
  */
-internal fun homeCellHeightPx(availableHeightPx: Int, rows: Int, minimumHeightPx: Int): Int {
+internal fun homeCellHeightPx(
+    availableHeightPx: Int,
+    rows: Int,
+    minimumHeightPx: Int,
+    maximumHeightPx: Int = Int.MAX_VALUE
+): Int {
     val safeRows = rows.coerceIn(1, 8)
-    return (availableHeightPx.coerceAtLeast(0) / safeRows).coerceAtLeast(minimumHeightPx.coerceAtLeast(0))
+    val minimum = minimumHeightPx.coerceAtLeast(0)
+    val maximum = maximumHeightPx.coerceAtLeast(minimum)
+    return (availableHeightPx.coerceAtLeast(0) / safeRows).coerceIn(minimum, maximum)
 }
+
+/** Comfortable upper bound for a home row: 40 % taller than the content needs. */
+internal fun homeCellMaximumPx(minimumHeightPx: Int): Int = (minimumHeightPx * 1.4f).toInt()
 
 /** Scales an icon to its grid cell when a large icon/column combination cannot fit. */
 internal fun responsiveIconSizePx(

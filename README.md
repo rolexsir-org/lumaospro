@@ -11,7 +11,7 @@ Its current visual identity is **Luma Glass**: a restrained Liquid Glass /
 Glassmorphism system driven by shared semantic tokens and used by both the
 Views home screen and the Compose settings surfaces. When the system wallpaper
 backdrop is selected, it shows through a legibility scrim; effects fall back to
-opaque, readable surfaces on devices without blur support. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md).
 
 ---
 
@@ -34,7 +34,7 @@ The Robolectric suite exercises the app's **real** Android-dependent code on
 the JVM, including inflating the actual layouts and driving `HomeActivity`
 through its lifecycle. No emulator is required for those tests. They do not
 replace a fresh build, lint run, or testing on physical devices; see
-§"Running the code without a device" below for the scope and limits.
+[§"Running the code without a device"](#running-the-code-without-a-device) below for the scope and limits.
 
 On first launch LumaOS Pro offers to become the default launcher. Skipping is a
 first-class outcome — it stays fully usable as an app, and the choice remains
@@ -44,8 +44,6 @@ available in Settings at any time.
 
 ```bash
 ./build.sh assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell monkey -p com.lumaos.pro.launcher.debug 1
 ```
 
 The debug build uses the separate application ID `com.lumaos.pro.launcher.debug`.
@@ -69,7 +67,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
   to a debug key; without a valid upload key the output is not uploadable.
 - Complete the Play Console Data safety form and provide a public privacy-policy
   URL ([Data safety requirements](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)).
-  `PRIVACY_POLICY_DRAFT.md` is a publisher-review draft with placeholders,
+  [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) is a publisher-review draft with placeholders,
   not a publishable policy. LumaOS Pro stores preferences, layouts, launch history
   and diagnostics locally; Android backup may transfer some of this data.
   Optional voice commands hand audio to the installed Android speech-recognition
@@ -78,7 +76,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
   supplied; reconcile the wording with the final Data safety answers.
 - Complete the store listing (including publisher/support contact, app-content
   declarations and real screenshots captured from verified devices). Review
-  the supplied 512 × 512 icon and 1024 × 500 feature graphic in `store-assets/`;
+  the supplied 512 × 512 icon and 1024 × 500 feature graphic in [store-assets/](store-assets/);
   those brand assets are not application screenshots.
 - The publisher selected **LumaOS Pro** as the replacement brand; app labels,
   package namespace, and listing artwork have been updated in source. Confirm
@@ -92,13 +90,13 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 
 ## Project identity
 
-| | |
+| Property | Value |
 |---|---|
 | Application ID | `com.lumaos.pro.launcher` (provisional; verify availability before first upload) |
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 1.0.0 (versionCode 100) |
+| Version | 1.0.1 (versionCode 101) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
@@ -126,15 +124,15 @@ migration path while retaining the new application ID; it is not automatic.
 ## Design system (v3.2)
 
 The appearance layer is **LumaOS Design System v3.2**, adopted from the authored
-bundle in [`docs/design/v3.2/`](docs/design/v3.2/): a written specification, one
+bundle in [docs/design/v3.2/](docs/design/v3.2/): a written specification, one
 token file per theme, and a parity test that fails if the Kotlin constants and the
 bundle ever disagree. The bundle's studio build is kept in
-[`design-src/v3.2/`](design-src/v3.2/).
+[design-src/v3.2/](design-src/v3.2/).
 
 Three identities, one grammar. They differ in composition, typography, icon
 treatment, surface material and motion — not just in accent hue:
 
-| | **Signature** | **Atmosphere** | **Monolith** |
+| Identity | **Signature** | **Atmosphere** | **Monolith** |
 | --- | --- | --- | --- |
 | Character | Refined, timeless | Cinematic, adaptive | Architectural, exact |
 | Accent | `#7C86FF` indigo-violet | `#46E0B0` aurora mint | `#FF5A2B` vermilion |
@@ -145,7 +143,7 @@ treatment, surface material and motion — not just in accent hue:
 
 | Area | Where it lives | Summary |
 | --- | --- | --- |
-| Tokens | `ui/theme/LumaDesignTokens.kt` | Authored v3.2 colour, shape, material, type, spacing and motion; parity-tested against `docs/design/v3.2/tokens` |
+| Tokens | `ui/theme/LumaDesignTokens.kt` | Authored v3.2 colour, shape, material, type, spacing and motion; parity-tested against [docs/design/v3.2/tokens](docs/design/v3.2/tokens) |
 | Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt`, `ThemeEngine.kt` | Authored roles for v3.2 themes, seed-derived for retained palettes and custom colours; contrast enforced on both paths |
 | Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 10-role ladder, five voices |
 | Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 45 glyphs on one 24 dp grid, filled only for selection; per-theme tile shape at 58 dp |
@@ -225,14 +223,16 @@ folders, menus, hosted-widget frames, and Compose settings/Studio:
   (8/4/2/2/2), **no blur at all**, an 84 sp Space Grotesk clock and mono labels.
 
 Aurora, Zen, Void, Obsidian, Graphite and Chroma remain available as retained
-palettes, with their historical storage keys (`porcelain` and `vector` included) so
-no saved preference is rewritten or used to reset the home layout. Theme selection persists through DataStore and does not change
-app placement, folders, widget IDs/configuration, icon-pack choice, or unrelated
-preferences. The Studio keeps custom color/type/icon/backdrop overrides when a
-preset changes. New installations start with the Liquid experience. System,
-scheduled, and context-profile switching remain available. A custom accent or
-background deliberately switches the palette to the seed-derived path, which can guarantee contrast for an arbitrary colour —
-the authored v3.2 roles are used only while the theme's own colours are in force.
+palettes, with their historical storage keys (`porcelain` and `vector` included)
+so no saved preference is rewritten or used to reset the home layout. Theme
+selection persists through DataStore and does not change app placement,
+folders, widget IDs/configuration, icon-pack choice, or unrelated preferences.
+The Studio keeps custom color/type/icon/backdrop overrides when a preset
+changes. New installations start with the Liquid experience. System, scheduled,
+and context-profile switching remain available. A custom accent or background
+deliberately switches the palette to the seed-derived path, which can guarantee
+contrast for an arbitrary colour — the authored v3.2 roles are used only while
+the theme's own colours are in force.
 
 The Studio previews the user's installed app icons and Android wallpaper color
 seeds. Android exposes wallpaper colors here, not the wallpaper image, so that

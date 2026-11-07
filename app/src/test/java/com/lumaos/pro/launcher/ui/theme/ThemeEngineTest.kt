@@ -93,12 +93,14 @@ class ThemeEngineTest {
         assertNotEquals(ThemePresets.SIGNATURE_THEME.accent, ThemePresets.ATMOSPHERE_THEME.accent)
     }
 
-    @Test fun `fresh theme defaults follow the system with Signature and Zen`() {
+    @Test fun `fresh theme defaults follow the system with Signature and Ivory`() {
+        // The authored premium Ivory replaced Zen as the light half of the
+        // default pair; Zen stays selectable under its `porcelain` key.
         assertEquals(ThemeSwitching.SYSTEM, ThemeSettings().switching)
         assertEquals(ThemeId.SIGNATURE, ThemeSettings().darkThemeId)
-        assertEquals(ThemeId.PORCELAIN, ThemeSettings().lightThemeId)
+        assertEquals(ThemeId.IVORY, ThemeSettings().lightThemeId)
         assertEquals(ThemeId.SIGNATURE, ThemeEngine.resolve(ThemeSettings(), envDark).id)
-        assertEquals(ThemeId.PORCELAIN, ThemeEngine.resolve(ThemeSettings(), envLight).id)
+        assertEquals(ThemeId.IVORY, ThemeEngine.resolve(ThemeSettings(), envLight).id)
     }
 
     @Test fun `selecting a preset preserves custom appearance and context choices`() {

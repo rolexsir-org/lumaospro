@@ -117,7 +117,7 @@ class DiagnosticsStoreConcurrencyTest {
      */
     @Test
     fun `concurrent readers and writers never observe a closed connection`() {
-        repeat(40) { index -> store.insertEvent(event(ts = index.toLong())) }
+        repeat(80) { index -> store.insertEvent(event(ts = index.toLong())) }
         repeat(20) { index -> store.recordStartup(100L + index, atMillis = index.toLong()) }
 
         val threadCount = 8

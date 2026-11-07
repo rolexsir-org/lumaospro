@@ -17,7 +17,7 @@ class LumaGlassMonoThemeTest {
         assertEquals(ThemeId.PORCELAIN, ThemeId.fromStorageKey("porcelain"))
         // v3.2 trio keeps its exact membership/order; new themes are additive.
         assertEquals(listOf(ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH), ThemePresets.SIGNATURE.map { it.id })
-        assertEquals(ThemePresets.SIGNATURE + ThemePresets.SCREENSHOT, ThemePresets.FEATURED)
+        assertEquals(ThemePresets.PREMIUM + ThemePresets.SIGNATURE + ThemePresets.SCREENSHOT, ThemePresets.FEATURED)
         assertEquals(ThemeId.entries.toSet(), ThemePresets.ALL.map { it.id }.toSet())
     }
 

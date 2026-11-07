@@ -18,24 +18,22 @@ object LumaLog {
     private const val TAG = "LumaOS Pro"
 
     fun v(message: String) {
-        if (BuildConfig.DEBUG) Log.v(TAG, message)
+        if (BuildConfig.DEBUG) runCatching { Log.v(TAG, message) }
     }
 
     fun d(message: String) {
-        if (BuildConfig.DEBUG) Log.d(TAG, message)
+        if (BuildConfig.DEBUG) runCatching { Log.d(TAG, message) }
     }
 
     fun i(message: String) {
-        if (BuildConfig.DEBUG) Log.i(TAG, message)
+        if (BuildConfig.DEBUG) runCatching { Log.i(TAG, message) }
     }
 
     fun w(message: String) {
-        // Warnings survive release builds: they indicate a real problem, and
-        // losing them would make field diagnosis impossible.
-        Log.w(TAG, message)
+        runCatching { Log.w(TAG, message) }
     }
 
     fun e(message: String, throwable: Throwable? = null) {
-        Log.e(TAG, message, throwable)
+        runCatching { Log.e(TAG, message, throwable) }
     }
 }

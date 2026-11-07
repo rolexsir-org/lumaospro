@@ -42,7 +42,12 @@ enum class ThemeId(val storageKey: String) {
     /** Deep-navy liquid glass (2026-11 reference). Appended: existing keys/order untouched. */
     LUMA_GLASS("luma_glass"),
     /** Warm peach duotone on charcoal-brown (2026-11 reference). */
-    LUMA_MONO("luma_mono");
+    LUMA_MONO("luma_mono"),
+    /**
+     * Premium collection - elegant authored light theme. Appended so every
+     * earlier storage key and ordinal stays exactly where it was.
+     */
+    IVORY("ivory");
 
     companion object {
         fun fromStorageKey(raw: String?): ThemeId? = entries.firstOrNull { it.storageKey == raw }
@@ -411,31 +416,64 @@ data class WallpaperSeeds(
 
 object ThemePresets {
 
-    // The pre-3.2 presets are kept exactly as they shipped. They are the
-    // compatibility half of this file: storage keys, seeds, corner scales and
-    // voices here must not change, because a database row or an exported backup
-    // may still name them.
+    // ------------------------------------------------------- premium collection
+    //
+    // Obsidian, Ivory and Aurora are the premium trio: each one is a complete
+    // authored identity (LumaDesignTokens.OBSIDIAN / IVORY / AURORA) with its own
+    // palette, surface ladder, radii, elevation, material and type voice.
+    // Obsidian and Aurora keep their historic storage keys, so a user who had
+    // either selected is upgraded in place rather than reset; Ivory is new.
 
+    /** Obsidian: premium OLED dark. Pure black field, graphite glass, champagne light. */
     val OBSIDIAN = ThemeSpec(
         id = ThemeId.OBSIDIAN,
         displayName = "Obsidian",
-        tagline = "True black for OLED. No glow, lowest power.",
+        tagline = "Premium OLED dark: pure black, graphite glass and a quiet champagne light.",
         dark = true,
         amoled = true,
         background = 0xFF000000.toInt(),
-        accent = 0xFFB5C5A9.toInt(),
-        secondary = 0xFFE8EBE4.toInt(),
-        neutralTint = 0xFFB5C5A9.toInt(),
-        neutralChroma = 0.006,
+        accent = 0xFFD9BC8C.toInt(),
+        secondary = 0xFFB9C3D3.toInt(),
+        neutralTint = 0xFFD9BC8C.toInt(),
+        neutralChroma = 0.004,
         typography = TypeStyle.PRECISION,
         motionCharacter = MotionCharacter.SUBTLE,
-        iconShape = IconShape.SYSTEM,
+        iconShape = IconShape.SQUIRCLE,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.NONE,
-        surfaceStyle = SurfaceStyle.SOLID,
+        surfaceStyle = SurfaceStyle.TRANSLUCENT,
         defaultBackdrop = Backdrop.THEME,
-        cornerScale = 1.0f
+        cornerScale = 1.0f,
+        tokens = LumaDesignTokens.OBSIDIAN
     )
+
+    /** Ivory: elegant light. Warm paper field, white cards, sapphire ink, bronze detail. */
+    val IVORY = ThemeSpec(
+        id = ThemeId.IVORY,
+        displayName = "Ivory",
+        tagline = "Elegant light: warm paper, crisp white cards and a sapphire ink accent.",
+        dark = false,
+        amoled = false,
+        background = 0xFFF6F3EC.toInt(),
+        accent = 0xFF2E5AAC.toInt(),
+        secondary = 0xFF8E6E42.toInt(),
+        neutralTint = 0xFFB9A98C.toInt(),
+        neutralChroma = 0.008,
+        typography = TypeStyle.PRECISION,
+        motionCharacter = MotionCharacter.SUBTLE,
+        iconShape = IconShape.SQUIRCLE,
+        iconStyle = IconStyle.NATURAL,
+        atmosphere = Atmosphere.HALO,
+        surfaceStyle = SurfaceStyle.TRANSLUCENT,
+        defaultBackdrop = Backdrop.THEME,
+        cornerScale = 1.0f,
+        tokens = LumaDesignTokens.IVORY
+    )
+
+    // The remaining pre-3.2 presets are kept exactly as they shipped. They are
+    // the compatibility half of this file: storage keys, seeds, corner scales
+    // and voices here must not change, because a database row or an exported
+    // backup may still name them.
 
     val GRAPHITE = ThemeSpec(
         id = ThemeId.GRAPHITE,
@@ -486,25 +524,32 @@ object ThemePresets {
     /** Backwards-compatible source name; the persisted ID is still `vector`. */
     val VECTOR: ThemeSpec get() = VOID
 
+    /**
+     * Aurora: expressive gradient. Indigo night with a slow orchid-and-teal
+     * aurora; the one premium theme allowed real colour in its backdrop. Its
+     * bundled "Nightfall" artwork stays selectable through the LUMA backdrop.
+     */
     val AURORA = ThemeSpec(
         id = ThemeId.AURORA,
         displayName = "Aurora",
-        tagline = "Midnight glass, brushed with a cool polar-blue glow.",
+        tagline = "Expressive gradient: indigo night, orchid light and a drifting teal aurora.",
         dark = true,
         amoled = false,
-        background = 0xFF080D1A.toInt(),
-        accent = 0xFF9AD3FF.toInt(),
-        secondary = 0xFFC5DDF4.toInt(),
-        neutralTint = 0xFF5B7592.toInt(),
-        neutralChroma = 0.016,
-        typography = TypeStyle.PRECISION,
-        motionCharacter = MotionCharacter.SUBTLE,
+        background = 0xFF070A1C.toInt(),
+        accent = 0xFFB48CFF.toInt(),
+        secondary = 0xFF4FE3C1.toInt(),
+        neutralTint = 0xFF8C84E8.toInt(),
+        neutralChroma = 0.024,
+        typography = TypeStyle.AMBIENT,
+        motionCharacter = MotionCharacter.CINEMATIC,
         iconShape = IconShape.SQUIRCLE,
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.AURORA,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.LUMA,
-        cornerScale = 1.0f
+        defaultBackdrop = Backdrop.THEME,
+        // Medium radius 20 dp over the pre-3.2 16 dp base.
+        cornerScale = 1.25f,
+        tokens = LumaDesignTokens.AURORA
     )
 
     /**
@@ -686,22 +731,52 @@ object ThemePresets {
     /** The 2026-11 reference identities, shown alongside (never instead of) the v3.2 three. */
     val SCREENSHOT: List<ThemeSpec> = listOf(LUMA_GLASS_THEME, LUMA_MONO_THEME)
 
+    /**
+     * The premium collection, in the order Studio and Settings present it:
+     * dark, light, expressive. These are the first themes a user sees.
+     */
+    val PREMIUM: List<ThemeSpec> = listOf(OBSIDIAN, IVORY, AURORA)
+
     /** Every flagship identity Studio/Settings offer as one-tap packages. */
-    val FEATURED: List<ThemeSpec> = SIGNATURE + SCREENSHOT
+    val FEATURED: List<ThemeSpec> = PREMIUM + SIGNATURE + SCREENSHOT
 
     /**
      * Palettes retained from before v3.2. Same IDs, seeds and geometry as the day
-     * they shipped: an upgrade must not move a user's home screen.
+     * they shipped: an upgrade must not move a user's home screen. (Obsidian and
+     * Aurora graduated to the premium collection under their original keys.)
      */
-    val ADDITIONAL: List<ThemeSpec> = listOf(AURORA, ZEN, VOID, OBSIDIAN, GRAPHITE, CHROMA, LUMA_GLASS_THEME, LUMA_MONO_THEME)
+    val ADDITIONAL: List<ThemeSpec> = listOf(ZEN, VOID, GRAPHITE, CHROMA, LUMA_GLASS_THEME, LUMA_MONO_THEME)
 
     /** All selectable presets, including the retained specialist palettes. */
-    val ALL: List<ThemeSpec> = SIGNATURE + ADDITIONAL
+    val ALL: List<ThemeSpec> = PREMIUM + SIGNATURE + ADDITIONAL
+
+    /** The premium light theme: the light half of the default system-following pair. */
+    val DEFAULT_LIGHT: ThemeId = ThemeId.IVORY
+
+    /** The default dark theme of the system-following pair. */
+    val DEFAULT_DARK: ThemeId = ThemeId.SIGNATURE
+
+    /**
+     * Curated accent choices for [id] - the theme's own accent first, then a
+     * short set of companions that were contrast-checked against its surfaces.
+     * Studio shows these instead of the full swatch wall, so customising a
+     * premium theme stays inside its design language.
+     */
+    fun curatedAccents(id: ThemeId): List<Int> = when (id) {
+        ThemeId.OBSIDIAN -> listOf(0xFFD9BC8C, 0xFFB9C3D3, 0xFFE8A598, 0xFF9FD3B8, 0xFF8FB6FF, 0xFFC9A7FF)
+        ThemeId.IVORY -> listOf(0xFF2E5AAC, 0xFF8E6E42, 0xFF2F6B55, 0xFFA2453A, 0xFF5B4BA8, 0xFF1F2A36)
+        ThemeId.AURORA -> listOf(0xFFB48CFF, 0xFF4FE3C1, 0xFFFF8FC8, 0xFF7FB6FF, 0xFFFFC870, 0xFF9AE66E)
+        else -> listOf(of(id).accent.toLong() and 0xFFFFFFFFL) +
+            listOf(0xFF7C86FF, 0xFF46E0B0, 0xFFE2B66B, 0xFFFF8FA3, 0xFF8AB4F8)
+    }.map { it.toInt() }.distinct()
 
     fun of(id: ThemeId): ThemeSpec = ALL.first { it.id == id }
 
     /** Curated accent swatches offered in the Studio (plus the theme's own). */
     val ACCENT_SWATCHES: List<Int> = listOf(
+        0xFFD9BC8C.toInt(), // Obsidian champagne
+        0xFF2E5AAC.toInt(), // Ivory sapphire
+        0xFFB48CFF.toInt(), // Aurora orchid
         0xFF7C86FF.toInt(), // Signature indigo-violet (v3.2)
         0xFFA78BFA.toInt(), // Signature secondary violet (v3.2)
         0xFF46E0B0.toInt(), // Atmosphere aurora mint (v3.2)
@@ -734,13 +809,15 @@ object ThemePresets {
         0xFF050D1F.toInt(), // Luma Glass deep navy
         0xFF161110.toInt(), // Luma Mono charcoal brown
         0xFF000000.toInt(),
-        0xFF080D1A.toInt(), // Aurora midnight
+        0xFF080D1A.toInt(), // midnight blue
         0xFF080815.toInt(), // Void indigo
         0xFF101214.toInt(),
         0xFF0B1220.toInt(),
         0xFF14110F.toInt(),
         0xFF0F1A14.toInt(),
         0xFF1A1020.toInt(),
+        0xFF070A1C.toInt(), // Aurora indigo night
+        0xFFF6F3EC.toInt(), // Ivory paper
         0xFFF2F4F1.toInt(), // Zen paper
         0xFFF4F2EC.toInt(),
         0xFFEEF1F5.toInt(),
