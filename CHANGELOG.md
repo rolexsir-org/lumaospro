@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — LumaOS Vault security hardening
+
+Pre-release security review of the Vault (see `docs/VAULT_SECURITY_AUDIT.md`).
+
+- **Backups are staged and verified locally before the destination is touched**, so an
+  interrupted upload can no longer leave a truncated file that looks like a backup, and a
+  previous good backup is never replaced by an incomplete one.
+- **Restore now treats a backup file as hostile input:** canonical object ids only, hard
+  caps on every length and count, a free-space check, and a completeness check that
+  refuses a container whose index references payloads it does not contain.
+- **A failed restore rolls the previous vault back** instead of leaving a half-established
+  one.
+- **Key rings reject absurd KDF iteration counts**, closing a pre-authentication hang.
+- **Valid recovery keys are no longer rejected** when a checksum character is transcribed
+  with a Crockford alias (`l` for `1`, `O` for `0`) — this affected roughly one key in
+  eight.
+- **The recovery key can no longer be copied to the system clipboard.**
+- Staging is shredded rather than unlinked; container verification is size-bounded.
+- 18 new automated tests (105 total in this area), including hostile-container restore
+  tests, key-ring limits, concurrent stores and manifest hygiene.
+
 ## Unreleased — LumaOS Vault
 
 A private, fully offline encrypted space inside LumaOS Pro. No new dependency, no

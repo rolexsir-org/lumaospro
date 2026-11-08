@@ -226,7 +226,10 @@ class VaultSecurityActivity : VaultScreenActivity() {
     private fun showRecoveryKey(code: String) {
         val field = VaultUi.text(this, code, VaultDesign.typeHeadingSp, VaultDesign.colorTextPrimary, VaultUi.Weight.MEDIUM).apply {
             typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
+            // Never selectable: see the same decision on the setup screen.
+            setTextIsSelectable(false)
+            isLongClickable = false
+            setOnLongClickListener { true }
             setPadding(
                 VaultDesign.dp(this@VaultSecurityActivity, VaultDesign.spaceMD),
                 VaultDesign.dp(this@VaultSecurityActivity, VaultDesign.spaceMD),

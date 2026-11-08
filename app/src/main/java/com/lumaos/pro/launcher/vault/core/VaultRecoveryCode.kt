@@ -68,7 +68,14 @@ object VaultRecoveryCode {
         val checksum = cleaned.substring(SECRET_CHARS)
         val secret = decode(body) ?: return null
         if (secret.size != SECRET_BYTES) return null
-        if (checksumChars(secret) != checksum) return null
+
+        // The checksum is compared by *value*, not by character. A person who
+        // writes `l` for `1` or `O` for `0` inside the two checksum characters has
+        // transcribed a correct key; comparing raw characters would reject it and
+        // tell someone with a forgotten PIN that their only way back in is wrong.
+        val given = checksum.map { DECODE[it] ?: return null }
+        val expected = checksumChars(secret).map { DECODE.getValue(it) }
+        if (given != expected) return null
         return secret
     }
 

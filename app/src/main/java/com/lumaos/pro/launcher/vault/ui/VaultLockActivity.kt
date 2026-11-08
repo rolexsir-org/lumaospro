@@ -129,7 +129,12 @@ class VaultLockActivity : VaultScreenActivity() {
             typeface = Typeface.MONOSPACE
             setLineSpacing(VaultDesign.dp(this@VaultLockActivity, 6f).toFloat(), 1.4f)
             letterSpacing = 0.06f
-            setTextIsSelectable(true)
+            // Deliberately not selectable: a long-press would copy the master
+            // recovery secret to the system clipboard, where every app can read it
+            // and where it survives this screen. Write it down instead.
+            setTextIsSelectable(false)
+            isLongClickable = false
+            setOnLongClickListener { true }
         }
         code.text = recoveryCodeForSetup
         codeBox.addView(code)

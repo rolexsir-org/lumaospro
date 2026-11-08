@@ -63,6 +63,27 @@ class VaultPlatformIntegrationTests {
     }
 
     @Test
+    fun vaultBringsNoExportedComponentsAndNoProviderOrNetworkSurface() {
+        val manifest = moduleDir.resolve("src/main/AndroidManifest.xml").readText()
+        // Vault is reachable only through the launcher itself. It must not add a
+        // service, a receiver, a content provider or a broadcast that another app
+        // could bind to or query, and none of its activities may be exported.
+        assertFalse("Vault must not add a content provider", manifest.contains("android/provider"))
+        for (line in manifest.lines()) {
+            if (!line.contains("vault", ignoreCase = true)) continue
+            assertFalse("Vault must not export anything: $line", line.contains("android:exported=\"true\""))
+            assertFalse("Vault must not declare an intent-filter: $line", line.contains("intent-filter"))
+        }
+        // No networking permission is requested anywhere by this app.
+        assertFalse(manifest.contains("android.permission.INTERNET"))
+        // FLAG_SECURE is applied by the one base class every Vault screen extends.
+        val base = moduleDir.resolve(
+            "src/main/java/com/lumaos/pro/launcher/vault/ui/VaultScreenActivity.kt"
+        ).readText()
+        assertTrue("every Vault screen must set FLAG_SECURE", base.contains("FLAG_SECURE"))
+    }
+
+    @Test
     fun vaultSourcesDoNotLogFileNamesOrContent() {
         val root = moduleDir.resolve("src/main/java/com/lumaos/pro/launcher/vault")
         assertTrue(root.isDirectory)

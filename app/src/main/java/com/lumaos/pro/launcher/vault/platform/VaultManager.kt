@@ -27,9 +27,9 @@ import com.lumaos.pro.launcher.vault.core.VaultSession
 import com.lumaos.pro.launcher.vault.core.VaultUnlockGuard
 import com.lumaos.pro.launcher.vault.core.VaultWrappedKey
 import java.io.File
+import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import javax.crypto.Cipher
@@ -916,22 +916,44 @@ class VaultManager(private val context: Context) {
         if (!paths.metadata.isFile) throw IllegalStateException("Vault index is missing")
 
         val started = System.currentTimeMillis()
+        // The container is finished and integrity-checked on local storage first.
+        // The destination is touched only once a complete, verified backup exists,
+        // so a provider that fails mid-upload cannot leave a truncated file behind
+        // that still looks like a backup - and nothing is ever written over a good
+        // backup that has not been replaced by a complete one.
+        val staged = runCatching { paths.stagingFile(".lvbk") }.getOrNull()
+            ?: throw IllegalStateException("The staging area is unavailable")
         val written = try {
+            VaultBackup.writeToFile(
+                paths = paths,
+                vaultId = current.vaultId,
+                recoveryWrapper = recovery,
+                requiredObjectIds = current.index.items.map { item -> item.id }.toSet(),
+                file = staged
+            )
             val out = context.contentResolver.openOutputStream(destination, "wt")
                 ?: throw IllegalStateException("The backup destination could not be opened")
-            out.use {
-                VaultBackup.write(
-                    paths = paths,
-                    vaultId = current.vaultId,
-                    recoveryWrapper = recovery,
-                    out = it,
-                    requiredObjectIds = current.index.items.map { item -> item.id }.toSet()
-                )
+            var copied = 0L
+            out.use { sink ->
+                FileInputStream(staged).use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        sink.write(buffer, 0, read)
+                        copied += read
+                    }
+                }
+                sink.flush()
             }
+            if (copied != staged.length()) throw IllegalStateException("The backup was not written completely")
+            copied
         } catch (e: Exception) {
             recordBackupFailure(current, userMessage(e), label, destination, started)
+            VaultFiles.shred(staged)
             throw e
         }
+        VaultFiles.shred(staged)
         val verified = verifyContainer(destination)
         if (!verified) {
             recordBackupFailure(current, "The written backup did not verify", label, destination, started)
@@ -1050,21 +1072,31 @@ class VaultManager(private val context: Context) {
                     return RestoreResult.Failed("The restored vault could not be moved into place")
                 }
             }
-            // Re-open through the normal unlock path so the master key is proven
-            // against the restored index, then establish this device's PIN.
-            when (val unlockedResult = unlockWithRecovery(recoveryCode)) {
-                UnlockResult.Success -> Unit
-                else -> {
+            // From here on the restored directory is in place. Any failure must put
+            // the previous vault back rather than leave a half-established one:
+            // a restored vault that never got a PIN would otherwise be openable
+            // only with the recovery key while the user's original data sits in a
+            // directory they cannot reach.
+            fun rollback(): RestoreResult {
+                runCatching { lock(VaultSession.LockReason.RESTORE) }
+                if (previousRoot.isDirectory) {
                     VaultFiles.deleteRecursively(paths.root)
                     previousRoot.renameTo(paths.root)
-                    return RestoreResult.Failed("The restored vault could not be opened")
+                } else {
+                    VaultFiles.deleteRecursively(paths.root)
                 }
+                return RestoreResult.Failed("The restore could not be completed; the previous Vault was kept")
             }
-            when (setPinAfterRecovery(newPin)) {
-                VaultPinPolicy.Result.Ok -> Unit
-                else -> return RestoreResult.Failed("The new PIN was rejected")
+
+            // Re-open through the normal unlock path so the master key is proven
+            // against the restored index, then establish this device's PIN.
+            when (unlockWithRecovery(recoveryCode)) {
+                UnlockResult.Success -> Unit
+                else -> return rollback()
             }
-            synchronized(this) { unlocked }?.let { current ->
+            if (setPinAfterRecovery(newPin) != VaultPinPolicy.Result.Ok) return rollback()
+            try {
+                val current = synchronized(this) { unlocked } ?: return rollback()
                 commit(
                     current,
                     current.index.withSettings(
@@ -1077,6 +1109,8 @@ class VaultManager(private val context: Context) {
                         )
                     ).withEvent(VaultEventType.RESTORED)
                 )
+            } catch (e: Exception) {
+                return rollback()
             }
             VaultFiles.deleteRecursively(previousRoot)
             RestoreResult.Success(restored.itemCount)
@@ -1098,7 +1132,7 @@ class VaultManager(private val context: Context) {
      */
     fun verifyContainer(uri: Uri): Boolean {
         val stream = context.contentResolver.openInputStream(uri) ?: return false
-        return stream.use { input -> verifyStream(input) }
+        return stream.use { input -> VaultBackup.verify(input) }
     }
 
     /** Whether the persisted permission for a backup destination is still valid. */
@@ -1151,30 +1185,6 @@ class VaultManager(private val context: Context) {
 
     private fun calibratedIterations(): Int = iterationsCache ?: VaultCrypto.calibratePbkdf2Iterations().also {
         iterationsCache = it
-    }
-
-    private fun verifyStream(input: InputStream): Boolean {
-        val digest = MessageDigest.getInstance("SHA-256")
-        var carry = ByteArray(0)
-        val buffer = ByteArray(64 * 1024)
-        var sawAnything = false
-        while (true) {
-            val read = input.read(buffer)
-            if (read < 0) break
-            if (read == 0) continue
-            sawAnything = true
-            val combined = ByteArray(carry.size + read)
-            carry.copyInto(combined, 0)
-            buffer.copyInto(combined, carry.size, 0, read)
-            if (combined.size > 32) {
-                digest.update(combined, 0, combined.size - 32)
-                carry = combined.copyOfRange(combined.size - 32, combined.size)
-            } else {
-                carry = combined
-            }
-        }
-        if (!sawAnything || carry.size != 32) return false
-        return VaultCrypto.constantTimeEquals(carry, digest.digest())
     }
 
     private fun userMessage(e: Exception): String = when (e) {

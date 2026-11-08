@@ -30,7 +30,17 @@ class VaultPaths(val root: File) {
     val objects: File get() = File(root, "objects")
     val staging: File get() = File(root, "staging")
 
-    fun objectFile(id: String): File = File(objects, "$id.obj")
+    /**
+     * Path of one object payload.
+     *
+     * Ids are opaque 128-bit hex strings generated here. The guard is defence in
+     * depth: even if a caller ever passed a name read out of a backup, no id can
+     * escape `objects/`.
+     */
+    fun objectFile(id: String): File {
+        require(OBJECT_ID.matches(id)) { "Object id is not a canonical identifier" }
+        return File(objects, "$id.obj")
+    }
 
     fun stagingFile(suffix: String = ".tmp"): File {
         ensureDirectories()
@@ -48,15 +58,28 @@ class VaultPaths(val root: File) {
         }
     }
 
-    /** Removes every in-flight file; called at unlock and at lock. */
+    /**
+     * Removes every in-flight file; called at unlock and at lock.
+     *
+     * Staging can hold the only plaintext Vault ever writes (a PDF handed to the
+     * system renderer, a recorder scratch file), so it is shredded rather than
+     * simply unlinked. That is best effort - flash wear levelling can keep old
+     * blocks - and nothing in the UI claims more than that.
+     */
     fun clearStaging() {
         val children = staging.listFiles() ?: return
         for (child in children) {
-            runCatching { child.delete() }
+            runCatching {
+                if (child.isDirectory) VaultFiles.deleteRecursively(child) else VaultFiles.shred(child)
+            }
         }
     }
 
     fun exists(): Boolean = keyRing.isFile
+
+    companion object {
+        private val OBJECT_ID = Regex("^[0-9a-f]{32}$")
+    }
 
     /** Bytes currently occupied by encrypted objects. */
     fun objectBytes(): Long = objects.listFiles()?.sumOf { it.length() } ?: 0L

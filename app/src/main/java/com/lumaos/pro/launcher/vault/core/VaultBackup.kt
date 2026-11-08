@@ -54,6 +54,28 @@ object VaultBackup {
     /** Anything smaller than header + trailer is not a backup. */
     private const val MIN_CONTAINER_BYTES = 4 + 1 + 1 + 1 + 32 + 4 + 8 + 32
 
+    /**
+     * Hard limits applied to *everything read from a backup file*.
+     *
+     * A backup is attacker-supplied input: it arrives from a cloud folder, a USB
+     * stick or a chat app, and the restore path runs before anything inside it has
+     * been authenticated. Every length in the container is therefore treated as
+     * hostile until it has been checked against these bounds and against the
+     * bytes that actually remain, so a crafted header cannot make the vault
+     * allocate gigabytes (out of memory) or write outside its own directory.
+     */
+    const val MAX_INDEX_RECORD_BYTES: Long = 64L * 1024 * 1024
+    const val MAX_OBJECT_RECORD_BYTES: Long = 64L * 1024 * 1024 * 1024
+    const val MAX_OBJECTS: Int = 200_000
+    const val MAX_OBJECT_ID_BYTES: Int = 64
+    const val MAX_CONTAINER_BYTES: Long = 1024L * 1024 * 1024 * 1024
+
+    /** Object ids are opaque 128-bit hex strings; nothing else may name a file. */
+    private val OBJECT_ID = Regex("^[0-9a-f]{32}$")
+
+    /** Free space kept back so a restore can never fill the partition. */
+    private const val FREE_SPACE_MARGIN: Long = 16L * 1024 * 1024
+
     class Restored(
         val vaultId: String,
         val createdAtMs: Long,
@@ -139,6 +161,12 @@ object VaultBackup {
 
         for (file in objectFiles) {
             val id = file.name.removeSuffix(".obj")
+            if (!OBJECT_ID.matches(id)) {
+                // An object file whose name is not a canonical id cannot be
+                // represented in a container the reader would accept; skip nothing
+                // silently - refuse, because a backup must be complete.
+                throw IOException("Object storage contains an unreadable file name")
+            }
             val idBytes = id.toByteArray(Charsets.UTF_8)
             counter.write(RECORD_OBJECT)
             writeInt(counter, idBytes.size)
@@ -159,6 +187,83 @@ object VaultBackup {
         out.write(digest.digest())
         out.flush()
         return counter.count + 32
+    }
+
+    /**
+     * Writes a verified container to [file] and returns its size.
+     *
+     * This is the only path the manager uses when a backup has to leave the
+     * process: the container is completed and integrity-checked on local storage
+     * first, so a provider that fails halfway through an upload can never leave a
+     * truncated file that still looks like a backup. [file] is synced to the
+     * device before verification, so what is verified is what a recovery would
+     * read.
+     */
+    fun writeToFile(
+        paths: VaultPaths,
+        vaultId: String,
+        recoveryWrapper: VaultWrappedKey,
+        requiredObjectIds: Set<String>,
+        file: File,
+        nowMs: Long = System.currentTimeMillis()
+    ): Long {
+        file.parentFile?.mkdirs()
+        val written = FileOutputStream(file).use { out ->
+            val size = write(
+                paths = paths,
+                vaultId = vaultId,
+                recoveryWrapper = recoveryWrapper,
+                out = out,
+                requiredObjectIds = requiredObjectIds,
+                nowMs = nowMs
+            )
+            out.flush()
+            out.fd.sync()
+            size
+        }
+        if (!verifyFile(file)) {
+            VaultFiles.shred(file)
+            throw VaultCryptoException("The backup did not verify")
+        }
+        return written
+    }
+
+    /** True when [file] is a complete, untampered container with a valid trailer. */
+    fun verifyFile(file: File): Boolean {
+        if (!file.isFile || file.length() < MIN_CONTAINER_BYTES) return false
+        return FileInputStream(file).use { verify(it) }
+    }
+
+    /**
+     * Streams a container through SHA-256 in constant memory and compares the
+     * trailer. Nothing is decrypted here: this proves the file is whole, not that
+     * the caller can open it.
+     */
+    fun verify(input: InputStream, limit: Long = MAX_CONTAINER_BYTES): Boolean {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var carry = ByteArray(0)
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        var sawAnything = false
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (read == 0) continue
+            sawAnything = true
+            total += read
+            if (total > limit) return false
+            val combined = ByteArray(carry.size + read)
+            carry.copyInto(combined, 0)
+            buffer.copyInto(combined, carry.size, 0, read)
+            if (combined.size > 32) {
+                digest.update(combined, 0, combined.size - 32)
+                carry = combined.copyOfRange(combined.size - 32, combined.size)
+            } else {
+                carry = combined
+            }
+        }
+        if (!sawAnything || carry.size != 32) return false
+        return VaultCrypto.constantTimeEquals(carry, digest.digest())
     }
 
     // ------------------------------------------------------------------
@@ -237,9 +342,21 @@ object VaultBackup {
                 val type = counting.read()
                 if (type < 0) throw EOFException("Backup ended early")
                 val idLength = readInt(counting)
+                // Bound the id before allocating: a header may claim any int, and a
+                // 2 GB id would be an out-of-memory crash rather than a rejection.
+                if (idLength < 0 || idLength > MAX_OBJECT_ID_BYTES) {
+                    throw VaultCryptoException("Backup record id is too large")
+                }
                 val id = if (idLength > 0) String(readExactly(counting, idLength.toLong()), Charsets.UTF_8) else ""
                 val length = readLong(counting)
                 if (length < 0 || length > remaining) throw VaultCryptoException("Backup record length is invalid")
+                if (type == RECORD_METADATA && length > MAX_INDEX_RECORD_BYTES) {
+                    throw VaultCryptoException("Backup index is too large")
+                }
+                if (type == RECORD_OBJECT) {
+                    if (length > MAX_OBJECT_RECORD_BYTES) throw VaultCryptoException("Backup object is too large")
+                    if (objectCount >= MAX_OBJECTS) throw VaultCryptoException("Backup holds too many objects")
+                }
                 remaining -= 1 + 4 + idLength + 8 + length
                 when (type) {
                     RECORD_METADATA -> {
@@ -249,8 +366,14 @@ object VaultBackup {
                         written += length
                     }
                     RECORD_OBJECT -> {
-                        if (id.isEmpty() || !id.all { it.isLetterOrDigit() }) {
+                        // Only a canonical 128-bit hex id may become a file name.
+                        // This rejects path separators, "..", unicode look-alikes
+                        // and anything else that could escape the objects folder.
+                        if (!OBJECT_ID.matches(id)) {
                             throw VaultCryptoException("Backup object id is invalid")
+                        }
+                        if (length > target.root.usableSpace - FREE_SPACE_MARGIN) {
+                            throw IOException("Not enough free space to restore this backup")
                         }
                         val file = target.objectFile(id)
                         FileOutputStream(file).use { out ->
@@ -285,6 +408,15 @@ object VaultBackup {
             val index = VaultMetadataStore(target, metadataKey).read(header.info.vaultId)
                 ?: throw VaultCryptoException("Backup index is empty")
             if (index.vaultId != header.info.vaultId) throw VaultCryptoException("Backup vault id mismatch")
+
+            // A container can be internally consistent yet incomplete: records may
+            // simply be absent while the index still references them. Restoring such
+            // a file would hand the user a vault full of items whose contents are
+            // gone, so completeness is checked before the caller swaps anything in.
+            val missing = index.items.map { it.id }.filterNot { target.objectFile(it).isFile }
+            if (missing.isNotEmpty()) {
+                throw VaultCryptoException("Backup is missing ${missing.size} object(s)")
+            }
 
             // The key ring for a restored vault starts with the recovery wrapper
             // only: the PIN and biometric wrappers are created on this device.

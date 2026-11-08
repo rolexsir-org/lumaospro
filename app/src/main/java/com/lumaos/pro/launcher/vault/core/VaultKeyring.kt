@@ -54,6 +54,17 @@ object VaultKeyring {
     /** Refuse to open a key ring that claims fewer iterations than this. */
     const val MIN_PBKDF2_ITERATIONS = 100_000
 
+    /**
+     * Ceiling on the iteration count read from a key ring.
+     *
+     * The floor stops a downgrade; the ceiling stops the opposite attack. The PIN
+     * is verified *before* the vault is open, so a key ring edited to claim four
+     * billion iterations would hang the lock screen for hours - a denial of service
+     * against the legitimate owner, triggered without knowing any secret. Anything
+     * beyond a generous multiple of the calibrated value is rejected as corrupt.
+     */
+    const val MAX_PBKDF2_ITERATIONS = 4_000_000
+
     /** HKDF domain separation for the recovery wrapper. */
     private const val RECOVERY_INFO = "lumaos/vault/recovery-wrap/v1"
 
@@ -81,6 +92,7 @@ object VaultKeyring {
     ): VaultWrappedKey {
         require(vmk.size == VaultCrypto.KEY_BYTES) { "master key must be 256 bits" }
         require(iterations >= MIN_PBKDF2_ITERATIONS) { "PIN KDF iterations below the floor" }
+        require(iterations <= MAX_PBKDF2_ITERATIONS) { "PIN KDF iterations above the ceiling" }
         val kek = VaultCrypto.pbkdf2Sha256(pin, salt, iterations)
         try {
             val sealed = VaultCrypto.seal(kek, vmk, aad(PIN_SCHEME, vaultId))
@@ -109,6 +121,7 @@ object VaultKeyring {
     fun unwrapWithPin(wrapper: VaultWrappedKey, pin: CharArray, vaultId: String): ByteArray {
         require(wrapper.scheme == PIN_SCHEME) { "not a PIN wrapper" }
         require(wrapper.iterations >= MIN_PBKDF2_ITERATIONS) { "PIN KDF iterations below the floor" }
+        require(wrapper.iterations <= MAX_PBKDF2_ITERATIONS) { "PIN KDF iterations above the ceiling" }
         val kek = VaultCrypto.pbkdf2Sha256(pin, wrapper.salt, wrapper.iterations)
         return try {
             VaultCrypto.open(kek, wrapper.iv, wrapper.wrapped, aad(PIN_SCHEME, vaultId))

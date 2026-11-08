@@ -1,5 +1,10 @@
 # LumaOS Vault — implementation report
 
+> **Pre-release security review (2026-11-07):** see
+> [`VAULT_SECURITY_AUDIT.md`](VAULT_SECURITY_AUDIT.md) for the vulnerability report, the
+> seven fixes made in that pass, the executed test results (105 passing) and the hardware
+> checklist that is still outstanding.
+
 **Status: source-complete for the security foundation, capture, files, notes, gallery,
 recorder, scanner, backup/restore and the Security Centre. Unit-tested on the JVM
 (87 tests, all passing). Not device-verified: this sandbox has no Android SDK, no
