@@ -1,10 +1,6 @@
 package com.lumaos.pro.launcher.vault.ui
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import android.graphics.drawable.Drawable
-import android.net.Uri
-import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -14,7 +10,6 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Space
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.vault.core.VaultHiddenApp
