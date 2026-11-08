@@ -178,8 +178,12 @@ body:
   reader falls back to `.bak` when the primary copy fails authentication.
 * Object writes: staging file → `fsync` → verified by decrypting both ends → rename →
   *then* the index entry is committed. Deletion removes the index entry first and
-  shreds the payload second. A crash can leave an unreferenced encrypted blob (swept at
-  next unlock) but never a reference to nothing, and never a damaged existing object.
+  shreds the payload second. A crash can leave an unreferenced encrypted blob (swept and
+  shredded at next unlock) but never a reference to nothing, and never a damaged existing
+  object.
+* Deletion also **overwrites the `.bak` generation**. That copy would otherwise still hold
+  the deleted object's wrapped data key, which is what actually makes a deletion
+  unrecoverable (`docs/VAULT_THREAT_MODEL.md` §3.2; `VaultDeletionTests`).
 * `FLAG_SECURE` on every Vault activity; no Vault content is ever logged (a unit test
   greps the Vault sources for logging of names/URIs).
 
@@ -298,8 +302,10 @@ fresh 87/87 run on the exact final tree is a Gradle-time task.
    shredded on exit and on lock. This is the only plaintext file Vault ever writes.
 6. **Shredding is best-effort.** Flash translation layers may keep old blocks; the app
    states this rather than promising erasure.
-7. **Throttling is local.** An attacker with the vault directory and a copy of the
-   ciphertext is limited only by PBKDF2 and PIN entropy, not by `guard.json`.
+7. **Throttling is local, and deleting `guard.json` resets it.** An attacker with the
+   vault directory and a copy of the ciphertext is limited only by PBKDF2 and PIN entropy,
+   not by the guard file — which is documented rather than defended, because a file that
+   must be readable before unlock cannot be authenticated against that same attacker.
 8. **Not defended against:** root, a compromised OS, a keylogger, an unlocked bootloader,
    or someone using the phone while the vault is already open. Nothing here claims
    otherwise.
@@ -359,7 +365,7 @@ None of those harness files are committed; the scripts live outside the reposito
 | 11 | Lifecycle locking (screen-off, background, timeout, process death) | ✅ | `VaultSessionTests` (screen-off, idle, conceal, lock-on-leave, process death) — the Android wiring itself is 🟡 |
 | 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the 74 pre-existing test classes were **not** executed here (no Gradle) — must be run before release |
 | 13 | No false security claims | ✅ | UI states best-effort shredding, local-only throttling, and "no absolute protection"; see §10 |
-| 14 | Automated tests pass | ✅ | 87/87 on the JVM harness (§12), plus post-edit re-verification of the XML assertions; Gradle run pending |
+| 14 | Automated tests pass | ✅ | 126/126 on the JVM harness after the 2026-11 remediation pass (`docs/VAULT_REMEDIATION_2026-11.md` §4); the Gradle run is still pending — see criterion 15 |
 | 15 | Real-device testing | ⛔ | No device, emulator or SDK in this environment |
 | 16 | Valid build and release configuration | 🟡 | No dependency, no Gradle, no ProGuard change was needed; the Gradle build itself has not been executed here |
 | 17 | Private camera, gallery, files, notes, recorder, scanner | 🟡 | All six surfaces exist; none has run on a device |

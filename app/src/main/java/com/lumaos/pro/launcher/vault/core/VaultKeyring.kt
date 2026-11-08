@@ -346,9 +346,24 @@ object VaultPinPolicy {
     enum class Reason { TOO_SHORT, TOO_LONG, NOT_DIGITS, REPEATED_DIGIT, SEQUENTIAL, ONLY_FEW_DIGITS }
 
     fun validate(pin: String): Result {
-        if (pin.length < MIN_LENGTH) return Result.Rejected(Reason.TOO_SHORT)
-        if (pin.length > MAX_LENGTH) return Result.Rejected(Reason.TOO_LONG)
-        if (!pin.all { it.isDigit() }) return Result.Rejected(Reason.NOT_DIGITS)
+        val chars = pin.toCharArray()
+        return try {
+            validate(chars)
+        } finally {
+            chars.fill('\u0000')
+        }
+    }
+
+    /**
+     * Validates PIN characters in place.
+     *
+     * The UI hands its buffer over as a `CharArray` so no immutable `String` of the
+     * PIN has to exist; this overload is the one that does the work.
+     */
+    fun validate(pin: CharArray): Result {
+        if (pin.size < MIN_LENGTH) return Result.Rejected(Reason.TOO_SHORT)
+        if (pin.size > MAX_LENGTH) return Result.Rejected(Reason.TOO_LONG)
+        if (!pin.all { it in '0'..'9' }) return Result.Rejected(Reason.NOT_DIGITS)
         if (pin.all { it == pin[0] }) return Result.Rejected(Reason.REPEATED_DIGIT)
         if (isSequential(pin)) return Result.Rejected(Reason.SEQUENTIAL)
         if (pin.toSet().size < 3) return Result.Rejected(Reason.ONLY_FEW_DIGITS)
@@ -359,7 +374,7 @@ object VaultPinPolicy {
      * True for runs like 123456, 987654, 112233 and 246810 - patterns that make a
      * PIN guessable from a glance at the keypad.
      */
-    private fun isSequential(pin: String): Boolean {
+    private fun isSequential(pin: CharArray): Boolean {
         val digits = pin.map { it - '0' }
         val ascending = digits.zipWithNext().all { (a, b) -> b == (a + 1) % 10 }
         val descending = digits.zipWithNext().all { (a, b) -> b == (a + 9) % 10 }

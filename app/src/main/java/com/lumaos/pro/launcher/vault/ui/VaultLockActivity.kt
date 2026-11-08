@@ -48,7 +48,15 @@ class VaultLockActivity : VaultScreenActivity() {
 
     private var stage: Stage = Stage.UNLOCK_PIN
     private val buffer = StringBuilder()
-    private var firstPin: String = ""
+
+    /**
+     * The first PIN of the setup flow, held as characters.
+     *
+     * A `String` cannot be wiped, so the PIN never becomes one: the buffer is copied
+     * into this array, the array is handed to the manager, and both are zeroed as
+     * soon as they are no longer needed.
+     */
+    private var firstPin: CharArray = CharArray(0)
     private var recoveryCodeForSetup: String = ""
     private var setupVaultId: String = ""
 
@@ -361,14 +369,16 @@ class VaultLockActivity : VaultScreenActivity() {
     // ------------------------------------------------------------------
 
     private fun submitSetupPin() {
-        val pin = buffer.toString()
+        val pin = bufferChars()
         when (val validation = VaultPinPolicy.validate(pin)) {
             is VaultPinPolicy.Result.Rejected -> {
+                pin.fill('\u0000')
                 showMessage(describe(validation.reason))
                 buffer.clear()
                 updateDots()
             }
             VaultPinPolicy.Result.Ok -> {
+                firstPin.fill('\u0000')
                 firstPin = pin
                 buffer.clear()
                 stage = Stage.SETUP_CONFIRM
@@ -377,30 +387,42 @@ class VaultLockActivity : VaultScreenActivity() {
         }
     }
 
+    /** Copies the digit buffer into characters that can be wiped. */
+    private fun bufferChars(): CharArray = CharArray(buffer.length) { buffer[it] }
+
     private fun submitConfirmPin() {
-        val pin = buffer.toString()
-        if (pin != firstPin) {
+        val pin = bufferChars()
+        if (!pin.contentEquals(firstPin)) {
+            pin.fill('\u0000')
             showMessage("The PINs do not match. Let's try again.")
             buffer.clear()
-            firstPin = ""
+            firstPin.fill('\u0000')
             stage = Stage.SETUP_PIN
             render()
             return
         }
+        pin.fill('\u0000')
         buffer.clear()
-        createVault(pin)
+        createVault(firstPin)
     }
 
-    private fun createVault(pin: String) {
+    private fun createVault(pin: CharArray) {
         body.addView(VaultUi.busyRow(this, "Creating your Vault…"))
         actionButton.isEnabled = false
-        io({ manager.createVault(pin, biometricEnabled = false) }) { result ->
+        io({
+            try {
+                manager.createVault(pin, biometricEnabled = false)
+            } finally {
+                pin.fill('\u0000')
+                firstPin.fill('\u0000')
+            }
+        }) { result ->
             val outcome = result.getOrNull()
             when (outcome) {
                 is VaultManager.CreateResult.Success -> {
                     recoveryCodeForSetup = outcome.recoveryCode
                     setupVaultId = outcome.vaultId
-                    firstPin = ""
+                    firstPin.fill('\u0000')
                     stage = Stage.SETUP_RECOVERY
                     render()
                 }
@@ -438,10 +460,16 @@ class VaultLockActivity : VaultScreenActivity() {
     // ------------------------------------------------------------------
 
     private fun submitUnlock() {
-        val pin = buffer.toString()
+        val pin = bufferChars()
+        buffer.clear()
         actionButton.isEnabled = false
-        io({ manager.unlockWithPin(pin) }) { result ->
-            buffer.clear()
+        io({
+            try {
+                manager.unlockWithPin(pin)
+            } finally {
+                pin.fill('\u0000')
+            }
+        }) { result ->
             when (val outcome = result.getOrNull()) {
                 VaultManager.UnlockResult.Success -> openHome()
                 is VaultManager.UnlockResult.WrongPin -> {
@@ -491,14 +519,21 @@ class VaultLockActivity : VaultScreenActivity() {
     }
 
     private fun submitNewPin() {
-        val pin = buffer.toString()
+        val pin = bufferChars()
         when (val validation = VaultPinPolicy.validate(pin)) {
             is VaultPinPolicy.Result.Rejected -> {
+                pin.fill('\u0000')
                 showMessage(describe(validation.reason))
                 buffer.clear()
                 updateDots()
             }
-            VaultPinPolicy.Result.Ok -> io({ manager.setPinAfterRecovery(pin) }) { result ->
+            VaultPinPolicy.Result.Ok -> io({
+                try {
+                    manager.setPinAfterRecovery(pin)
+                } finally {
+                    pin.fill('\u0000')
+                }
+            }) { result ->
                 when (result.getOrNull()) {
                     VaultPinPolicy.Result.Ok -> openHome()
                     else -> showMessage("That PIN could not be saved. Try a different one.")

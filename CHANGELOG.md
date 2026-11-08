@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — LumaOS Vault targeted remediation
+
+The seven findings from the maintainer's remediation brief, plus one defect found while
+verifying them. Details, evidence and limits: `docs/VAULT_REMEDIATION_2026-11.md`;
+the written threat model is `docs/VAULT_THREAT_MODEL.md`.
+
+- **Deleted items are now cryptographically deleted.** The crash-recovery copy of the
+  metadata index (`meta.bin.bak`) still held the wrapped data key of a deleted item, so
+  recovered ciphertext plus that stale index could be decrypted. Deletion now rewrites the
+  backup generation with the post-deletion index before destroying the payload, and evicts
+  thumbnails first. Interrupted deletions leave a swept orphan, never a dangling entry.
+- **`guard.json` is handled defensively and documented honestly.** No fake integrity
+  protection; a malformed record is treated as damage (seeded count anchored to its own
+  mtime) instead of a clean slate; forged values are clamped so a corrupt file cannot lock
+  the owner out for more than 15 minutes. Deleting it still resets the delay — documented
+  as a bypass of the delay only, which never bypasses PIN verification.
+- **Note copy is marked sensitive** with `ClipDescription.EXTRA_IS_SENSITIVE` (Android 13+)
+  while remaining fully available to the user; no unmarked fallback, no clipboard logging.
+- **Further zeroization:** PBKDF2 plaintext chunk buffers, decrypted chunks and the reader's
+  cached chunk are wiped; the metadata key is destroyed on every failed unlock; PIN change
+  works on `CharArray` instead of unwipeable `String`s.
+- **Orphan sweep shreds** instead of unlinking.
+- 22 new or rewritten tests (126 total in this area), 0 failing. No format, schema,
+  parameter or UI change, so no migration is required.
+
 ## Unreleased — LumaOS Vault security hardening
 
 Pre-release security review of the Vault (see `docs/VAULT_SECURITY_AUDIT.md`).

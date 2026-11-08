@@ -118,6 +118,30 @@ object VaultFiles {
     fun writeBytesAtomically(target: File, bytes: ByteArray) =
         writeAtomically(target) { it.write(bytes) }
 
+    /**
+     * Atomic write that deliberately keeps **no** copy of the previous content.
+     *
+     * `writeAtomically` snapshots the old file to `<name>.bak` before replacing
+     * it, which is exactly what the metadata index wants for crash recovery - and
+     * exactly what a deletion must not do, because that snapshot would still name
+     * the item that was just removed. This variant writes the temp file, syncs it,
+     * and renames over the target without preserving the old bytes.
+     */
+    fun writeReplacingNoBackup(target: File, bytes: ByteArray) {
+        val temp = File(target.parentFile, target.name + ".tmp")
+        FileOutputStream(temp).use { out ->
+            out.write(bytes)
+            out.flush()
+            out.fd.sync()
+        }
+        if (!temp.renameTo(target)) {
+            if (!target.delete() || !temp.renameTo(target)) {
+                temp.delete()
+                throw IOException("Could not commit ${target.name}")
+            }
+        }
+    }
+
     fun readBytes(file: File): ByteArray = file.readBytes()
 
     /**

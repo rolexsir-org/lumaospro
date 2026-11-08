@@ -85,9 +85,11 @@ object VaultStreamAead {
         val chunkKey = VaultCrypto.hkdf(dek, salt, KEY_INFO)
         val source = PushbackInputStream(input, 2)
 
+        // The plaintext chunk buffer is wiped before returning: it holds up to
+        // 64 KiB of the user's content in the heap after the ciphertext is written.
+        val buffer = ByteArray(CHUNK_BYTES)
         try {
             output.write(header)
-            val buffer = ByteArray(CHUNK_BYTES)
             var total = 0L
             var counter = 0L
             var pending = readFully(source, buffer)
@@ -110,6 +112,7 @@ object VaultStreamAead {
             return total
         } finally {
             VaultCrypto.zeroize(chunkKey)
+            VaultCrypto.zeroize(buffer)
         }
     }
 
@@ -125,8 +128,8 @@ object VaultStreamAead {
         val source = PushbackInputStream(input, 2)
         val header = readHeader(source)
         val chunkKey = VaultCrypto.hkdf(dek, header.salt, KEY_INFO)
+        val buffer = ByteArray(header.chunkBytes + VaultCrypto.GCM_TAG_BYTES)
         try {
-            val buffer = ByteArray(header.chunkBytes + VaultCrypto.GCM_TAG_BYTES)
             var total = 0L
             var counter = 0L
             while (true) {
@@ -142,8 +145,15 @@ object VaultStreamAead {
                     ciphertext,
                     header.raw
                 )
-                output.write(plaintext)
-                total += plaintext.size
+                try {
+                    output.write(plaintext)
+                    total += plaintext.size
+                } finally {
+                    // Every decrypted chunk is wiped as soon as it is written. The
+                    // sink has its own copy by then; Vault does not keep one.
+                    VaultCrypto.zeroize(plaintext)
+                    if (ciphertext !== buffer) VaultCrypto.zeroize(ciphertext)
+                }
                 if (!hasMore) break
                 counter++
                 if (counter > 0xFFFF_FFFFL) throw VaultCryptoException("Object exceeds the stream AEAD chunk limit")
@@ -152,6 +162,7 @@ object VaultStreamAead {
             return total
         } finally {
             VaultCrypto.zeroize(chunkKey)
+            VaultCrypto.zeroize(buffer)
         }
     }
 

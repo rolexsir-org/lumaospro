@@ -106,7 +106,49 @@ class VaultNotesActivity : VaultScreenActivity() {
         container.addView(VaultUi.secondaryButton(this, "Discard") { render() })
     }
 
-    private fun privateField(hint: String): EditText = EditText(this).apply {
+    /**
+     * A text field whose copy and cut actions mark the clip sensitive.
+     *
+     * The platform's own Copy action writes an ordinary clip, so it is intercepted
+     * here: the selection is copied with `EXTRA_IS_SENSITIVE` set, and only then is a
+     * cut applied. Everything else (selection, paste, select-all) falls through to the
+     * platform, so copying still works exactly as the user expects.
+     */
+    private inner class SensitiveField(context: android.content.Context) : EditText(context) {
+
+        override fun onTextContextMenuItem(id: Int): Boolean {
+            if (id == android.R.id.copy || id == android.R.id.cut) {
+                val start = selectionStart
+                val end = selectionEnd
+                val from = minOf(start, end)
+                val to = maxOf(start, end)
+                val content = text
+                if (content != null && from >= 0 && to > from && to <= content.length) {
+                    val selected = content.subSequence(from, to).toString()
+                    val copied = VaultClipboard.copySensitive(
+                        this@VaultNotesActivity,
+                        "LumaOS Vault note",
+                        selected
+                    )
+                    if (!copied) {
+                        // Never fall back to an unmarked copy: it would silently give
+                        // the platform an ordinary clip of Vault content.
+                        android.widget.Toast.makeText(
+                            this@VaultNotesActivity,
+                            "This device did not accept the copy.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        return true
+                    }
+                    if (id == android.R.id.cut) text?.delete(from, to)
+                    return true
+                }
+            }
+            return super.onTextContextMenuItem(id)
+        }
+    }
+
+    private fun privateField(hint: String): EditText = SensitiveField(this).apply {
         this.hint = hint
         // A private note must not be learned, autofilled or restored from a bundle.
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or

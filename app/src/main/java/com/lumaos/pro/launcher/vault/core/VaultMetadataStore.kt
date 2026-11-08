@@ -35,6 +35,19 @@ class VaultMetadataStore(private val paths: VaultPaths, private val metadataKey:
     fun exists(): Boolean = paths.metadata.isFile
 
     /**
+     * Zeroizes the derived index key.
+     *
+     * The master key lives in `VaultSession` and is destroyed when the vault locks;
+     * this key is a *separate* HKDF output, so it needs its own destruction or it
+     * would sit in the heap after the session key is gone. The store is unusable
+     * afterwards - every read after this call fails authentication, which is the
+     * intended behaviour for a locked vault.
+     */
+    fun destroy() {
+        VaultCrypto.zeroize(metadataKey)
+    }
+
+    /**
      * Reads and decrypts the index.
      *
      * Returns null when no vault index exists yet. Throws [VaultCryptoException]
@@ -79,6 +92,45 @@ class VaultMetadataStore(private val paths: VaultPaths, private val metadataKey:
         }
         VaultFiles.writeAtomically(paths.metadata) { it.write(blob) }
         return next
+    }
+
+    /**
+     * Commits [index] and then removes every *previous* on-disk copy that still
+     * named the items that were just deleted.
+     *
+     * This is the cryptographic half of a deletion. Removing a payload file is not
+     * enough on its own: the index holds that object's wrapped data key, and the
+     * `.bak` generation kept by [commit] holds the previous index verbatim. Anyone
+     * who later recovers the old ciphertext blocks *and* the stale index could
+     * re-derive the data key - so a deletion commits the new index and then
+     * overwrites the backup generation and the leftover temp file with it.
+     *
+     * The rewrite is idempotent: if the process dies halfway, the next unlock's
+     * [read] still sees a valid index (primary first, backup second) and the next
+     * deletion or commit finishes the job. Deleting twice is therefore safe.
+     */
+    fun commitAndScrubPrevious(index: VaultIndex): VaultIndex {
+        val committed = commit(index)
+        scrubPreviousGeneration(committed)
+        return committed
+    }
+
+    /**
+     * Overwrites the backup generation and any leftover temp file with the current
+     * (already committed) index. Called after a deletion.
+     */
+    private fun scrubPreviousGeneration(index: VaultIndex) {
+        val plaintext = MiniJson.write(index.toMap()).toByteArray(Charsets.UTF_8)
+        val blob = try {
+            encrypt(plaintext, index.vaultId)
+        } finally {
+            VaultCrypto.zeroize(plaintext)
+        }
+        runCatching { VaultFiles.writeReplacingNoBackup(paths.metadataBackup, blob) }
+        // A temp file from an interrupted commit can hold the pre-deletion index.
+        runCatching { VaultFiles.shred(File(paths.metadata.path + ".tmp")) }
+        // And so can a snapshot-of-a-snapshot left by an older build.
+        runCatching { VaultFiles.shred(File(paths.metadataBackup.path + ".bak")) }
     }
 
     /** Deletes both copies; used only by "delete vault". */

@@ -128,7 +128,20 @@ class VaultObjectStore(private val paths: VaultPaths, private val masterKey: Byt
         }
     }
 
-    /** Deletes an object's payload. The index entry must be removed by the caller. */
+    /**
+     * Destroys an object's payload file.
+     *
+     * The caller must first commit an index that no longer names the object: the
+     * index holds the object's wrapped data key, so while that entry exists the
+     * payload is still decryptable. Deleting the entry first means an interrupted
+     * deletion leaves an *unreferenced* ciphertext file (which [sweepOrphans]
+     * removes), never an index entry pointing at a half-destroyed object.
+     *
+     * This is a best-effort overwrite followed by unlink. Flash translation layers
+     * may keep the old blocks, so what actually makes the content unrecoverable is
+     * that the data key is gone from every generation of the index - not the
+     * overwrite itself.
+     */
     fun delete(itemId: String) {
         VaultFiles.shred(paths.objectFile(itemId))
     }
@@ -137,7 +150,10 @@ class VaultObjectStore(private val paths: VaultPaths, private val masterKey: Byt
     fun sweepOrphans(index: VaultIndex): Int {
         val referenced = index.items.map { "${it.id}.obj" }.toSet()
         val orphans = paths.objects.listFiles()?.filter { it.name !in referenced } ?: return 0
-        orphans.forEach { it.delete() }
+        // Shredded rather than unlinked: an orphan is the leftover half of a
+        // deletion or of an interrupted import, and it is still ciphertext of
+        // private content.
+        orphans.forEach { VaultFiles.shred(it) }
         return orphans.size
     }
 
@@ -280,14 +296,22 @@ class VaultObjectReader private constructor(
         val offset = VaultStreamAead.HEADER_BYTES + index * cipherChunkBytes
         if (cipherLength < VaultCrypto.GCM_TAG_BYTES) throw VaultCryptoException("Corrupt object chunk")
         val ciphertext = ByteArray(cipherLength)
-        file.seek(offset)
-        file.readFully(ciphertext)
-        val plaintext = VaultCrypto.open(
-            chunkKey,
-            VaultStreamAead.chunkNonce(header, index, isFinal),
-            ciphertext,
-            header.raw
-        )
+        val plaintext = try {
+            file.seek(offset)
+            file.readFully(ciphertext)
+            VaultCrypto.open(
+                chunkKey,
+                VaultStreamAead.chunkNonce(header, index, isFinal),
+                ciphertext,
+                header.raw
+            )
+        } finally {
+            VaultCrypto.zeroize(ciphertext)
+        }
+        // Replacing the cache wipes the chunk it replaces rather than leaving up to
+        // 64 KiB of old plaintext reachable through the field. On failure the cache
+        // is left untouched and still consistent with `cachedIndex`.
+        VaultCrypto.zeroize(cachedPlain)
         cachedIndex = index
         cachedPlain = plaintext
         return plaintext

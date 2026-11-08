@@ -224,8 +224,15 @@ class VaultManager(private val context: Context) {
      * caller must make the user confirm they wrote it down (see
      * [confirmRecoverySaved]) before the vault is treated as safe to use.
      */
+    /**
+     * Creates a vault from PIN characters.
+     *
+     * The `CharArray` overload exists so the lock screen never has to build an
+     * immutable `String` of the user's PIN: a `String` cannot be wiped, a character
+     * array can. The caller keeps ownership and is expected to zero it.
+     */
     @Synchronized
-    fun createVault(pin: String, biometricEnabled: Boolean): CreateResult {
+    fun createVault(pin: CharArray, biometricEnabled: Boolean): CreateResult {
         if (isVaultCreated()) return CreateResult.AlreadyExists
         when (val validation = VaultPinPolicy.validate(pin)) {
             is VaultPinPolicy.Result.Rejected -> return CreateResult.InvalidPin(validation.reason)
@@ -240,18 +247,13 @@ class VaultManager(private val context: Context) {
             // Calibrated per device so a low-end phone does not spend two seconds
             // per unlock while a fast one is not left with a cheap KDF.
             val iterations = calibratedIterations()
-            val pinChars = pin.toCharArray()
-            val keyFile = try {
-                VaultKeyFile(
-                    vaultId = vaultId,
-                    createdAtMs = System.currentTimeMillis(),
-                    pin = VaultKeyring.wrapWithPin(masterKey, pinChars, vaultId, iterations = iterations),
-                    recovery = VaultKeyring.wrapWithRecovery(masterKey, recoverySecret, vaultId),
-                    biometric = null
-                )
-            } finally {
-                pinChars.fill('\u0000')
-            }
+            val keyFile = VaultKeyFile(
+                vaultId = vaultId,
+                createdAtMs = System.currentTimeMillis(),
+                pin = VaultKeyring.wrapWithPin(masterKey, pin, vaultId, iterations = iterations),
+                recovery = VaultKeyring.wrapWithRecovery(masterKey, recoverySecret, vaultId),
+                biometric = null
+            )
             writeKeyFile(keyFile)
             val metadata = VaultMetadataStore(paths, VaultMetadataStore.keyFor(masterKey))
             val seeded = metadata.commit(VaultIndex.empty(vaultId).withEvent(VaultEventType.CREATED))
@@ -266,6 +268,17 @@ class VaultManager(private val context: Context) {
         } catch (e: Exception) {
             LumaLog.e("Vault creation failed: ${e.javaClass.simpleName}")
             CreateResult.Failed(userMessage(e))
+        }
+    }
+
+    /** Convenience overload; the String's characters are copied and wiped again. */
+    @Synchronized
+    fun createVault(pin: String, biometricEnabled: Boolean): CreateResult {
+        val chars = pin.toCharArray()
+        return try {
+            createVault(chars, biometricEnabled)
+        } finally {
+            chars.fill('\u0000')
         }
     }
 
@@ -296,25 +309,40 @@ class VaultManager(private val context: Context) {
     /** Milliseconds the caller must wait before another PIN attempt is allowed. */
     fun pinRetryDelayMs(): Long = guard.state().remainingDelayMs(System.currentTimeMillis())
 
+    /**
+     * Verifies a PIN.
+     *
+     * The characters are used in place and not copied: the caller owns the array and
+     * the UI wipes it as soon as this returns. Nothing derived from the PIN is
+     * cached - the only value kept across calls is the calibrated iteration *count*.
+     */
     @Synchronized
-    fun unlockWithPin(pin: String): UnlockResult {
-        val state = guard.state()
+    fun unlockWithPin(pin: CharArray): UnlockResult {
         val now = System.currentTimeMillis()
+        val state = guard.state(now)
         if (state.isThrottled(now)) return UnlockResult.Throttled(state.remainingDelayMs(now))
         val keyFile = readKeyFile() ?: return UnlockResult.Failed("Vault is not set up")
         val wrapper = keyFile.pin ?: return UnlockResult.NoPinConfigured
-        val chars = pin.toCharArray()
         val masterKey = try {
-            VaultKeyring.unwrapWithPin(wrapper, chars, keyFile.vaultId)
+            VaultKeyring.unwrapWithPin(wrapper, pin, keyFile.vaultId)
         } catch (e: VaultCryptoException) {
             val failed = guard.recordFailure(now)
             return UnlockResult.WrongPin(failed.failures, failed.remainingDelayMs(now))
         } catch (e: Exception) {
             return UnlockResult.Failed(userMessage(e))
+        }
+        return completeUnlock(keyFile, masterKey, VaultEventType.UNLOCKED_PIN)
+    }
+
+    /** Convenience overload for callers that already hold a String. */
+    @Synchronized
+    fun unlockWithPin(pin: String): UnlockResult {
+        val chars = pin.toCharArray()
+        return try {
+            unlockWithPin(chars)
         } finally {
             chars.fill('\u0000')
         }
-        return completeUnlock(keyFile, masterKey, VaultEventType.UNLOCKED_PIN)
     }
 
     /**
@@ -342,36 +370,45 @@ class VaultManager(private val context: Context) {
 
     /** After a recovery unlock the vault has no usable PIN; set one now. */
     @Synchronized
-    fun setPinAfterRecovery(pin: String): VaultPinPolicy.Result {
+    fun setPinAfterRecovery(pin: CharArray): VaultPinPolicy.Result {
         val current = unlocked ?: return VaultPinPolicy.Result.Rejected(VaultPinPolicy.Reason.TOO_SHORT)
         val validation = VaultPinPolicy.validate(pin)
         if (validation is VaultPinPolicy.Result.Rejected) return validation
         val keyFile = readKeyFile() ?: return VaultPinPolicy.Result.Rejected(VaultPinPolicy.Reason.TOO_SHORT)
-        val chars = pin.toCharArray()
-        try {
-            writeKeyFile(
-                keyFile.copy(
-                    pin = VaultKeyring.wrapWithPin(
-                        current.masterKey,
-                        chars,
-                        current.vaultId,
-                        iterations = calibratedIterations()
-                    )
+        writeKeyFile(
+            keyFile.copy(
+                pin = VaultKeyring.wrapWithPin(
+                    current.masterKey,
+                    pin,
+                    current.vaultId,
+                    iterations = calibratedIterations()
                 )
             )
-        } finally {
-            chars.fill('\u0000')
-        }
+        )
         commit(current, current.index.withEvent(VaultEventType.PIN_CHANGED))
         return VaultPinPolicy.Result.Ok
     }
 
-    private fun completeUnlock(keyFile: VaultKeyFile, masterKey: ByteArray, event: VaultEventType): UnlockResult {
+    /** Convenience overload for callers that already hold a String. */
+    @Synchronized
+    fun setPinAfterRecovery(pin: String): VaultPinPolicy.Result {
+        val chars = pin.toCharArray()
         return try {
-            val metadata = VaultMetadataStore(paths, VaultMetadataStore.keyFor(masterKey))
+            setPinAfterRecovery(chars)
+        } finally {
+            chars.fill('\u0000')
+        }
+    }
+
+    private fun completeUnlock(keyFile: VaultKeyFile, masterKey: ByteArray, event: VaultEventType): UnlockResult {
+        var metadataKey: ByteArray? = null
+        return try {
+            metadataKey = VaultMetadataStore.keyFor(masterKey)
+            val metadata = VaultMetadataStore(paths, metadataKey)
             val stored = metadata.read(keyFile.vaultId)
                 ?: run {
                     VaultCrypto.zeroize(masterKey)
+                    VaultCrypto.zeroize(metadataKey)
                     return UnlockResult.Failed("Vault data is missing")
                 }
             val objects = VaultObjectStore(paths, masterKey)
@@ -392,9 +429,11 @@ class VaultManager(private val context: Context) {
             UnlockResult.Success
         } catch (e: VaultCryptoException) {
             VaultCrypto.zeroize(masterKey)
+            metadataKey?.let { VaultCrypto.zeroize(it) }
             UnlockResult.Failed("Vault data could not be verified")
         } catch (e: Exception) {
             VaultCrypto.zeroize(masterKey)
+            metadataKey?.let { VaultCrypto.zeroize(it) }
             UnlockResult.Failed(userMessage(e))
         }
     }
@@ -416,6 +455,10 @@ class VaultManager(private val context: Context) {
             // the key is gone. The event is queued and committed with the next
             // unlock instead, which costs nothing and cannot block the UI.
             pendingLockEvent = true
+            // Destroy the derived index key now; the session destroys the master key
+            // it owns a few lines below. Both must go, or key material would survive
+            // the lock in the heap.
+            runCatching { current.metadata.destroy() }
         }
         unlocked = null
         session.lock(reason)
@@ -443,7 +486,7 @@ class VaultManager(private val context: Context) {
      * vault holds.
      */
     @Synchronized
-    fun changePin(currentPin: String, newPin: String): PinChangeResult {
+    fun changePin(currentPin: CharArray, newPin: CharArray): PinChangeResult {
         val current = unlocked ?: return PinChangeResult.Failed("Vault is locked")
         when (val validation = VaultPinPolicy.validate(newPin)) {
             is VaultPinPolicy.Result.Rejected -> return PinChangeResult.InvalidNewPin(validation.reason)
@@ -452,37 +495,44 @@ class VaultManager(private val context: Context) {
         val keyFile = readKeyFile() ?: return PinChangeResult.Failed("Vault is not set up")
         val existing = keyFile.pin
         if (existing != null) {
-            val chars = currentPin.toCharArray()
+            // The unwrapped copy of the master key only proves the current PIN, so it
+            // is destroyed immediately instead of being handed to a session.
             val verified = try {
-                VaultKeyring.unwrapWithPin(existing, chars, keyFile.vaultId)
+                VaultKeyring.unwrapWithPin(existing, currentPin, keyFile.vaultId)
             } catch (e: Exception) {
                 null
-            } finally {
-                chars.fill('\u0000')
             }
             if (verified == null) return PinChangeResult.WrongCurrentPin
             VaultCrypto.zeroize(verified)
         }
         return try {
-            val chars = newPin.toCharArray()
-            try {
-                writeKeyFile(
-                    keyFile.copy(
-                        pin = VaultKeyring.wrapWithPin(
-                            current.masterKey,
-                            chars,
-                            current.vaultId,
-                            iterations = calibratedIterations()
-                        )
+            writeKeyFile(
+                keyFile.copy(
+                    pin = VaultKeyring.wrapWithPin(
+                        current.masterKey,
+                        newPin,
+                        current.vaultId,
+                        iterations = calibratedIterations()
                     )
                 )
-            } finally {
-                chars.fill('\u0000')
-            }
+            )
             commit(current, current.index.withEvent(VaultEventType.PIN_CHANGED))
             PinChangeResult.Success
         } catch (e: Exception) {
             PinChangeResult.Failed(userMessage(e))
+        }
+    }
+
+    /** Convenience overload for callers that already hold Strings. */
+    @Synchronized
+    fun changePin(currentPin: String, newPin: String): PinChangeResult {
+        val currentChars = currentPin.toCharArray()
+        val newChars = newPin.toCharArray()
+        return try {
+            changePin(currentChars, newChars)
+        } finally {
+            currentChars.fill('\u0000')
+            newChars.fill('\u0000')
         }
     }
 
@@ -812,7 +862,11 @@ class VaultManager(private val context: Context) {
             capturedAtMs = System.currentTimeMillis()
         )
         val next = current.index.withoutItem(item.id).withItem(updated).markBackupPending()
-        commit(current, next)
+        // The old payload is replaced here, so the commit must not leave a
+        // generation behind that still holds its wrapped key.
+        current.index = current.metadata.commitAndScrubPrevious(next)
+        VaultMediaCache.evict(item.id)
+        VaultMediaCache.evict(updated.id)
         current.objects.delete(item.id)
         return updated
     }
@@ -834,13 +888,37 @@ class VaultManager(private val context: Context) {
         return updated
     }
 
-    /** Removes an item; the index entry goes first, the payload second. */
+    /**
+     * Removes an item: index first, payload second, stale generations last.
+     *
+     * The order is what makes an interrupted deletion safe. The new index (without
+     * the item) is committed and fsynced before anything is destroyed, so a crash
+     * at any point leaves either "the item still exists" or "the item is gone and
+     * its payload is an unreferenced file that [VaultObjectStore.sweepOrphans]
+     * shreds at the next unlock". It can never leave an index entry pointing at a
+     * half-destroyed payload.
+     *
+     * The commit also overwrites `meta.bin.bak`, and this is the part that makes
+     * the deletion cryptographic rather than merely structural: the backup
+     * generation still contained the object's *wrapped data key*. Removing the
+     * payload while leaving that key behind would allow anyone who later recovered
+     * both files to decrypt the content again. Once the key is gone from every
+     * generation of the index, no remaining legitimate key can open that object -
+     * not the master key, not an index restored from a backup, not an older PIN
+     * wrapper (which protects the same master key, so it does not help either).
+     *
+     * Thumbnails live in an in-memory LRU only - nothing decrypted is ever written
+     * to disk - so evicting the entry drops the last decoded copy of the pixels.
+     */
     @Synchronized
     fun delete(item: VaultItem) {
         val current = unlocked ?: throw IllegalStateException("Vault is locked")
-        commit(current, current.index.withoutItem(item.id).markBackupPending())
-        current.objects.delete(item.id)
+        val committed = current.metadata.commitAndScrubPrevious(
+            current.index.withoutItem(item.id).markBackupPending()
+        )
+        current.index = committed
         VaultMediaCache.evict(item.id)
+        current.objects.delete(item.id)
     }
 
     /** Opens an item for reading (image decoding, playback, viewer). */

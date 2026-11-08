@@ -167,6 +167,94 @@ class VaultKeyringTests {
         assertEquals(VaultPinPolicy.Reason.ONLY_FEW_DIGITS, reason("12121212"))
     }
 
+    // ------------------------------------------------------------------
+    // PIN KDF parameters and migration
+    // ------------------------------------------------------------------
+
+    @Test
+    fun pinWrapperRecordsItsIterationCountAndScheme() {
+        val vmk = VaultKeyring.newMasterKey()
+        val wrapper = VaultKeyring.wrapWithPin(vmk, "84920517".toCharArray(), "vault", iterations = 150_000)
+        assertEquals(VaultKeyring.PIN_SCHEME, wrapper.scheme)
+        assertEquals(150_000, wrapper.iterations)
+        assertEquals(VaultCrypto.SALT_BYTES, wrapper.salt.size)
+        // Only the salt, the iteration count and the ciphertext are persisted.
+        val encoded = VaultEncoding.base64(wrapper.wrapped) + VaultEncoding.base64(wrapper.salt)
+        assertFalse(encoded.contains("84920517"))
+    }
+
+    /** Two vaults created with the same PIN must not share a salt or a wrapper. */
+    @Test
+    fun everyPinWrapperGetsAFreshSalt() {
+        val vmk = VaultKeyring.newMasterKey()
+        val pin = "84920517".toCharArray()
+        val first = VaultKeyring.wrapWithPin(vmk, pin, "vault-a", iterations = 120_000)
+        val second = VaultKeyring.wrapWithPin(vmk, pin, "vault-a", iterations = 120_000)
+        assertFalse("salts must differ", first.salt.contentEquals(second.salt))
+        assertFalse("wrappers must differ", first.wrapped.contentEquals(second.wrapped))
+        // Both still open with the PIN: the salt travels with the wrapper.
+        assertArrayEquals(vmk, VaultKeyring.unwrapWithPin(second, pin, "vault-a"))
+    }
+
+    /**
+     * An existing vault keeps opening under the parameters it was created with.
+     *
+     * This is the migration property: the iteration count is *stored per wrapper*,
+     * so raising [VaultKeyring.DEFAULT_PBKDF2_ITERATIONS] for new vaults cannot
+     * lock anyone out of an old one, and no existing data is re-derived.
+     */
+    @Test
+    fun anOldWrapperStaysReadableAfterTheDefaultsChange() {
+        val vmk = VaultKeyring.newMasterKey()
+        val pin = "84920517".toCharArray()
+        val old = VaultKeyring.wrapWithPin(vmk, pin, "vault", iterations = VaultKeyring.MIN_PBKDF2_ITERATIONS)
+        // Rewrap the same master key with the current default, as a PIN change would.
+        val migrated = VaultKeyring.wrapWithPin(vmk, pin, "vault", iterations = VaultKeyring.DEFAULT_PBKDF2_ITERATIONS)
+        assertArrayEquals(vmk, VaultKeyring.unwrapWithPin(old, pin, "vault"))
+        assertArrayEquals(vmk, VaultKeyring.unwrapWithPin(migrated, pin, "vault"))
+        assertTrue("the old wrapper kept its own parameters", old.iterations < migrated.iterations)
+        // And the old wrapper still refuses a wrong PIN after the change.
+        assertThrows(VaultCryptoException::class.java) {
+            VaultKeyring.unwrapWithPin(old, "11111111".toCharArray(), "vault")
+        }
+    }
+
+    /**
+     * The iteration count is read from the file before any PIN is tried, so a
+     * downgraded key ring must be refused rather than silently used.
+     */
+    @Test
+    fun aDowngradedIterationCountIsRefusedBeforeDeriving() {
+        val vmk = VaultKeyring.newMasterKey()
+        val wrapper = VaultKeyring.wrapWithPin(vmk, "84920517".toCharArray(), "vault", iterations = 120_000)
+        val downgraded = wrapper.copy(iterations = VaultKeyring.MIN_PBKDF2_ITERATIONS - 1)
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyring.unwrapWithPin(downgraded, "84920517".toCharArray(), "vault")
+        }
+    }
+
+    /** A wrapper cannot be moved to another vault: the vault id is authenticated. */
+    @Test
+    fun pinWrapperIsBoundToItsVaultId() {
+        val vmk = VaultKeyring.newMasterKey()
+        val wrapper = VaultKeyring.wrapWithPin(vmk, "84920517".toCharArray(), "vault-a", iterations = 120_000)
+        assertThrows(VaultCryptoException::class.java) {
+            VaultKeyring.unwrapWithPin(wrapper, "84920517".toCharArray(), "vault-b")
+        }
+    }
+
+    /** The in-place validation path leaves the caller's buffer untouched. */
+    @Test
+    fun pinPolicyCharArrayValidationDoesNotMutateTheBuffer() {
+        val pin = "84920517".toCharArray()
+        assertEquals(VaultPinPolicy.Result.Ok, VaultPinPolicy.validate(pin))
+        assertEquals("84920517", String(pin))
+        val weak = "111111".toCharArray()
+        assertTrue(VaultPinPolicy.validate(weak) is VaultPinPolicy.Result.Rejected)
+        assertEquals("111111", String(weak))
+        weak.fill('\u0000')
+    }
+
     @Test
     fun recoveryCodeFormatHasEnoughEntropyAndChecksum() {
         val secret = VaultRecoveryCode.generate()

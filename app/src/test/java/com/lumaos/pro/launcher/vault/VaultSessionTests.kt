@@ -213,13 +213,88 @@ class VaultSessionTests {
         assertFalse(guard.state().isThrottled(now))
     }
 
+    /**
+     * A present-but-unreadable record is damage or tampering, not a first run.
+     *
+     * It must never do the two things a malformed file could otherwise be used for:
+     * lock the owner out permanently, or reset the counter to a clean slate.
+     */
     @Test
-    fun unreadableGuardFileDoesNotLockTheUserOut() {
+    fun unreadableGuardFileStartsFromAPenaltyButNeverTrapsTheOwner() {
         val file = Files.createTempFile("vault-guard", ".json").toFile()
         file.writeText("this is not json")
+        // Real wall-clock values: a file's mtime cannot precede the epoch.
+        val t = 1_700_000_000_000L
+        file.setLastModified(t - 60 * 60_000L)
         val guard = VaultUnlockGuard(file)
-        assertEquals(0, guard.state().failures)
-        assertFalse(guard.state().isThrottled(now))
+
+        val state = guard.state(t)
+        assertTrue("a damaged record is marked", state.damaged)
+        assertTrue("counter is seeded above the free attempts", state.failures > VaultUnlockGuard.FREE_ATTEMPTS)
+        assertFalse("the one-off penalty has already run out", state.isThrottled(t))
+
+        // The penalty is anchored to the file's own timestamp, so it cannot renew
+        // itself: an hour later the record still reads the same.
+        assertEquals(state.failures, guard.state(t + 60 * 60_000L).failures)
         file.delete()
+    }
+
+    /** A truncated or absent field is read defensively, never trusted as a clean state. */
+    @Test
+    fun malformedGuardJsonIsReadAsDamagedState() {
+        val cases = listOf(
+            "{}",
+            "{\"failures\":\"lots\"}",
+            "[]",
+            "",
+            "{\"failures\":-40,\"lockedUntil\":-1}",
+            "{\"failures\":2147483647,\"lockedUntil\":0,\"lastFailure\":0}"
+        )
+        val t = 1_700_000_000_000L
+        for (text in cases) {
+            val file = Files.createTempFile("vault-guard", ".json").toFile()
+            file.writeText(text)
+            file.setLastModified(t - 60 * 60_000L)
+            val guard = VaultUnlockGuard(file)
+            val state = guard.state(t)
+            assertTrue("'$text' is read as damaged", state.damaged)
+            assertTrue("'$text' seeds failures", state.failures >= VaultUnlockGuard.FREE_ATTEMPTS)
+            assertTrue("'$text' is not throttled forever", state.remainingDelayMs(t) <= VaultUnlockGuard.MAX_DELAY_MS)
+            file.delete()
+        }
+    }
+
+    /** A forged record can never impose more than the cap, nor a negative count. */
+    @Test
+    fun forgedGuardValuesAreClamped() {
+        val file = Files.createTempFile("vault-guard", ".json").toFile()
+        // A count inside the tracked range but a deadline far ahead: clamped, not honoured.
+        file.writeText("{\"failures\":900,\"lockedUntil\":9223372036854775807,\"lastFailure\":9223372036854775807}")
+        val guard = VaultUnlockGuard(file)
+        val t = 1_700_000_000_000L
+        val state = guard.state(t)
+        assertEquals(900, state.failures)
+        assertTrue(state.remainingDelayMs(t) <= VaultUnlockGuard.MAX_DELAY_MS)
+        assertTrue(state.lastFailureMs <= t)
+        file.delete()
+    }
+
+    /**
+     * Deleting the record resets the local delay - that bypass is documented - but it
+     * cannot produce a usable key: the guard holds no key material at all.
+     */
+    @Test
+    fun deletingGuardStateCannotProduceAKeyOrBypassThePin() {
+        assertFalse(
+            "the guard must not expose any key material",
+            VaultUnlockGuard::class.java.declaredMethods.any { m ->
+                m.name.lowercase().contains("key")
+            }
+        )
+        val guard = VaultUnlockGuard(guardFile())
+        repeat(8) { guard.recordFailure(now) }
+        assertTrue(guard.state(now).isThrottled(now))
+        guard.clear()
+        assertEquals(0, VaultUnlockGuard(guardFile()).state(now).failures)
     }
 }

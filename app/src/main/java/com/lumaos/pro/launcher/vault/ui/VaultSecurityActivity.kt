@@ -101,26 +101,45 @@ class VaultSecurityActivity : VaultScreenActivity() {
             .setTitle("Change PIN")
             .setView(layout)
             .setPositiveButton("Save") { _, _ ->
-                val current = currentField.text.toString()
-                val next = newField.text.toString()
-                if (next != confirmField.text.toString()) {
-                    toast("The new PINs do not match.")
-                    return@setPositiveButton
-                }
-                io({ manager.changePin(current, next) }) { result ->
-                    when (val outcome = result.getOrNull()) {
-                        VaultManager.PinChangeResult.Success -> {
-                            toast("PIN changed. Your files were not re-encrypted - only the key wrapper changed.")
-                            render()
-                        }
-                        VaultManager.PinChangeResult.WrongCurrentPin -> toast("That current PIN is not right.")
-                        is VaultManager.PinChangeResult.InvalidNewPin -> toast("That new PIN is too easy to guess. Try another.")
-                        else -> toast("The PIN could not be changed.")
+                // Characters, not Strings: a PIN held in a String cannot be wiped,
+                // and this path used to leave two of them in the heap until the GC
+                // happened to collect them.
+                val current = charsOf(currentField)
+                val next = charsOf(newField)
+                val confirmation = charsOf(confirmField)
+                try {
+                    if (!next.contentEquals(confirmation)) {
+                        toast("The new PINs do not match.")
+                        return@setPositiveButton
                     }
+                    io({ manager.changePin(current, next) }) { result ->
+                        when (val outcome = result.getOrNull()) {
+                            VaultManager.PinChangeResult.Success -> {
+                                toast("PIN changed. Your files were not re-encrypted - only the key wrapper changed.")
+                                render()
+                            }
+                            VaultManager.PinChangeResult.WrongCurrentPin -> toast("That current PIN is not right.")
+                            is VaultManager.PinChangeResult.InvalidNewPin -> toast("That new PIN is too easy to guess. Try another.")
+                            else -> toast("The PIN could not be changed.")
+                        }
+                    }
+                } finally {
+                    current.fill('\u0000')
+                    next.fill('\u0000')
+                    confirmation.fill('\u0000')
+                    currentField.text?.clear()
+                    newField.text?.clear()
+                    confirmField.text?.clear()
                 }
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** Copies a field's digits into a buffer the caller can wipe. */
+    private fun charsOf(field: EditText): CharArray {
+        val text = field.text ?: return CharArray(0)
+        return CharArray(text.length) { text[it] }
     }
 
     private fun pinField(hint: String): EditText = EditText(this).apply {

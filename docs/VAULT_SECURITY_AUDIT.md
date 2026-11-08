@@ -11,6 +11,15 @@ build, lint, R8 and every on-device behaviour are **unverified** in this environ
 and no hardware testing has been performed. §9 lists exactly what must happen before
 release.
 
+> **Update, 2026-11-07 (remediation pass).** A follow-up pass addressed seven specific
+> findings at the maintainer's request — `guard.json` hardened and documented, clipboard
+> sensitivity marking, further zeroization, cryptographic-deletion verification, a full
+> PBKDF2/PIN audit, a written threat model, and the regression run. It found and fixed one
+> **real defect** that this document's V-15 had stated too favourably: the crash-recovery
+> backup of the metadata index still held the wrapped data key of deleted items. See
+> `docs/VAULT_REMEDIATION_2026-11.md` for what changed, the actual test and benchmark
+> results, and the remaining limitations. The verdict below is unchanged.
+
 ---
 
 ## 1. Method, and what "verified" means here
@@ -148,20 +157,33 @@ forever. *Fix:* `VaultBackup.verify` is bounded at 1 TiB and rejects beyond it.
   cannot be: the file must be readable before the vault is open, and any key that could
   authenticate it would have to be available to the same attacker. The real defences are
   PBKDF2 cost and PIN entropy; the throttle only slows a person tapping at a lock screen.
+  *Updated in the 2026-11 remediation pass:* a malformed record is now read as *damaged*
+  (seeded failure count anchored to the file's mtime) instead of a clean slate, and all
+  values are clamped so a forged record cannot impose more than the 15-minute cap or a
+  negative count. Deleting the file still resets the delay, as documented. See
+  `docs/VAULT_THREAT_MODEL.md` §3.1.
 * **V-12 No per-object nonce registry.** 96-bit random IVs per key are used. For the
   metadata index (one key, many commits) the collision bound is ~2⁴⁸ commits; per-object
   keys are single-use, so their nonce space is never shared. Covered by
   `VaultCryptoTests` (500 seals, all distinct) and by design.
 * **V-13 Notes can be copied by the user.** A note's text can be selected and copied. That
-  is the user's own content and an intentional feature; marking the clip sensitive
-  (`EXTRA_IS_SENSITIVE`, API 33+) is proposed but not implemented.
+  is the user's own content and an intentional feature. *Fixed in the 2026-11 pass:* copy and
+  cut are intercepted and the clip is created with `ClipDescription.EXTRA_IS_SENSITIVE`, so
+  Android 13+ suppresses the preview, clipboard history and editor rendering. Copying is still
+  available and never silently disabled; the flag is a hint that a clipboard manager may
+  ignore, and it does not exist before API 33. See `docs/VAULT_THREAT_MODEL.md` §5.
 * **V-14 No Google Drive SDK is present.** Backups go through the Storage Access Framework,
   which is provider-agnostic: the user may pick Google Drive, a USB drive or a local
   folder, and the app never talks to a network itself. Any statement that Vault ships a
   "Drive integration" would be false.
 * **V-15 Object deletion is cryptographic.** Deleting an item drops its wrapped DEK with
   the index entry (and then the payload). The key is unrecoverable, which is stronger than
-  overwriting, but the filesystem may retain old blocks — see §10.
+  overwriting, but the filesystem may retain old blocks — see §10. *Corrected and hardened in
+  the 2026-11 pass:* the original claim was incomplete. `commit()` keeps the previous index as
+  `meta.bin.bak`, so the DEK of a just-deleted item survived in that generation until the next
+  commit. Deletion now uses `VaultMetadataStore.commitAndScrubPrevious`, which overwrites the
+  backup generation with the post-deletion index and shreds leftover temp files, in addition to
+  evicting thumbnails before destroying the payload. Verified by `VaultDeletionTests`.
 
 ---
 
