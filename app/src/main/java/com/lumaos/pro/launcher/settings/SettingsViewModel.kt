@@ -10,7 +10,6 @@ import com.lumaos.pro.launcher.BuildConfig
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.backup.BackupCodec
 import com.lumaos.pro.launcher.core.LumaApp
-import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
@@ -233,11 +232,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _backupState = MutableStateFlow(BackupUiState())
     val backupState: StateFlow<BackupUiState> = _backupState.asStateFlow()
 
-    private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
-    val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
-    private val _appsLoading = MutableStateFlow(true)
-    val appsLoading: StateFlow<Boolean> = _appsLoading.asStateFlow()
-
     private val _historyLoading = MutableStateFlow(true)
     val historyLoading: StateFlow<Boolean> = _historyLoading.asStateFlow()
 
@@ -253,9 +247,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _historyError = MutableStateFlow<String?>(null)
     val historyError: StateFlow<String?> = _historyError.asStateFlow()
 
-    private val _appsFailed = MutableStateFlow(false)
-    val appsFailed: StateFlow<Boolean> = _appsFailed.asStateFlow()
-
     private val _hasDndAccess = MutableStateFlow(false)
     val hasDndAccess: StateFlow<Boolean> = _hasDndAccess.asStateFlow()
 
@@ -266,17 +257,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * SQLite connection. One pass at a time, with a single trailing pass for
      * anything requested in between, is both correct and cheaper.
      */
-    private val appsCoalescer = RefreshCoalescer(
-        scope = viewModelScope,
-        dispatcher = Dispatchers.IO,
-        onLoadingChanged = { _appsLoading.value = it },
-        operation = { _apps.value = core.appRepository.refresh() },
-        onFailure = {
-            LumaLog.e("Installed apps could not be listed in Settings", it)
-            _appsFailed.value = true
-        }
-    )
-
     private val historyCoalescer = RefreshCoalescer(
         scope = viewModelScope,
         dispatcher = Dispatchers.IO,
@@ -291,19 +271,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
 
     init {
-        refreshApps()
         refreshRoleStatus()
         refreshHistory()
         refreshIconPacks()
-    }
-
-    fun refreshApps() {
-        _appsFailed.value = false
-        appsCoalescer.request()
-    }
-
-    fun setAppHidden(profile: ContextProfile, key: ComponentKey, hidden: Boolean) {
-        viewModelScope.launch { prefs.setAppHidden(profile, key, hidden) }
     }
 
     fun setSchedule(profile: ContextProfile, schedule: ProfileSchedule) {

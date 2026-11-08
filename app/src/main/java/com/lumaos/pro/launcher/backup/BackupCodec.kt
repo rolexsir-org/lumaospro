@@ -69,6 +69,9 @@ object BackupCodec {
         "drawer_presentation" to ValueType.STRING,
         "drawer_categories" to ValueType.BOOLEAN,
         "suggestions_enabled" to ValueType.BOOLEAN,
+        // "hidden_search"/"hidden_lock" are no longer read: hiding moved into the
+        // Vault. They stay in the whitelist so an older backup still restores
+        // cleanly instead of being rejected for keys this build ignores.
         "hidden_search" to ValueType.BOOLEAN,
         "hidden_lock" to ValueType.BOOLEAN,
         "widgets_enabled" to ValueType.BOOLEAN,

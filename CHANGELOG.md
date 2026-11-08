@@ -1,5 +1,207 @@
 # Changelog
 
+## Unreleased — three critical Vault fixes
+
+Follow-up to the Hide Apps / PIN hand-off work below. Each of these is a defect in
+shipped behaviour, not a new feature.
+
+### Hidden apps no longer reappear after a reboot
+
+- **Cause.** The hidden set lived only in the Vault's encrypted index, which cannot
+  be read without the master key. Every time the Vault was locked — and therefore
+  after every reboot, and during the whole post-upgrade window before the first
+  unlock — `hiddenComponentKeys()` returned an empty set and the drawer rendered
+  every hidden app.
+- **Fix.** A second, device-bound copy (`conceal.bin`) is sealed with AES-256-GCM
+  under a non-exportable Android Keystore key and read by the launcher *before*
+  authentication. The encrypted index stays authoritative; the mirror is rewritten
+  on every hide and restore and rebuilt from the index on every unlock, so an
+  upgraded Vault repairs itself on its first unlock.
+- **Failure handling.** A missing mirror is a clean first run only if the Vault has
+  never hidden anything; a damaged or unreadable one falls back to the previous
+  generation and is then reported as degraded — never silently treated as
+  "nothing is hidden" — and is rebuilt at the next unlock. Writes are atomic, so an
+  interrupted update leaves the old or the new selection, never a half file.
+- **What it is not.** The mirror is not a plaintext copy: it cannot be read from an
+  ADB pull, a bug report or a disk image. It is not hidden *from the device* — the
+  key needs no user authentication (it must work before the first unlock), so code
+  running as the app can open it. See `docs/VAULT.md` §7.1.
+
+### The 400 ms hand-off window is gone
+
+- **Cause.** Deciding "did the user leave?" from an attached-screen count is racy,
+  because `startActivity()` is asynchronous. The previous fix treated a drop to zero
+  as provisional for 400 ms and cancelled it if another screen attached. That worked,
+  but it was a timing guess with no platform guarantee behind it: the window had to
+  be longer than the slowest device and shorter than a shoulder-surfer's patience,
+  and the settle callback ran on a clock that had to agree with the `Handler`.
+- **Fix.** `VaultScreenPresence` no longer uses a clock. It tracks each Vault
+  activity's lifecycle stage and decides a departure from the state of the *other*
+  activities. Android always creates a successor before its predecessor stops, so a
+  hand-off is recognised as a hand-off rather than inferred from elapsed time.
+  Configuration changes are explicitly exempt.
+- **Preserved.** Lock-on-leave, the idle timeout and immediate screen-off locking all
+  behave exactly as before; a genuine departure — including pressing Home from a
+  deep screen while the parent is still alive — conceals synchronously, in the same
+  callback that observes it.
+
+### `guard.json` can no longer be reset by deleting it
+
+- **Cause.** The retry counter had to be readable before unlock, so it could not be
+  protected with the master key. It was plain JSON: editing or deleting it reset the
+  progressive delay, which was documented as an accepted limitation.
+- **Fix.** Every record is now tagged with an HMAC-SHA-256 key generated in the
+  Android Keystore and never exported. Editing the record fails verification and is
+  treated as tampering. Deleting it is detected too — the Keystore entry outlives
+  the file — and the maximum penalty is stored immediately, so a delete-then-guess
+  loop grants **no** attempts rather than one free guess per deletion.
+- **Preserved.** The delays (3 free attempts, then 10 s → 30 s → 60 s → 5 min →
+  15 min cap), PIN verification and recovery are unchanged. A new Vault is the only
+  clean slate (`resetForNewVault()` is called from creation and nowhere else), and a
+  device whose Keystore cannot provide an HMAC key degrades to the previous mode
+  instead of locking its owner out.
+- **Not claimed.** Replaying an older valid record still verifies, and root or a
+  compromised OS can ask the Keystore for the tag. Rollback protection for file
+  contents is not available to apps on Android; this is stated in
+  `docs/VAULT_THREAT_MODEL.md` §3.1.
+
+## Unreleased — Hide Apps moves into the Vault; PIN hand-off fixes
+
+Two related changes: the launcher-level **Hide Apps** feature is now part of the
+Vault, and the three defects behind "correct PIN bounces you back to the launcher"
+are fixed.
+
+### Hide Apps is a Vault section
+
+- Hidden apps are selected, stored and restored inside the Vault, in the
+  `Hidden Apps` section of the Vault home. The list lives in the Vault's encrypted
+  index (`VaultSettings.hiddenApps`), not in a plaintext DataStore preference.
+- The standalone entry points are gone: the Settings "Manage hidden apps" dialog,
+  the "Find hidden apps in search" and "Protect hidden apps with screen lock"
+  switches, and the drawer long-press action that wrote the preference directly.
+  Settings now has one row that opens the section, and the drawer's long-press
+  entry routes into the Vault instead of changing a locked vault's state.
+- **Migration is additive and never discards the old selection.** On the first
+  unlock after upgrading, the per-profile `hidden_apps_<profile>` preference is
+  converted and imported. The import only adds, is idempotent, is recorded by a
+  marker file outside the encrypted index, and the old preference is left in place
+  so an interrupted import can retry and a downgrade still finds it.
+- Hidden apps stay out of the drawer **and** out of launcher search; the old
+  "show hidden apps in search" opt-in is removed rather than left inert.
+- **What did not change, by design:** hiding is launcher-level metadata. No app is
+  uninstalled, disabled, suspended, force-stopped or cleared, and the screen says
+  so, including that any other launcher can still open a hidden app and that this
+  is not Android work-profile isolation.
+
+### Vault PIN hand-off
+
+- **Correct PIN re-locked the Vault.** `startActivity()` is asynchronous but
+  `finish()` is immediate, so the count of attached Vault screens dropped through
+  zero during the lock→home transition; the lifecycle guard read that frame as
+  "the user left" and, with lock-on-leave on, locked the vault the moment the PIN
+  was accepted. `VaultScreenPresence` now treats a short depart-while-starting
+  window as provisional and cancels it when the next screen attaches.
+- **`finishAffinity()` finished the launcher's task.** The Vault shares the
+  launcher's affinity, so "lock and return" closed the whole task and dropped the
+  user to the system home — "the app closed itself". Vault now starts the
+  launcher's own HOME intent instead.
+- **Wrong recovery key crashed.** `messageView` was only created by `buildPinPad()`,
+  so `showMessage()` threw `UninitializedPropertyAccessException` on the recovery
+  screen. It is now guarded and falls back to a message view in the body.
+- **The hand-off window was on the wall clock.** The policy timestamped departures
+  with `currentTimeMillis()` while the settle runs on `Handler` uptime, so a clock
+  correction could collapse the window and re-lock the vault mid-transition. It now
+  uses a monotonic source.
+- **The lock screen closed itself when the vault locked.** Screen-off, the idle
+  timeout or a failed biometric finished the only attached Vault screen, dropping the
+  user out of the app instead of back to PIN entry. The lock screen now resets itself
+  and never finishes on a lock.
+- **`lateinit` crashes in the camera screen.** `showCameraProblem`, `savePhoto`,
+  `savePdf` and `resetFooter` touched views from background callbacks before those
+  views existed. Guarded; a failure no longer takes the process down.
+- The lock screen is started before the old screen finishes, and unlocks can carry
+  a destination (`EXTRA_DESTINATION`) so the drawer's entry lands on Hidden Apps
+  rather than the Vault home.
+
+**Verification:** see `docs/HIDDEN_APPS_AND_PIN_2026-11.md`. 187 JVM tests pass and
+34 Vault sources compile; Gradle, lint, R8, the debug APK and on-device checks
+could not run in the offline sandbox and are reported as blocked, not as passing.
+
+## Unreleased — LumaOS Vault targeted remediation
+
+The seven findings from the maintainer's remediation brief, plus one defect found while
+verifying them. Details, evidence and limits: `docs/VAULT_REMEDIATION_2026-11.md`;
+the written threat model is `docs/VAULT_THREAT_MODEL.md`.
+
+- **Deleted items are now cryptographically deleted.** The crash-recovery copy of the
+  metadata index (`meta.bin.bak`) still held the wrapped data key of a deleted item, so
+  recovered ciphertext plus that stale index could be decrypted. Deletion now rewrites the
+  backup generation with the post-deletion index before destroying the payload, and evicts
+  thumbnails first. Interrupted deletions leave a swept orphan, never a dangling entry.
+- **`guard.json` is handled defensively and documented honestly.** No fake integrity
+  protection; a malformed record is treated as damage (seeded count anchored to its own
+  mtime) instead of a clean slate; forged values are clamped so a corrupt file cannot lock
+  the owner out for more than 15 minutes. Deleting it still resets the delay — documented
+  as a bypass of the delay only, which never bypasses PIN verification.
+- **Note copy is marked sensitive** with `ClipDescription.EXTRA_IS_SENSITIVE` (Android 13+)
+  while remaining fully available to the user; no unmarked fallback, no clipboard logging.
+- **Further zeroization:** PBKDF2 plaintext chunk buffers, decrypted chunks and the reader's
+  cached chunk are wiped; the metadata key is destroyed on every failed unlock; PIN change
+  works on `CharArray` instead of unwipeable `String`s.
+- **Orphan sweep shreds** instead of unlinking.
+- 22 new or rewritten tests (126 total in this area), 0 failing. No format, schema,
+  parameter or UI change, so no migration is required.
+
+## Unreleased — LumaOS Vault security hardening
+
+Pre-release security review of the Vault (see `docs/VAULT_SECURITY_AUDIT.md`).
+
+- **Backups are staged and verified locally before the destination is touched**, so an
+  interrupted upload can no longer leave a truncated file that looks like a backup, and a
+  previous good backup is never replaced by an incomplete one.
+- **Restore now treats a backup file as hostile input:** canonical object ids only, hard
+  caps on every length and count, a free-space check, and a completeness check that
+  refuses a container whose index references payloads it does not contain.
+- **A failed restore rolls the previous vault back** instead of leaving a half-established
+  one.
+- **Key rings reject absurd KDF iteration counts**, closing a pre-authentication hang.
+- **Valid recovery keys are no longer rejected** when a checksum character is transcribed
+  with a Crockford alias (`l` for `1`, `O` for `0`) — this affected roughly one key in
+  eight.
+- **The recovery key can no longer be copied to the system clipboard.**
+- Staging is shredded rather than unlinked; container verification is size-bounded.
+- 18 new automated tests (105 total in this area), including hostile-container restore
+  tests, key-ring limits, concurrent stores and manifest hygiene.
+
+## Unreleased — LumaOS Vault
+
+A private, fully offline encrypted space inside LumaOS Pro. No new dependency, no
+second APK, and no change to existing launcher behaviour.
+
+- **Security foundation.** Per-vault 256-bit master key, per-object random data keys,
+  AES-256-GCM for small objects and a chunked streaming AEAD (Tink-style framing) for
+  large ones, HKDF-SHA-256 domain separation, PBKDF2-HMAC-SHA-256 PIN stretching
+  calibrated per device, a checksummed 256-bit recovery key, and a device-bound
+  Keystore wrapper for biometric unlock.
+- **Private capture.** Camera (Camera2), document scanner (multi-page PDF via
+  `PdfDocument`), and voice recorder (MediaRecorder) all write ciphertext only — no
+  DCIM, no MediaStore, no plaintext scratch outside the vault's own staging directory.
+- **Private library.** Gallery with in-memory thumbnails, files with SAF import/export,
+  notes, and a viewer that plays encrypted audio/video through a seekable decrypting
+  source.
+- **Session security.** Lock on screen-off, immediate concealing on background,
+  configurable inactivity timeout, `FLAG_SECURE` everywhere, key zeroization on lock,
+  progressive retry throttling.
+- **Encrypted backup and restore.** Ciphertext-only container, recovery-key restore on a
+  new phone, integrity verified before success is reported.
+- **Security Centre.** PIN change, biometric enrolment, recovery-key rotation, auto-lock,
+  backup status, restore and a content-free security log.
+- **Tests.** 87 new JVM tests covering cryptography, storage privacy, session policy,
+  throttling, backup/restore, backup-rule exclusions and manifest hygiene.
+- Integration is limited to `LumaCore`, one Settings row, the manifest and four strings.
+
+
+
 Notable changes to LumaOS Pro. Entries use the app's `versionName`; the Play
 `versionCode` is derived as `major * 100 + minor * 10 + patch` (1.0.0 → 100).
 

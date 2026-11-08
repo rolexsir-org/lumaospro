@@ -6,6 +6,11 @@
     Once any <include> is present, everything else is excluded by default, so
     listing an <exclude> would be redundant (and lint rejects it). The
     diagnostics database is therefore left out simply by not being named.
+
+    LumaOS Vault never appears here. Its content is stored in
+    noBackupFilesDir, which Android never backs up, so no rule in this file can
+    name it. VaultPlatformIntegrationTests fails the build if this file ever
+    starts referencing the Vault location.
 -->
 <full-backup-content>
     <include domain="sharedpref" path="." />

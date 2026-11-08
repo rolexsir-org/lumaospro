@@ -2,7 +2,6 @@ package com.lumaos.pro.launcher.launcher
 
 import android.app.ActivityOptions
 import android.app.AlertDialog
-import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -191,19 +190,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
-    private val hiddenUnlockLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val pending = pendingHiddenApp
-        pendingHiddenApp = null
-        if (result.resultCode == RESULT_OK && pending != null) {
-            lifecycleScope.launch {
-                viewModel.prefs.setAppHidden(pending.profile, pending.key, true)
-                toast(getString(R.string.toast_app_hidden, pending.label))
-            }
-        }
-    }
-
     private val widgetBindLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val pending = pendingWidget ?: return@registerForActivityResult
         if (result.resultCode == RESULT_OK) continueWidgetAdd(pending) else {
@@ -298,8 +284,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var drawerCellConfig = CellConfig(LumaTokens.iconAppInt, true, 1f, ColorMath.WHITE, false)
     private var folderCellConfig = drawerCellConfig
     private var widgetsEnabled = true
-    private var hiddenLock = false
-    private var pendingHiddenApp: PendingHiddenApp? = null
     private var cellHeightPx = 0
     private var gridColumns = 4
     private var drawerColumns = 4
@@ -371,12 +355,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private var themeAnimating = false
 
     private val density by lazy { resources.displayMetrics.densityDpi }
-
-    private data class PendingHiddenApp(
-        val profile: ContextProfile,
-        val key: ComponentKey,
-        val label: String
-    )
 
     /** Appearance inputs from preferences. */
     private data class Appearance(
@@ -1451,7 +1429,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
                 launch { viewModel.drawerSort.collect { drawer.currentSort = it } }
                 launch { viewModel.prefs.widgetsEnabled.collect { widgetsEnabled = it } }
-                launch { viewModel.prefs.hiddenLock.collect { hiddenLock = it } }
 
                 launch {
                     combine(viewModel.activeContextProfile, readouts.state) { p, r -> p to r }.collect { (p, r) ->
@@ -2941,7 +2918,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             )
         }
         entries += MenuEntry(M_CHOOSE_ICON, getString(R.string.action_choose_icon), R.drawable.ic_rx_spark, group = 2)
-        entries += MenuEntry(M_HIDE, getString(R.string.action_hide_app, viewModel.activeContextProfile.value.title), R.drawable.ic_rx_hide, group = 2)
+        // Hiding is a Vault owned operation now. The launcher no longer writes the
+        // hidden list itself, so this entry routes into the Vault instead of
+        // pretending it can change the list from here. Always offered: hiding it
+        // while the Vault is locked would remove the entry at the one moment the
+        // user is most likely to look for it.
+        entries += MenuEntry(M_HIDE, getString(R.string.action_hide_app), R.drawable.ic_rx_hide, group = 2)
         entries += MenuEntry(M_INFO, getString(R.string.action_app_info), R.drawable.ic_rx_info, group = 2)
         entries += MenuEntry(M_UNINSTALL, getString(R.string.action_uninstall), R.drawable.ic_rx_uninstall, destructive = true, group = 2)
 
@@ -2964,7 +2946,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 e.id == M_PIN -> viewModel.setAppPinned(key, true)
                 e.id == M_UNPIN -> viewModel.setAppPinned(key, false)
                 e.id == M_CHOOSE_ICON -> openLivingIconPicker(key, label)
-                e.id == M_HIDE -> requestHideApp(key, label)
+                e.id == M_HIDE -> openHiddenAppsInVault()
                 e.id == M_INFO -> appInfo(key)
                 e.id == M_UNINSTALL -> uninstall(key)
             }
@@ -3004,32 +2986,26 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
-    private fun requestHideApp(key: ComponentKey, label: String) {
-        val profile = viewModel.activeContextProfile.value
-        if (!hiddenLock) {
-            viewModel.hideApp(key)
-            toast(getString(R.string.toast_app_hidden, label))
-            return
+    /**
+     * Opens the Vault's Hidden Apps section.
+     *
+     * Deliberately not a silent hide: the selection belongs to the Vault, is stored
+     * encrypted there, and is only editable after authenticating. Promising a hide
+     * from the drawer menu and doing it behind the user's back would be both a
+     * second entry point and a way to change a locked vault's state.
+     */
+    private fun openHiddenAppsInVault() {
+        val target = if (viewModel.isVaultUnlocked()) {
+            // Already authenticated: go straight to the section, with no second PIN.
+            Intent(this, com.lumaos.pro.launcher.vault.ui.VaultHiddenAppsActivity::class.java)
+        } else {
+            com.lumaos.pro.launcher.vault.ui.VaultLockActivity.intent(
+                this,
+                com.lumaos.pro.launcher.vault.ui.VaultLockActivity.DESTINATION_HIDDEN_APPS
+            )
         }
-        val keyguard = getSystemService(KeyguardManager::class.java)
-        val intent = keyguard?.createConfirmDeviceCredentialIntent(
-            getString(R.string.hidden_unlock_title),
-            getString(R.string.pref_hidden_lock_desc)
-        )
-        if (intent == null) {
-            toast(getString(R.string.hidden_no_lock))
-            return
-        }
-        pendingHiddenApp = PendingHiddenApp(profile, key, label)
-        try {
-            hiddenUnlockLauncher.launch(intent)
-        } catch (_: ActivityNotFoundException) {
-            pendingHiddenApp = null
-            toast(getString(R.string.hidden_locked))
-        } catch (_: SecurityException) {
-            pendingHiddenApp = null
-            toast(getString(R.string.hidden_locked))
-        }
+        runCatching { startActivity(target) }
+            .onFailure { toast(getString(R.string.vault_unavailable)) }
     }
 
     private fun showLayoutMenu(anchor: View) {

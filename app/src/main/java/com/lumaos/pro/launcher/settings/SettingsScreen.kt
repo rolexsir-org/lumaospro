@@ -1,9 +1,6 @@
 package com.lumaos.pro.launcher.settings
 
 import android.app.Activity
-import android.app.KeyguardManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
@@ -32,7 +27,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -65,7 +60,6 @@ import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 import androidx.compose.foundation.horizontalScroll
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
-import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.core.prefs.GestureKind
@@ -136,6 +130,10 @@ fun SettingsRoot(
             CleanSection {
                 PerformanceSection(viewModel)
             }
+            Spacer(Modifier.height(20.dp))
+
+            CleanGroupTitle(R.string.settings_group_private)
+            CleanSection { VaultRow() }
             Spacer(Modifier.height(20.dp))
 
             CleanGroupTitle(R.string.settings_group_advanced)
@@ -590,6 +588,33 @@ private fun ActiveThemeBanner(
     }
 }
 
+/**
+ * The Launcher's entry point into LumaOS Vault.
+ *
+ * Vault is part of this app, not a second one: it opens here, in the launcher's
+ * own settings, and every Vault screen is unexported so nothing else on the device
+ * can launch it. The lock screen it opens authenticates before anything is
+ * decrypted.
+ */
+@Composable
+private fun VaultRow() {
+    val context = LocalContext.current
+    CleanNavigationRow(
+        title = stringResource(R.string.vault_entry_title),
+        subtitle = stringResource(R.string.vault_entry_subtitle),
+        onClick = {
+            // Compose rows are hosted by an activity, not an Activity context, so a
+            // new task is mandatory for the Vault's own task. `VaultLockActivity.intent`
+            // supplies it, and both Vault entry points therefore behave identically.
+            runCatching {
+                context.startActivity(com.lumaos.pro.launcher.vault.ui.VaultLockActivity.intent(context))
+            }.onFailure {
+                Toast.makeText(context, R.string.vault_unavailable, Toast.LENGTH_LONG).show()
+            }
+        }
+    )
+}
+
 @Composable
 private fun WallpaperRow(onOpenWallpaper: () -> Unit) {
     CleanRow(
@@ -614,7 +639,16 @@ private fun WidgetsRow(viewModel: SettingsViewModel) {
     CleanRow(
         title = stringResource(R.string.music_widget_name),
         subtitle = stringResource(R.string.music_widget_description),
-        onClick = { context.startActivity(Intent(context, com.lumaos.pro.launcher.widgets.music.MusicAccessActivity::class.java)) }
+        // Same reason as the Vault row above: this context is not an Activity, so
+        // the launch needs its own task or the platform raises.
+        onClick = {
+            runCatching {
+                context.startActivity(
+                    Intent(context, com.lumaos.pro.launcher.widgets.music.MusicAccessActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
+        }
     )
 }
 
@@ -712,32 +746,8 @@ private fun CleanSectionHeader(resId: Int) {
 private fun DrawerSection(viewModel: SettingsViewModel) {
     val categories by viewModel.prefs.drawerCategoriesEnabled.collectAsState(true)
     val suggestions by viewModel.prefs.suggestionsEnabled.collectAsState(true)
-    val hiddenInSearch by viewModel.prefs.hiddenInSearch.collectAsState(false)
-    val hiddenLock by viewModel.prefs.hiddenLock.collectAsState(false)
-    val activeProfile by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
-    val hidden by remember(activeProfile) { viewModel.prefs.hiddenApps(activeProfile) }.collectAsState(emptySet())
-    val apps by viewModel.apps.collectAsState()
-    val appsLoading by viewModel.appsLoading.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val keyguard = remember { context.getSystemService(KeyguardManager::class.java) }
-    var managerOpen by remember { mutableStateOf(false) }
-    var managerQuery by remember { mutableStateOf("") }
-
-    val unlockLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) managerOpen = true
-    }
-    val openManager: () -> Unit = {
-        managerQuery = ""
-        if (!hiddenLock) managerOpen = true else {
-            val intent = keyguard?.createConfirmDeviceCredentialIntent(
-                context.getString(R.string.hidden_unlock_title),
-                context.getString(R.string.pref_hidden_lock_desc)
-            )
-            if (intent == null) Toast.makeText(context, R.string.hidden_no_lock, Toast.LENGTH_SHORT).show()
-            else runCatching { unlockLauncher.launch(intent) }.onFailure { Toast.makeText(context, R.string.hidden_locked, Toast.LENGTH_SHORT).show() }
-        }
-    }
 
     Column {
         CleanSectionHeader(R.string.section_drawer)
@@ -755,31 +765,15 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
             onCheckedChange = { scope.launch { viewModel.prefs.setSuggestionsEnabled(it) } }
         )
         CleanDivider()
-        CompactSwitchRow(
-            title = stringResource(R.string.pref_hidden_search),
-            subtitle = stringResource(if (hiddenLock) R.string.pref_hidden_search_locked else R.string.pref_hidden_search_desc),
-            checked = hiddenInSearch && !hiddenLock,
-            enabled = !hiddenLock,
-            onCheckedChange = { scope.launch { viewModel.prefs.setHiddenInSearch(it) } }
-        )
-        CleanDivider()
-        CompactSwitchRow(
-            title = stringResource(R.string.pref_hidden_lock),
-            subtitle = stringResource(R.string.pref_hidden_lock_desc),
-            checked = hiddenLock,
-            onCheckedChange = { enabled ->
-                if (enabled && keyguard?.isDeviceSecure != true) Toast.makeText(context, R.string.hidden_no_lock, Toast.LENGTH_SHORT).show()
-                else scope.launch {
-                    if (enabled) viewModel.prefs.setHiddenInSearch(false)
-                    viewModel.prefs.setHiddenLock(enabled)
-                }
-            }
-        )
-        CleanDivider()
+        // Hide Apps used to live here as a dialog with its own checkbox list and its
+        // own screen-lock prompt. Both are gone: hiding is a Vault operation, stored
+        // in the Vault's encrypted index, and this row only opens that section. The
+        // old per-profile lists are imported into the Vault on first unlock, and the
+        // note explains the move so it does not look like the selection was lost.
         CleanRow(
-            title = stringResource(R.string.hidden_manage),
-            subtitle = stringResource(R.string.hidden_manage_summary, hidden.size, activeProfile.title),
-            onClick = openManager
+            title = stringResource(R.string.hidden_moved_title),
+            subtitle = stringResource(R.string.hidden_moved_summary),
+            onClick = { openVaultHiddenApps(context) }
         )
         CleanDivider()
         CleanRow(
@@ -792,53 +786,24 @@ private fun DrawerSection(viewModel: SettingsViewModel) {
             }
         )
     }
+}
 
-    if (managerOpen) {
-        Dialog(onDismissRequest = { managerOpen = false }) {
-            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.hidden_manage_title, activeProfile.title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    androidx.compose.foundation.layout.Box(
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), MaterialTheme.shapes.small).padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = managerQuery,
-                            onValueChange = { managerQuery = it },
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                            modifier = Modifier.fillMaxWidth(),
-                            decorationBox = { inner ->
-                                if (managerQuery.isEmpty()) Text(stringResource(R.string.search_hint), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
-                                inner()
-                            }
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    val filteredApps = remember(apps, managerQuery) { AppMatcher.filter(apps, managerQuery) }
-                    when {
-                        appsLoading -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
-                        filteredApps.isEmpty() -> Text(stringResource(R.string.empty_no_apps), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp))
-                        else -> LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                            items(filteredApps, key = { it.key.serialize() }) { app ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(app.label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(app.key.packageName, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                                    }
-                                    Checkbox(checked = app.key in hidden, onCheckedChange = { checked -> viewModel.setAppHidden(activeProfile, app.key, checked) })
-                                }
-                                HorizontalDivider(thickness = 0.4.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            }
-                        }
-                    }
-                    TextButton(onClick = { managerOpen = false }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.edit_done)) }
-                }
-            }
-        }
+/**
+ * Opens the Vault's Hidden Apps section.
+ *
+ * The Vault is a separate task, so `NEW_TASK` is required here: without it the
+ * activity manager can throw, which `runCatching` turned into a silent no-op tap.
+ */
+private fun openVaultHiddenApps(context: Context) {
+    runCatching {
+        context.startActivity(
+            com.lumaos.pro.launcher.vault.ui.VaultLockActivity.intent(
+                context,
+                com.lumaos.pro.launcher.vault.ui.VaultLockActivity.DESTINATION_HIDDEN_APPS
+            )
+        )
+    }.onFailure {
+        Toast.makeText(context, R.string.vault_unavailable, Toast.LENGTH_LONG).show()
     }
 }
 

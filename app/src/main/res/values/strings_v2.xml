@@ -62,8 +62,7 @@
     <string name="action_remove_from_folder_short">Remove from folder</string>
     <string name="action_pin_app">Pin to top of drawer</string>
     <string name="action_unpin_app">Unpin from drawer</string>
-    <string name="action_hide_app">Hide in %1$s</string>
-    <string name="toast_app_hidden">%1$s hidden. Unhide it in Settings.</string>
+    <string name="action_hide_app">Hide apps in the Vault</string>
 
     <!-- Folders -->
     <string name="folder_close_description">Close folder</string>
@@ -253,18 +252,11 @@
     <string name="pref_suggestions_desc">Suggested apps, Frequent, Most used sorting and smart folders use launches made through LumaOS Pro only. Stored on this device, never sent anywhere.</string>
     <string name="pref_clear_history">Clear launch history</string>
     <string name="pref_history_cleared">Launch history cleared</string>
-    <string name="pref_hidden_search">Find hidden apps in search</string>
-    <string name="pref_hidden_search_desc">Off by default. Hidden apps never appear in the drawer, suggestions or folders.</string>
-    <string name="pref_hidden_lock">Protect hidden apps with screen lock</string>
-    <string name="pref_hidden_lock_desc">Asks for your PIN, pattern or fingerprint before the hidden list can be shown or changed.</string>
-    <string name="hidden_unlock_title">Unlock hidden apps</string>
-    <string name="hidden_locked">Hidden apps are locked</string>
-    <string name="hidden_unlock">Unlock</string>
-    <string name="hidden_no_lock">Set a screen lock in Android settings to use this protection.</string>
-    <string name="pref_hidden_search_locked">Turn off hidden-app protection to include hidden apps in search.</string>
-    <string name="hidden_manage">Manage hidden apps</string>
-    <string name="hidden_manage_title">App visibility · %1$s</string>
-    <string name="hidden_manage_summary">%1$d hidden in %2$s. Checked apps are hidden.</string>
+    <string name="hidden_moved_title">Hidden Apps moved into the Vault</string>
+    <string name="hidden_moved_summary">Hiding is now part of the Vault, behind your PIN. Existing hidden apps were kept; open the Vault to change them.</string>
+    <string name="hidden_open_vault">Open Hidden Apps in the Vault</string>
+    <string name="vault_unavailable">The Vault could not be opened. Please try again.</string>
+    <string name="screen_unavailable">That screen could not be opened. Please try again.</string>
 
     <!-- Backup -->
     <string name="section_backup">Backup and restore</string>

@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RefreshCoalescer
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
+import com.lumaos.pro.launcher.launcher.model.HiddenAppKeys
 import com.lumaos.pro.launcher.launcher.model.HomeGridSpec
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
@@ -69,20 +70,67 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val activeContextProfile: StateFlow<ContextProfile> = prefs.activeContextProfile
         .stateIn(viewModelScope, SharingStarted.Eagerly, ContextProfile.PERSONAL)
 
-    private val hiddenKeys: StateFlow<Set<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::hiddenApps)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    /**
+     * Hidden apps live in the Vault, and the drawer filters from two sources.
+     *
+     *  - while the vault is **unlocked**, the authoritative encrypted index;
+     *  - otherwise, the device-bound Keystore mirror ([VaultManager.concealedComponentKeys]).
+     *
+     * The second half is what makes hiding survive a reboot. The encrypted index
+     * cannot be read without the master key, so before this existed a freshly
+     * booted phone showed every hidden app in the drawer until the first unlock.
+     * The mirror is written by the Vault on every hide/restore and rebuilt on every
+     * unlock, so it never drifts from the index; both paths are mapped through the
+     * same tested key parser.
+     *
+     * Reads happen on the caller's thread but touch exactly one small file plus one
+     * Keystore unwrap; the revision flow keeps them to one per change rather than
+     * one per frame.
+     */
+    private val hiddenKeys: StateFlow<Set<ComponentKey>> =
+        core.vault.hiddenAppsRevision.map { readHiddenKeys() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, readHiddenKeys())
     private val pinnedKeys: StateFlow<List<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::pinnedApps)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * The current hidden set, from whichever source is authoritative right now.
+     *
+     * Unlocked: the encrypted Vault index. Locked, or after a reboot: the
+     * device-bound Keystore mirror. The mirror is what makes hiding survive a
+     * reboot - the index cannot be read without the master key.
+     *
+     * This is also the flow's *initial* value, which means it runs once on the
+     * constructing thread rather than asynchronously. That is deliberate: the drawer
+     * must never render a hidden app, not even for one frame between "apps loaded"
+     * and "hidden set known", so the set has to be known before the first frame that
+     * could contain one. The cost is one small file read plus a single AES-GCM
+     * unwrap of a few hundred bytes under a plain (non-authenticating) Keystore key -
+     * bounded, IPC-dominated, and far below the package-manager query that populates
+     * the app list. Nothing here waits on the user, unlike the biometric key path.
+     */
+    private fun readHiddenKeys(): Set<ComponentKey> = runCatching {
+        val keys = if (core.vault.session.isUnlocked) {
+            core.vault.hiddenComponentKeys()
+        } else {
+            core.vault.concealedComponentKeys()
+        }
+        HiddenAppKeys.toComponentKeys(keys)
+    }.getOrDefault(emptySet())
 
     val drawerSort: StateFlow<DrawerSort> = prefs.drawerSort
         .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSort.ALPHABETICAL)
     val suggestionsEnabled: StateFlow<Boolean> = prefs.suggestionsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    private val hiddenInSearch: StateFlow<Boolean> = combine(prefs.hiddenInSearch, prefs.hiddenLock) { include, locked ->
-        // A restored backup may contain both flags. Protection wins: hidden
-        // entries are only exposed through the authenticated manager.
-        include && !locked
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    /**
+     * Hidden apps are never searchable from the drawer.
+     *
+     * The old opt-in let a locked drawer reveal a hidden app (and launch it) by
+     * searching for it, which defeated the point of hiding it behind the Vault.
+     * Search now only ever looks at visible apps; the Vault's own search is the
+     * one place hidden apps can be found, and it requires authentication.
+     */
+    private val hiddenInSearch: StateFlow<Boolean> = MutableStateFlow(false)
     val categoriesEnabled: StateFlow<Boolean> = prefs.drawerCategoriesEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     private val drawerColumns: StateFlow<Int> = prefs.drawerColumns
@@ -692,10 +740,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { prefs.setAppPinned(activeContextProfile.value, key, pinned) }
     }
 
-    /** Hides an app in the active context profile (reversible in Settings). */
-    fun hideApp(key: ComponentKey) {
-        viewModelScope.launch { prefs.setAppHidden(activeContextProfile.value, key, true) }
-    }
+    /**
+     * True only while the Vault is open.
+     *
+     * The drawer menu uses this to decide whether to offer the "Hide in Vault"
+     * entry at all: hiding is a Vault owned operation, so the menu must not offer a
+     * shortcut that would either fail or change a locked vault behind the lock.
+     */
+    fun isVaultUnlocked(): Boolean = core.vault.session.isUnlocked
+
+    /**
+     * Removes an app from the drawer by moving it into the Vault.
+     *
+     * Requires an unlocked vault: hiding is now a Vault-owned operation, so the
+     * caller must have authenticated first (the long-press menu routes through the
+     * Vault, which asks for the PIN when it is locked).
+     */
+    fun hideApp(key: ComponentKey, label: String): Boolean = core.vault.hideApp(
+        com.lumaos.pro.launcher.vault.core.VaultHiddenApp(key.packageName, key.className, key.userSerial, label)
+    )
 
     /** Widget ids referenced by any profile's layout (for orphan clean-up). */
     suspend fun allWidgetIds(): Set<Int> = ContextProfile.entries.flatMapTo(HashSet()) { profile ->

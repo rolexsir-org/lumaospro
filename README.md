@@ -202,6 +202,8 @@ com.lumaos.pro.launcher
 ├── optimizer/       Optimizer — the four supported actions
 ├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), StartupStats, formatting
 ├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
+├── vault/           LumaOS Vault — core/ (pure crypto + storage), platform/ (Android
+│                    façade), ui/ (Activities). See docs/VAULT.md.
 ├── onboarding/      OnboardingActivity (Compose)
 └── ui/              DesignTokens, ThemeMode compatibility, shared theme engine
     └── theme/       ThemeRepository, ThemeEngine, LumaDesignTokens (v3.2),
@@ -417,6 +419,44 @@ nothing, those options are absent — see the note in `GestureAction.kt`.
 
 ---
 
+## LumaOS Vault
+
+LumaOS Vault is a private, encrypted space inside this app — not a second APK and
+not a separate package. It holds photos, documents, files, notes and voice
+recordings, and it is reached from **Settings → Private → LumaOS Vault**.
+
+- **Encryption.** Each vault has its own random 256-bit master key. Every object
+  gets its own random data key, wrapped by the master key with HKDF-SHA-256
+  domain separation. AES-256-GCM protects small objects; large media use a
+  chunked streaming AEAD, so a video is never written to disk in the clear even
+  while it plays.
+- **Three independent ways in, one key.** A PIN (stretched with
+  PBKDF2-HMAC-SHA-256 and calibrated per device), device biometrics through the
+  system prompt and a Keystore-bound key, or a 54-character recovery key with a
+  built-in checksum. The recovery key restores the original master key on a new
+  phone; biometrics only ever unlock the copy already on this device.
+- **Storage.** Everything lives in the app's `noBackupFilesDir` with opaque file
+  names: no MediaStore entry, no gallery thumbnail, no plaintext cache, no log
+  line. Android Auto Backup and device-to-device transfer cannot see it, and a
+  test fails the build if a backup rule ever names the directory.
+- **Lifecycle.** Lock on screen-off, conceal the moment the app leaves the
+  foreground, lock after an inactivity timeout, `FLAG_SECURE` on every screen and
+  no recents preview. Keys are zeroized on lock; nothing is left decrypted in
+  memory between sessions.
+- **Backup.** Optional, explicit and ciphertext-only. Restoring on a new device
+  needs the recovery key, and the file's integrity is verified before success is
+  shown. The Security Centre reports what is actually true: Protected, Pending,
+  Failed, Destination lost, or Not configured.
+- **Honest limits.** Best-effort zeroization cannot defeat flash wear-levelling,
+  and nothing here defends against root, a compromised OS or a keylogger. Video
+  recording and unattended scheduled backups are not implemented yet.
+
+`docs/VAULT.md` documents the exact construction, the storage layout, the backup
+container format, the deliberate deviations, and what has and has not been
+verified.
+
+---
+
 ## Privacy
 
 - No account, backend, analytics, advertising SDK, or app network permission.
@@ -443,6 +483,13 @@ nothing, those options are absent — see the note in `GestureAction.kt`.
   to the installed Android speech-recognition app; that provider may process
   audio locally or remotely under its own privacy policy. LumaOS Pro receives the
   recognized text to carry out the command and does not retain transcripts.
+- **LumaOS Vault** content is encrypted before it is written, stored under
+  `noBackupFilesDir` with opaque names, and excluded from Android cloud backup and
+  device-to-device transfer. It is never placed in MediaStore, never logged, never
+  shown in a notification, and never leaves the app except through a
+  user-confirmed export or the user's own encrypted backup. The Vault requests
+  `CAMERA` and `RECORD_AUDIO` only when the private camera, scanner or recorder is
+  opened, and it needs no network permission of its own.
 - The merged manifest requests `REQUEST_DELETE_PACKAGES` for the user-confirmed
   uninstall action. `QUERY_ALL_PACKAGES` is not requested; app discovery uses
   Android's `LauncherApps` API and the declared launcher-intent query.
