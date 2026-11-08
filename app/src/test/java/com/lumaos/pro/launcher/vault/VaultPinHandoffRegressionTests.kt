@@ -75,60 +75,74 @@ class VaultPinHandoffRegressionTests {
         assertTrue("finishAffinity() must not be called: $offenders", offenders.isEmpty())
     }
 
-    /** The presence window must be measured on a monotonic clock. */
+    /**
+     * The hand-off window is gone, and no timing heuristic replaced it.
+     *
+     * The window was already measured on `nanoTime` after D-04; that fixed the clock
+     * jump but left a heuristic in the conceal path. It has since been replaced by
+     * the deterministic rule in [VaultScreenPresence], so this guard now asserts the
+     * stronger property: the conceal decision contains no clock and no timer.
+     */
     @Test
-    fun theHandoffWindowUsesAMonotonicClock() {
+    fun theHandoffDecisionHasNoClockAndNoTimer() {
         val presence = source("core/VaultScreenPresence.kt")
-        assertTrue(
-            "the window must not be measured with wall-clock time",
-            presence.contains("System::nanoTime")
-        )
         assertFalse(
-            "currentTimeMillis jumps and would collapse the window",
-            presence.contains("System::currentTimeMillis")
+            "a temporal hand-off window must not come back",
+            presence.contains("HANDOFF_WINDOW_MS")
         )
+        assertFalse("nor any other wall-clock measurement", presence.contains("System::currentTimeMillis"))
+        assertFalse("nor a monotonic one", presence.contains("System::nanoTime"))
+        assertFalse("the conceal decision must not be scheduled", presence.contains("postDelayed"))
     }
 
     /**
      * The very sequence that used to lock a freshly unlocked vault, driven through
-     * the real [VaultSession] with lock-on-leave on, on a monotonic clock.
+     * the real [VaultSession] with lock-on-leave on.
+     *
+     * The home screen is *created* while the PIN is being verified - which is what
+     * `startActivity()` does - so the lock screen's stop recognises a successor and
+     * does not conceal. No elapsed time is involved anywhere.
      */
     @Test
-    fun aCorrectPinSurvivesTheHandoffOnAMonotonicClock() {
-        var elapsed = 1_000_000_000L
-        val presence = VaultScreenPresence { elapsed }
-        val window = VaultScreenPresence.HANDOFF_WINDOW_MS * 1_000_000L
-        val session = VaultSession { elapsed / 1_000_000L }
+    fun aCorrectPinSurvivesTheHandoffWithLockOnLeave() {
+        val presence = VaultScreenPresence()
+        val session = VaultSession { 1_000_000L }
         session.configure(com.lumaos.pro.launcher.vault.core.VaultAutoLock.THREE_MINUTES, lockOnLeave = true)
-
         session.unlock(VaultSession.Keys(com.lumaos.pro.launcher.vault.core.VaultCrypto.newKey(), "v"))
-        presence.onScreenStarted()      // lock screen visible
-        presence.onScreenStopped()      // PIN accepted, finish() queued
-        elapsed += 16 * 1_000_000L      // one frame later...
-        presence.onScreenStarted()      // ...the home screen attaches
-        // The guard's settle callback fires inside the window and must be a no-op.
-        if (presence.settle(elapsed + 16 * 1_000_000L)) session.conceal()
+
+        val lockScreen = Any()
+        val homeScreen = Any()
+        presence.onScreenCreated(lockScreen)
+        presence.onScreenStarted(lockScreen)
+        presence.onScreenCreated(homeScreen)              // startActivity(home) during the PIN check
+        if (presence.onScreenStopped(lockScreen, false))  // lock screen stops
+            session.conceal()
+        presence.onScreenStarted(homeScreen)
         assertTrue("a correct PIN must leave the vault open", session.isUnlocked)
 
         // A real departure still locks, so the feature was not disabled.
-        presence.onScreenStopped()
-        if (presence.settle(elapsed + window)) session.conceal()
+        if (presence.onScreenStopped(homeScreen, false)) session.conceal()
         assertFalse("leaving for real must still lock", session.isUnlocked)
     }
 
-    private fun resolveModuleDir(): File {
-        (System.getenv("VAULT_REPO") ?: System.getProperty("lumaos.repo"))?.let { root ->
-            val candidate = File(root, "app/src/main/AndroidManifest.xml")
-            if (candidate.isFile) return File(root, "app")
+    companion object {
+        /** Locates the app module from the working directory or an explicit env var. */
+        fun moduleDir(): File = resolveModuleDir()
+
+        private fun resolveModuleDir(): File {
+            (System.getenv("VAULT_REPO") ?: System.getProperty("lumaos.repo"))?.let { root ->
+                val candidate = File(root, "app/src/main/AndroidManifest.xml")
+                if (candidate.isFile) return File(root, "app")
+            }
+            var directory: File? = File(System.getProperty("user.dir")).absoluteFile
+            while (directory != null) {
+                val candidate = File(directory, "src/main/AndroidManifest.xml")
+                if (candidate.isFile) return directory
+                val nested = File(directory, "app/src/main/AndroidManifest.xml")
+                if (nested.isFile) return File(directory, "app")
+                directory = directory.parentFile
+            }
+            error("Could not locate the app module from " + System.getProperty("user.dir"))
         }
-        var directory: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (directory != null) {
-            val candidate = File(directory, "src/main/AndroidManifest.xml")
-            if (candidate.isFile) return directory
-            val nested = File(directory, "app/src/main/AndroidManifest.xml")
-            if (nested.isFile) return File(directory, "app")
-            directory = directory.parentFile
-        }
-        error("Could not locate the app module from ${System.getProperty("user.dir")}")
     }
 }

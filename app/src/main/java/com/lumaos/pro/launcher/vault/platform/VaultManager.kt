@@ -12,6 +12,7 @@ import com.lumaos.pro.launcher.vault.core.VaultCryptoException
 import com.lumaos.pro.launcher.vault.core.VaultEncoding
 import com.lumaos.pro.launcher.vault.core.VaultEventType
 import com.lumaos.pro.launcher.vault.core.VaultFiles
+import com.lumaos.pro.launcher.vault.core.VaultConcealment
 import com.lumaos.pro.launcher.vault.core.HiddenApp
 import com.lumaos.pro.launcher.vault.core.VaultHiddenApp
 import com.lumaos.pro.launcher.vault.core.VaultIndex
@@ -101,7 +102,25 @@ class VaultManager(private val context: Context) {
     val paths = VaultPaths(File(context.noBackupFilesDir, VAULT_DIR))
     val session = VaultSession()
     private val keyGuard = VaultDeviceKeyGuard(context)
-    private val guard = VaultUnlockGuard(paths.guard)
+    /**
+     * Retry throttle, authenticated with a non-exportable Keystore HMAC.
+     *
+     * The record stays readable before unlock (it must be), but it can no longer be
+     * edited or deleted to reset the delay: the signer's Keystore entry outlives the
+     * file and is the witness that turns "missing" into "removed".
+     */
+    private val guardSigner: VaultGuardSigner = VaultGuardSigner(context)
+
+    private val guard = VaultUnlockGuard(paths.guard, guardSigner) { readKeyFile()?.vaultId }
+
+    /**
+     * Device-bound mirror of the hidden-app list, readable before authentication.
+     *
+     * The encrypted index below is authoritative; this is a derived copy the
+     * launcher can consult at boot. It is written on every change and rebuilt on
+     * every unlock, so it cannot drift.
+     */
+    private val concealment = VaultConcealmentStore(context, paths)
 
     /** Single background lane: vault writes are serialised by design. */
     val ioExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
@@ -123,6 +142,53 @@ class VaultManager(private val context: Context) {
     private fun bumpHiddenApps() {
         _hiddenAppsRevision.value = _hiddenAppsRevision.value + 1
     }
+
+    /**
+     * Republishes the hidden-app set after a change: bumps the revision the drawer
+     * observes and rewrites the device-bound mirror the launcher reads at boot.
+     *
+     * The mirror write is best-effort *by design*: the Vault index has already been
+     * committed at this point, so a failed mirror write cannot lose the selection -
+     * it only means the pre-unlock drawer is one edit stale until the next unlock
+     * rebuilds it. Failing the user's "hide" because a Keystore call hiccuped would
+     * be worse, so the outcome is logged and the next unlock repairs it.
+     */
+    private fun publishHiddenApps() {
+        bumpHiddenApps()
+        mirrorHiddenApps()
+    }
+
+    /** Rebuilds the device-bound mirror from the authoritative index. */
+    @Synchronized
+    private fun mirrorHiddenApps() {
+        val current = unlocked ?: return
+        val entries = current.index.settings.hiddenApps.map {
+            VaultConcealment.Entry(it.packageName, it.className, it.userSerial, it.label)
+        }
+        concealment.write(current.vaultId, entries)
+    }
+
+    /**
+     * The hidden-app selection as the launcher may see it **before** authentication.
+     *
+     * This is the fix for "hidden apps are visible after a reboot": after a reboot
+     * there is no master key, so [hiddenComponentKeys] is empty, and the drawer used
+     * to show everything. This reads the sealed, device-bound mirror instead.
+     *
+     * Never throws; a vault that has never hidden anything reports an empty set.
+     */
+    fun concealedComponentKeys(): Set<String> = concealment.load(currentVaultId()).keys
+
+    /** Richer form of [concealedComponentKeys] for the Vault's own status UI. */
+    fun concealmentState(): VaultConcealment.State = concealment.load(currentVaultId())
+
+    /**
+     * The vault id, if a key ring exists.
+     *
+     * Read from `keyring.json` (wrapped key material only), which is available
+     * before unlock because the PIN has to be verified against it.
+     */
+    private fun currentVaultId(): String? = readKeyFile()?.vaultId
 
     /** A lock happened while the index could still be written; record it next time. */
     private var pendingLockEvent = false
@@ -277,6 +343,14 @@ class VaultManager(private val context: Context) {
             unlocked = Unlocked(vaultId, masterKey, metadata, objects, seeded)
             session.configure(seeded.settings.autoLock, seeded.settings.lockOnLeave)
             session.unlock(VaultSession.Keys(masterKey, vaultId))
+            // A brand-new vault gets a clean throttle record: this is the *only*
+            // path allowed to reset the failure counter unconditionally, and it
+            // needs the vault to have just been created. Deleting guard.json by hand
+            // does not go through here and is reported as a deletion instead.
+            runCatching { guard.resetForNewVault() }
+                .onFailure { LumaLog.e("Throttle record could not be initialised", it) }
+            // Nothing is hidden in a new vault; drop any mirror left by a previous one.
+            runCatching { concealment.clear() }
             bumpHiddenApps()
             LumaLog.i("Vault created") // never logs identifiers or content
             CreateResult.Success(VaultRecoveryCode.format(recoverySecret), vaultId).also {
@@ -325,6 +399,18 @@ class VaultManager(private val context: Context) {
 
     /** Milliseconds the caller must wait before another PIN attempt is allowed. */
     fun pinRetryDelayMs(): Long = guard.state().remainingDelayMs(System.currentTimeMillis())
+
+    /**
+     * The throttle record's integrity, for the Security screen and diagnostics.
+     *
+     * Exposed so the app can *say* that the record was damaged, removed or edited
+     * instead of only refusing attempts. Like every read of the guard, it persists
+     * the deletion penalty if the record has been removed (see
+     * [VaultUnlockGuard.state]); the Security screen is reached after a successful
+     * unlock, where the record has just been rewritten, so in practice this is a
+     * pure read.
+     */
+    fun throttleState(): VaultUnlockGuard.State = guard.state()
 
     /**
      * Verifies a PIN.
@@ -444,6 +530,12 @@ class VaultManager(private val context: Context) {
             // preference is still there and the migration retries next time.
             runCatching { completeLegacyHiddenAppMigration() }
                 .onFailure { LumaLog.e("Legacy hidden-app import did not complete", it) }
+            // The encrypted index is authoritative. Rebuild the device-bound mirror
+            // from it now, while we hold the key, so a mirror that was lost, damaged,
+            // written by an older build, or left stale by an interrupted write is
+            // correct again for the next reboot.
+            runCatching { mirrorHiddenApps() }
+                .onFailure { LumaLog.e("Hidden-app mirror could not be rebuilt", it) }
             bumpHiddenApps()
             // Anything left in staging belongs to an operation that died with the
             // process; it is never the only copy of anything.
@@ -954,7 +1046,7 @@ class VaultManager(private val context: Context) {
                 HiddenApp(app.packageName, app.className, app.userSerial, app.label, System.currentTimeMillis())
             ).withEvent(VaultEventType.HIDDEN_APP_ADDED)
         )
-        bumpHiddenApps()
+        publishHiddenApps()
         return true
     }
 
@@ -969,7 +1061,7 @@ class VaultManager(private val context: Context) {
         val current = unlocked ?: throw IllegalStateException("Vault is locked")
         if (current.index.settings.hiddenApps.none { it.componentKey == componentKey }) return false
         commit(current, current.index.withoutHiddenApp(componentKey).withEvent(VaultEventType.HIDDEN_APP_REMOVED))
-        bumpHiddenApps()
+        publishHiddenApps()
         return true
     }
 
@@ -1001,7 +1093,7 @@ class VaultManager(private val context: Context) {
         var index = current.index
         additions.forEach { index = index.withHiddenApp(it) }
         commit(current, index.withEvent(VaultEventType.HIDDEN_APP_ADDED))
-        bumpHiddenApps()
+        publishHiddenApps()
         return additions.size
     }
 

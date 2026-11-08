@@ -59,6 +59,7 @@ class VaultSecurityActivity : VaultScreenActivity() {
         addRecoverySection()
         addAutoLockSection()
         addBackupSection()
+        addThrottleSection()
         addLockNowSection()
         addEventSection()
     }
@@ -444,6 +445,73 @@ class VaultSecurityActivity : VaultScreenActivity() {
             manager.lock(VaultSession.LockReason.USER)
             returnToLauncher()
         })
+    }
+
+    /**
+     * Reports the integrity of the unlock-throttle record.
+     *
+     * The record is signed with a Keystore HMAC, so an edited or removed one is
+     * detectable. Detecting it and then staying silent would be the worst of both
+     * worlds: the owner would be penalised without being told why, and would have no
+     * way to distinguish a real problem from a bug. This says which of the four
+     * states applies, in the same plain terms the rest of the screen uses.
+     *
+     * Deliberately read-only: rendering a screen must not change throttle state.
+     */
+    private fun addThrottleSection() {
+        val card = section(
+            "Unlock attempts",
+            "Repeated wrong PINs are delayed. The record is signed with this device's Keystore key, " +
+                "so editing or deleting it is detected rather than obeyed."
+        )
+        val state = runCatching { manager.throttleState() }.getOrNull()
+        when {
+            state == null -> card.addView(VaultUi.caption(this, "The attempt record could not be read."))
+
+            state.tampered -> {
+                card.addView(
+                    VaultUi.statusLine(this, "Record", "Edited", VaultDesign.colorDanger)
+                )
+                card.addView(
+                    VaultUi.caption(
+                        this,
+                        "The unlock-attempt record failed its signature check. The delay is being enforced " +
+                            "from the maximum penalty. If you did not change it, someone may have tried to. " +
+                            "Unlocking successfully rewrites a correct record."
+                    )
+                )
+            }
+
+            state.deleted -> {
+                card.addView(
+                    VaultUi.statusLine(this, "Record", "Removed", VaultDesign.colorDanger)
+                )
+                card.addView(
+                    VaultUi.caption(
+                        this,
+                        "The unlock-attempt record was deleted, so the maximum delay has been applied. " +
+                            "It is rewritten on the next successful unlock."
+                    )
+                )
+            }
+
+            state.damaged -> {
+                card.addView(
+                    VaultUi.statusLine(this, "Record", "Damaged", VaultDesign.colorWarning)
+                )
+                card.addView(
+                    VaultUi.caption(
+                        this,
+                        "The unlock-attempt record could not be read, so a short delay was applied. " +
+                            "It is rewritten on the next successful unlock."
+                    )
+                )
+            }
+
+            else -> card.addView(
+                VaultUi.statusLine(this, "Record", "Signed and valid", VaultDesign.colorPositive)
+            )
+        }
     }
 
     private fun addEventSection() {

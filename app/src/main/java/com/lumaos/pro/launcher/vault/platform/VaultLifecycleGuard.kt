@@ -45,6 +45,12 @@ class VaultLifecycleGuard(
      * the count briefly touches zero during a normal hand-off from the lock screen
      * to the home screen. Conflating that with leaving the app concealed (and, with
      * lock-on-leave, locked) the vault the moment the PIN was accepted.
+     *
+     * Earlier revisions resolved that ambiguity with a 400 ms timer. The timer is
+     * gone: [VaultScreenActivity] now tells the guard *why* a screen is stopping
+     * (`isReplacing` for its own navigations, `isChangingConfigurations` for a
+     * configuration change), so a hand-off is recognised as a hand-off instead of
+     * being inferred from elapsed time.
      */
     private val presence = VaultScreenPresence()
 
@@ -107,7 +113,6 @@ class VaultLifecycleGuard(
         runCatching { context.unregisterReceiver(screenReceiver) }
         manager.session.removeListener(sessionListener)
         handler.removeCallbacks(ticker)
-        handler.removeCallbacks(settleConceal)
         presence.reset()
     }
 
@@ -115,9 +120,14 @@ class VaultLifecycleGuard(
     // Activity lifecycle
     // ------------------------------------------------------------------
 
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        if (activity !is VaultScreen) return
+        presence.onScreenCreated(activity)
+    }
+
     override fun onActivityStarted(activity: Activity) {
         if (activity !is VaultScreen) return
-        presence.onScreenStarted()
+        presence.onScreenStarted(activity)
         manager.session.reveal()
     }
 
@@ -126,33 +136,36 @@ class VaultLifecycleGuard(
         manager.session.touch()
     }
 
+    /**
+     * A Vault screen left the foreground.
+     *
+     * The conceal decision is taken here, synchronously, from the state of the
+     * other Vault activities: a stop is a departure only when no other Vault screen
+     * is created-but-not-yet-started (a successor materialising) and none is still
+     * started (a screen still visible). There is no deferred check and no timer, so
+     * there is no window in which a stale callback can conceal a vault the user is
+     * actively looking at.
+     *
+     * `isChangingConfigurations` is read here rather than passed in because the
+     * `Activity` is the only thing that knows it, and this callback runs while it
+     * is still valid. A recreated activity is exempt: it is not a departure.
+     */
     override fun onActivityStopped(activity: Activity) {
         if (activity !is VaultScreen) return
-        if (!presence.onScreenStopped()) return
-        // The last Vault screen went away. Do not conceal on this frame: the next
-        // Vault screen may be starting in the same transition. Give the hand-off
-        // window to resolve, then settle.
-        handler.removeCallbacks(settleConceal)
-        handler.postDelayed(settleConceal, VaultScreenPresence.HANDOFF_WINDOW_MS)
+        val replacing = activity.isChangingConfigurations
+        if (!presence.onScreenStopped(activity, replacing)) return
+        // A real departure. With lock-on-leave this locks; otherwise it starts the
+        // idle timeout from the moment the user actually left.
+        manager.session.conceal()
     }
 
-    /**
-     * Runs after the hand-off window and conceals only if no Vault screen attached.
-     *
-     * This is the single place that decides the vault became invisible, so the
-     * auto-lock timer and "lock when leaving" both start from a real departure
-     * rather than from an activity transition.
-     */
-    private val settleConceal = object : Runnable {
-        override fun run() {
-            if (presence.settle()) manager.session.conceal()
-        }
-    }
-
-    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-    override fun onActivityDestroyed(activity: Activity) = Unit
+
+    override fun onActivityDestroyed(activity: Activity) {
+        if (activity !is VaultScreen) return
+        presence.onScreenDestroyed(activity)
+    }
 
     companion object {
         /**

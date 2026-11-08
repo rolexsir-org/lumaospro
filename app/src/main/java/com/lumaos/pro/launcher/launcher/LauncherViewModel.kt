@@ -71,19 +71,52 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, ContextProfile.PERSONAL)
 
     /**
-     * Hidden apps now live in the Vault, not in preferences.
+     * Hidden apps live in the Vault, and the drawer filters from two sources.
      *
-     * The drawer still needs them, so the manager publishes a revision counter that
-     * ticks on unlock, lock and every hide/restore. Mapping that to the manager's
-     * authenticated list means the drawer is told "nothing is hidden" whenever the
-     * vault is locked, and exactly what is hidden while it is open - no separate
-     * plaintext copy of the selection exists for the launcher to read.
+     *  - while the vault is **unlocked**, the authoritative encrypted index;
+     *  - otherwise, the device-bound Keystore mirror ([VaultManager.concealedComponentKeys]).
+     *
+     * The second half is what makes hiding survive a reboot. The encrypted index
+     * cannot be read without the master key, so before this existed a freshly
+     * booted phone showed every hidden app in the drawer until the first unlock.
+     * The mirror is written by the Vault on every hide/restore and rebuilt on every
+     * unlock, so it never drifts from the index; both paths are mapped through the
+     * same tested key parser.
+     *
+     * Reads happen on the caller's thread but touch exactly one small file plus one
+     * Keystore unwrap; the revision flow keeps them to one per change rather than
+     * one per frame.
      */
     private val hiddenKeys: StateFlow<Set<ComponentKey>> =
-        core.vault.hiddenAppsRevision.map { HiddenAppKeys.toComponentKeys(core.vault.hiddenComponentKeys()) }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+        core.vault.hiddenAppsRevision.map { readHiddenKeys() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, readHiddenKeys())
     private val pinnedKeys: StateFlow<List<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::pinnedApps)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * The current hidden set, from whichever source is authoritative right now.
+     *
+     * Unlocked: the encrypted Vault index. Locked, or after a reboot: the
+     * device-bound Keystore mirror. The mirror is what makes hiding survive a
+     * reboot - the index cannot be read without the master key.
+     *
+     * This is also the flow's *initial* value, which means it runs once on the
+     * constructing thread rather than asynchronously. That is deliberate: the drawer
+     * must never render a hidden app, not even for one frame between "apps loaded"
+     * and "hidden set known", so the set has to be known before the first frame that
+     * could contain one. The cost is one small file read plus a single AES-GCM
+     * unwrap of a few hundred bytes under a plain (non-authenticating) Keystore key -
+     * bounded, IPC-dominated, and far below the package-manager query that populates
+     * the app list. Nothing here waits on the user, unlike the biometric key path.
+     */
+    private fun readHiddenKeys(): Set<ComponentKey> = runCatching {
+        val keys = if (core.vault.session.isUnlocked) {
+            core.vault.hiddenComponentKeys()
+        } else {
+            core.vault.concealedComponentKeys()
+        }
+        HiddenAppKeys.toComponentKeys(keys)
+    }.getOrDefault(emptySet())
 
     val drawerSort: StateFlow<DrawerSort> = prefs.drawerSort
         .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSort.ALPHABETICAL)

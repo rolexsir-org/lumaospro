@@ -65,36 +65,61 @@ These are not caveats at the end of the document; they are part of the design co
 | **Exported and backed-up copies** | The moment content is exported to a file or a backup container, it is the user's responsibility. A backup is encrypted with the recovery key, but a file the user saved in the clear stays in the clear. |
 | **Guaranteed memory erasure** | `zeroize()` overwrites arrays; the JVM and ART may have copied them (by the JIT, the GC, or a crypto provider), and the OS may have paged them. Vault zeroizes every buffer it owns, on every path, but "wiped" means "overwritten here", not "gone from the hardware". |
 | **Guaranteed physical erasure on flash** | Android devices use wear-levelled flash with a translation layer. Overwriting a file does not reliably overwrite the blocks that held its old contents. Cryptographic deletion (§3) is what actually makes deleted content unreadable — not the overwrite. |
-| **Tamper-proof local throttling** | `guard.json` is unauthenticated by design (it must be read before any key exists). Deleting it resets the delay. §3 explains why that is acceptable and what still has to be broken. |
+| **Tamper-proof local throttling** | `guard.json` is now authenticated with a non-exportable Keystore HMAC, so it cannot be edited or deleted to reset the delay with filesystem access alone. It is still **not** rollback-proof: replaying an older valid record verifies, and code running as this app (root, compromised OS) can ask the Keystore for the tag. §3.1 states exactly how far the protection goes. |
 | **Supply-chain / build integrity** | Reproducible builds, signing-key custody and Play Integrity are deployment concerns; see `docs/MANAGED_DEVICE_DEPLOYMENT.md`. |
 
 ---
 
 ## 3. The three places where the honest answer is "it is weaker than it looks"
 
-### 3.1 `guard.json` — throttling that can be reset
+### 3.1 `guard.json` — throttling that can be edited, but not silently reset
 
 `guard.json` holds a failure count and a lockout deadline. It is read **before** the vault is
-unlocked, so it cannot be authenticated with any key the vault protects: whoever can read the
-file can also read the key that would verify it. Vault therefore does not pretend otherwise:
+unlocked, so it cannot be protected with the master key or with anything derived from the PIN:
+the file must be interpretable while no secret exists yet.
 
-* it is **not** signed, MACed or otherwise "protected" — no fake integrity check exists;
-* **deleting it resets the local delay.** That is a documented bypass of the *delay*;
-* it **cannot** bypass the PIN: the file holds no key material, and `VaultManager.unlockWithPin`
-  still has to unwrap the master key through PBKDF2 + AES-GCM. A test asserts that the guard
-  exposes no key-producing method and that a cleared guard yields a clean counter and nothing else;
-* a **missing** file is indistinguishable from a first run, so it starts clean (that is the
-  bypass). A file that is **present but malformed** is treated as damage: a non-zero failure
-  count anchored at the file's own modification time, so corrupting it buys no clean slate and
-  cannot lock the owner out for longer than the 15-minute cap;
+What it *is* protected with is a key that does not live in the vault directory at all. An
+HMAC-SHA-256 key is generated in the Android Keystore (`lumaos.vault.throttle`) with
+`PURPOSE_SIGN | PURPOSE_VERIFY`; its bytes are never returned to the app, so the tag on the
+record can only be produced by code running as this app on this device. Every record is signed
+over a length-prefixed encoding of `vaultId | failures | lockedUntil | lastFailure`.
+
+The consequences, stated as precisely as the mechanism allows:
+
+* **editing the file does not work.** A changed count, deadline or timestamp fails verification
+  and is read as tampering: the counter is seeded above the free attempts, so editing it can
+  only make the attacker wait longer;
+* **deleting the file does not work either.** The Keystore entry outlives every file in the
+  vault directory, so it is the witness that distinguishes "never used" from "record removed".
+  An absent record on a vault that has been used is reported as a deletion and — importantly —
+  **stores the maximum penalty immediately**, so the attempt that follows is refused. Deleting
+  before every guess therefore grants *zero* attempts, not one free guess per deletion. The
+  penalty is written on detection, not renewed on every read, so rendering the lock screen in a
+  loop cannot push the deadline forward;
+* **copying a record between devices or vaults does not work.** The tag is bound to this
+  device's Keystore key and to the vault id;
+* **a new vault is the only clean slate.** `resetForNewVault()` is called from vault creation
+  and nowhere else, and a test asserts there is exactly one such call site;
 * **absurd values are clamped**: `failures ∈ [0, 1000]`, `lockedUntil ≤ now + 15 min`,
   `lastFailure ≤ now`. A forged record cannot impose a permanent lockout, and a record with a
-  negative count or timestamp is treated as damaged rather than parsed as "zero failures".
+  negative count or timestamp is treated as damaged rather than parsed as "zero failures";
+* **a device without a usable Keystore HMAC degrades instead of failing.** The guard then runs
+  in the old, unauthenticated mode rather than reading its own records as tampered and locking
+  the owner out for a platform limitation. The state is visible in the UI copy and here.
 
-What the delay is actually worth: it stops a **casual, in-person** attacker from trying a few
-hundred PINs at the lock screen, and it survives process death, so force-quitting does not reset
-it. Against a copying attacker it is worth nothing — which is exactly why the real offline
-defence is the KDF cost and the PIN's entropy, not this file.
+**What this does not do.** The Keystore offers no rollback protection for *file contents*: an
+attacker who kept a previously valid `guard.json` can restore it byte-for-byte and the HMAC will
+verify — counter monotonicity would need a hardware counter Android does not expose to apps.
+And an attacker who can execute code as this app, or who is root, can ask the Keystore for the
+tag directly. So the honest claim is: **the retry state cannot be reset through the filesystem,
+but it is not tamper-proof against a compromised OS.**
+
+What none of this changes is that the delay is not what protects the data. `guard.json` holds no
+key material; `VaultManager.unlockWithPin` still has to unwrap the master key through PBKDF2 +
+AES-GCM. A test asserts the guard exposes no key-producing method. Against a copying attacker the
+throttle is worth nothing — which is exactly why the real offline defence is the KDF cost and the
+PIN's entropy, not this file. What the throttle *is* worth is stopping a casual, in-person
+attacker, and it survives process death, so force-quitting does not reset it either.
 
 ### 3.2 "Deletion" means the key is gone, not that the blocks are gone
 

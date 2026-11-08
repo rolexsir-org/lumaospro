@@ -236,16 +236,24 @@ so no reader mistakes "the Vault package compiles" for "the app was built".
 1. **Hiding is launcher-level.** Not isolation, not encryption of the app's own data, not
    protection against another launcher, ADB or Android settings. Stated in the UI and in
    `docs/VAULT.md` §7.1.
-2. **A locked Vault shows every app in the drawer.** The hidden set is only readable while
-   unlocked. This is deliberate (the alternative is a plaintext copy), and it means a
-   device rebooted into a locked Vault displays the apps until the first unlock — including
-   the post-upgrade case, where the legacy list is imported on that first unlock.
-3. **The 400 ms hand-off window** in `VaultScreenPresence` is a heuristic; screen-off and
-   idle timeout lock independently of it. It is now measured on a monotonic clock, so a
-   wall-clock change cannot collapse it (D-04).
+2. **FIXED — a locked Vault no longer shows the hidden apps.** This was the behaviour when
+   the report was written: the hidden set lived only in the encrypted index, so a rebooted,
+   still-locked Vault rendered the drawer from an empty set. It is now mirrored into
+   `conceal.bin`, sealed under a non-exportable Android Keystore AES key and read before
+   authentication. The encrypted index stays authoritative and rebuilds the mirror on every
+   unlock, so an upgraded Vault repairs itself on its first unlock. The mirror is not a
+   plaintext copy — but see `docs/VAULT.md` §7.1 for what it does and does not hide from
+   code running on the device itself.
+3. **FIXED — the 400 ms hand-off window is gone.** `VaultScreenPresence` no longer uses a
+   clock at all. It tracks each Vault activity's lifecycle stage and decides a departure from
+   the state of the *other* activities, which is deterministic: a successor is always created
+   before its predecessor stops. Screen-off and the idle timeout lock independently of it, as
+   before.
 4. **`launch.migrated` is not encrypted** — it names a migration, never an app or a key.
-5. **Deleting `guard.json` still resets the retry delay** (unchanged; it never bypasses PIN
-   verification).
+5. **FIXED — deleting `guard.json` no longer resets the retry delay.** The record is tagged
+   with a Keystore HMAC, and the Keystore entry outlives the file, so a missing record is
+   detected as a deletion and stores the maximum penalty immediately. Rollback (replaying an
+   older valid record) remains possible: see `docs/VAULT_THREAT_MODEL.md` §3.1.
 6. Existing Vault residuals from the previous report are unchanged: no guaranteed
    flash-level erasure, no full-memory-wipe claim, `meta.bin.bak` may retain a wrapped key
    of an item deleted before the remediation commit, and the clipboard sensitivity flag is

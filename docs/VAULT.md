@@ -171,7 +171,8 @@ body:
 ```
 <noBackupFilesDir>/vault/          ← never included in Auto Backup or D2D transfer
   keyring.json                     wrapped VMKs, salts, iteration counts (no plaintext secret)
-  guard.json                       failure counter + lockout deadline
+  guard.json                       failure counter + lockout deadline, Keystore-HMAC tagged
+  conceal.bin / conceal.bin.bak    hidden-app index, sealed under a Keystore AES key
   meta.bin / meta.bin.bak          encrypted metadata index (names, kinds, settings, events)
   objects/<32-hex>.obj             streaming-AEAD payloads, opaque names
   staging/                         capture scratch, restore staging — wiped on lock and unlock
@@ -265,9 +266,26 @@ What is stored, and where:
   display label the launcher already shows;
 * nothing about the application itself — no data path, no state, no content.
 
-What the launcher can see: only `VaultManager.hiddenComponentKeys()`, a set of
-`serial:pkg/cls` strings, and only while the vault is unlocked. A locked vault reports
-"nothing is hidden", which is why a locked device shows every app in the drawer.
+What the launcher can see depends on whether the Vault is open, and both answers come from
+the Vault:
+
+* **unlocked** — `VaultManager.hiddenComponentKeys()`, the authoritative set from the
+  encrypted index;
+* **locked, or before the first unlock after a reboot** — `concealedComponentKeys()`, which
+  reads `conceal.bin`: the same selection, re-encoded as `pkg`/`cls`/`user`/`label`, sealed
+  under an AES-256-GCM key held in the Android Keystore that the app cannot export.
+
+The mirror exists because the index cannot be read without the master key, and without a
+pre-unlock source every hidden app reappeared in the drawer after a reboot. It is written on
+every hide and every restore, and rebuilt from the index on every unlock, so it cannot drift.
+
+The distinction that matters: `conceal.bin` is **not** a plaintext copy — it cannot be read
+from an ADB pull, a bug report, another app's view of the directory, or a copy of the disk —
+but it is **not hidden from the device itself**. The key requires no user authentication (it
+must be usable before the first unlock, or the reboot fix would do nothing), so any code
+running as LumaOS Pro on an unlocked boot can ask the Keystore to open it. It protects the
+answer from *outside the app*, not from a compromised OS. Android's own encrypted backup and
+`noBackupFilesDir` restrictions apply on top.
 
 Migration, in order of what could go wrong:
 
@@ -347,10 +365,15 @@ fresh 87/87 run on the exact final tree is a Gradle-time task.
    shredded on exit and on lock. This is the only plaintext file Vault ever writes.
 6. **Shredding is best-effort.** Flash translation layers may keep old blocks; the app
    states this rather than promising erasure.
-7. **Throttling is local, and deleting `guard.json` resets it.** An attacker with the
-   vault directory and a copy of the ciphertext is limited only by PBKDF2 and PIN entropy,
-   not by the guard file — which is documented rather than defended, because a file that
-   must be readable before unlock cannot be authenticated against that same attacker.
+7. **Throttling is local, and is now authenticated.** `guard.json` must be readable before
+   unlock, so it cannot be protected with the master key; it is tagged instead with an
+   HMAC key that lives in the Android Keystore and is never exported. Editing the record
+   fails verification and is treated as tampering; deleting it is detected because the
+   Keystore entry outlives the file, and it immediately stores the maximum penalty, so a
+   delete-then-guess loop grants no attempts at all. This is **not** rollback-proof — an
+   older valid record replays — and it does not defend against root or a compromised OS,
+   which can ask the Keystore for the tag. Against someone who simply copies the encrypted
+   files off the device, the real limit remains PBKDF2 and the PIN's entropy.
 8. **Not defended against:** root, a compromised OS, a keylogger, an unlocked bootloader,
    or someone using the phone while the vault is already open. Nothing here claims
    otherwise.

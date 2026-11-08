@@ -516,13 +516,14 @@ class VaultLockActivity : VaultScreenActivity() {
     /**
      * Enters the vault after a successful authentication.
      *
-     * Order matters. `startActivity` is asynchronous, so the home screen is not yet
-     * started when the next line runs; finishing first therefore left a frame with
-     * no attached Vault screen. With lock-on-leave enabled the lifecycle guard read
-     * that frame as "the user left" and re-locked the vault, sending the user back
-     * to this screen right after typing the correct PIN. Starting home first (and
-     * letting the presence window absorb the transition) means a correct PIN
-     * always lands, and stays, on the Vault home screen.
+     * Order still matters, but not for the reason it used to. `startActivity` is
+     * asynchronous, so the home screen is not yet started when the next line runs.
+     * The lifecycle guard no longer infers "the user left" from that gap: it reads
+     * the state of the other Vault activities and sees that this screen's successor
+     * has already been created, so the hand-off is recognised as a hand-off with no
+     * grace period involved. Starting home *before* finishing this screen keeps that
+     * invariant true on every API level instead of relying on the guard to infer it,
+     * and costs nothing.
      *
      * `FLAG_ACTIVITY_CLEAR_TOP | SINGLE_TOP` reuses an existing home screen rather
      * than stacking a second one after repeated unlocks.

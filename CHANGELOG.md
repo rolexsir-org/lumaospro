@@ -1,5 +1,70 @@
 # Changelog
 
+## Unreleased — three critical Vault fixes
+
+Follow-up to the Hide Apps / PIN hand-off work below. Each of these is a defect in
+shipped behaviour, not a new feature.
+
+### Hidden apps no longer reappear after a reboot
+
+- **Cause.** The hidden set lived only in the Vault's encrypted index, which cannot
+  be read without the master key. Every time the Vault was locked — and therefore
+  after every reboot, and during the whole post-upgrade window before the first
+  unlock — `hiddenComponentKeys()` returned an empty set and the drawer rendered
+  every hidden app.
+- **Fix.** A second, device-bound copy (`conceal.bin`) is sealed with AES-256-GCM
+  under a non-exportable Android Keystore key and read by the launcher *before*
+  authentication. The encrypted index stays authoritative; the mirror is rewritten
+  on every hide and restore and rebuilt from the index on every unlock, so an
+  upgraded Vault repairs itself on its first unlock.
+- **Failure handling.** A missing mirror is a clean first run only if the Vault has
+  never hidden anything; a damaged or unreadable one falls back to the previous
+  generation and is then reported as degraded — never silently treated as
+  "nothing is hidden" — and is rebuilt at the next unlock. Writes are atomic, so an
+  interrupted update leaves the old or the new selection, never a half file.
+- **What it is not.** The mirror is not a plaintext copy: it cannot be read from an
+  ADB pull, a bug report or a disk image. It is not hidden *from the device* — the
+  key needs no user authentication (it must work before the first unlock), so code
+  running as the app can open it. See `docs/VAULT.md` §7.1.
+
+### The 400 ms hand-off window is gone
+
+- **Cause.** Deciding "did the user leave?" from an attached-screen count is racy,
+  because `startActivity()` is asynchronous. The previous fix treated a drop to zero
+  as provisional for 400 ms and cancelled it if another screen attached. That worked,
+  but it was a timing guess with no platform guarantee behind it: the window had to
+  be longer than the slowest device and shorter than a shoulder-surfer's patience,
+  and the settle callback ran on a clock that had to agree with the `Handler`.
+- **Fix.** `VaultScreenPresence` no longer uses a clock. It tracks each Vault
+  activity's lifecycle stage and decides a departure from the state of the *other*
+  activities. Android always creates a successor before its predecessor stops, so a
+  hand-off is recognised as a hand-off rather than inferred from elapsed time.
+  Configuration changes are explicitly exempt.
+- **Preserved.** Lock-on-leave, the idle timeout and immediate screen-off locking all
+  behave exactly as before; a genuine departure — including pressing Home from a
+  deep screen while the parent is still alive — conceals synchronously, in the same
+  callback that observes it.
+
+### `guard.json` can no longer be reset by deleting it
+
+- **Cause.** The retry counter had to be readable before unlock, so it could not be
+  protected with the master key. It was plain JSON: editing or deleting it reset the
+  progressive delay, which was documented as an accepted limitation.
+- **Fix.** Every record is now tagged with an HMAC-SHA-256 key generated in the
+  Android Keystore and never exported. Editing the record fails verification and is
+  treated as tampering. Deleting it is detected too — the Keystore entry outlives
+  the file — and the maximum penalty is stored immediately, so a delete-then-guess
+  loop grants **no** attempts rather than one free guess per deletion.
+- **Preserved.** The delays (3 free attempts, then 10 s → 30 s → 60 s → 5 min →
+  15 min cap), PIN verification and recovery are unchanged. A new Vault is the only
+  clean slate (`resetForNewVault()` is called from creation and nowhere else), and a
+  device whose Keystore cannot provide an HMAC key degrades to the previous mode
+  instead of locking its owner out.
+- **Not claimed.** Replaying an older valid record still verifies, and root or a
+  compromised OS can ask the Keystore for the tag. Rollback protection for file
+  contents is not available to apps on Android; this is stated in
+  `docs/VAULT_THREAT_MODEL.md` §3.1.
+
 ## Unreleased — Hide Apps moves into the Vault; PIN hand-off fixes
 
 Two related changes: the launcher-level **Hide Apps** feature is now part of the

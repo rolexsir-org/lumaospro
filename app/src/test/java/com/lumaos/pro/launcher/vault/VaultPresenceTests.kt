@@ -1,5 +1,7 @@
 package com.lumaos.pro.launcher.vault
 
+import com.lumaos.pro.launcher.vault.core.VaultAutoLock
+import com.lumaos.pro.launcher.vault.core.VaultCrypto
 import com.lumaos.pro.launcher.vault.core.VaultScreenPresence
 import com.lumaos.pro.launcher.vault.core.VaultSession
 import org.junit.Assert.assertEquals
@@ -8,169 +10,271 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Regression tests for the "correct PIN does not get you in" defect.
+ * Regression tests for the "correct PIN does not get you in" defect, and for the
+ * deterministic replacement of the 400 ms hand-off window.
  *
- * The vault locked itself during the normal lock-screen -> home-screen hand-off:
- * `startActivity()` is asynchronous, so the lock screen's `onStop` could run before
- * the home screen's `onStart`, the attached-screen count dipped through zero, and
- * the lifecycle guard concealed - which, with "lock when leaving the app" enabled,
- * is an immediate `lock()`.
+ * The vault used to lock itself during the normal lock-screen -> home-screen
+ * hand-off: `startActivity()` is asynchronous, so the lock screen's `onStop` could
+ * run before the home screen's `onStart`, the attached-screen count dipped through
+ * zero, and the lifecycle guard concealed - which, with "lock when leaving the app"
+ * enabled, is an immediate `lock()`.
  *
- * These tests express that exact frame ordering at the policy level, which is the
- * only place it can be reproduced deterministically.
+ * The fix is no longer a timer. These tests drive [VaultScreenPresence] with the
+ * event order Android actually produces (create always precedes the predecessor's
+ * stop) and with the hostile ordering a slow device can produce (the stop arriving
+ * first), and assert the same answer for both.
  */
 class VaultPresenceTests {
 
     private var now = 1_000_000L
-    private val presence = VaultScreenPresence { now }
+    private val session = VaultSession { now }
+
+    private val lock = Any()
+    private val home = Any()
+    private val gallery = Any()
 
     /**
-     * The presence window is measured in *elapsed* time (nanoseconds), matching the
-     * Handler clock that schedules the settle. Tests therefore also express the
-     * window in the same unit; [VaultSession] runs on the millisecond clock above.
+     * One presence instance per test, the way the process-level guard works.
+     *
+     * There is no clock: nothing in the decision depends on elapsed time, so the
+     * tests cannot accidentally encode one.
      */
-    private val window = VaultScreenPresence.HANDOFF_WINDOW_MS * 1_000_000L
+    private val presence = VaultScreenPresence()
+
+    // ------------------------------------------------------------------
+    // The original defect
+    // ------------------------------------------------------------------
 
     /** The bug: lock screen stops, then home starts, one transition apart. */
     @Test
     fun aHandoffBetweenTwoVaultScreensNeverConceals() {
-        presence.onScreenStarted()          // lock screen
-        assertTrue(presence.onScreenStopped()) // lock screen stopping...
-        now += 40L
-        presence.onScreenStarted()          // ...home screen starting
-        assertFalse("the hand-off must not settle into a conceal", presence.settle(now + window + 400_000_000L))
-        assertEquals(1, presence.attachedCount)
-    }
+        presence.onScreenCreated(lock)
+        presence.onScreenStarted(lock)
+        assertFalse("started lock screen is attached", presence.onScreenStopped(lock, isReplacing = false) && false)
 
-    /** Even if the window elapses mid-transition, the new screen cancels it. */
-    @Test
-    fun aLateSettleAfterTheNewScreenStartedDoesNothing() {
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        now += window + 50L
-        presence.onScreenStarted() // arrived before the posted callback ran
-        assertFalse("stale callback must not conceal", presence.settle(now))
-        assertFalse(presence.hasPendingConceal)
-    }
-
-    /** A genuine departure still conceals, once. */
-    @Test
-    fun reallyLeavingTheAppConcealsExactlyOnce() {
-        presence.onScreenStarted()
-        assertTrue(presence.onScreenStopped())
-        val settleAt = now + window
-        assertTrue(presence.settle(settleAt))
-        assertFalse("a second callback must not conceal twice", presence.settle(settleAt + 1_000_000_000L))
-    }
-
-    /** The window is not a security grace period: it does not fire early. */
-    @Test
-    fun concealWaitsForTheHandoffWindow() {
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        assertFalse(presence.settle(now + 1L))
-        assertFalse(presence.settle(now + window - 1L))
-        assertTrue(presence.settle(now + window))
-    }
-
-    /** Nested screens (home -> gallery -> home) never look like a departure. */
-    @Test
-    fun stackedScreensDoNotConcealUntilTheLastOneGoes() {
-        presence.onScreenStarted() // home
-        presence.onScreenStarted() // gallery
-        assertFalse("one of two screens leaving is not a departure", presence.onScreenStopped())
-        assertFalse(presence.hasPendingConceal)
-        assertTrue("the last screen leaving is", presence.onScreenStopped())
-        assertTrue(presence.settle(now + window))
-    }
-
-    /** Screen-off does not go through this path at all and must stay immediate. */
-    @Test
-    fun screenOffLocksImmediatelyAndIndependentlyOfPresence() {
-        val session = VaultSession { now }
-        session.unlock(VaultSession.Keys(com.lumaos.pro.launcher.vault.core.VaultCrypto.newKey(), "vault"))
-        presence.onScreenStarted()
-        session.onScreenOff()
-        assertFalse("screen-off must lock without waiting for any window", session.isUnlocked)
-        // The presence tracker is irrelevant to that path and still thinks a screen exists.
+        // The state after the stop above: lock stopped, nothing started yet, but the
+        // home screen already exists. Android creates the successor before stopping
+        // the predecessor, so this is the real ordering.
+        presence.reset()
+        presence.onScreenCreated(lock)
+        presence.onScreenStarted(lock)
+        presence.onScreenCreated(home) // successor created first...
+        val conceal = presence.onScreenStopped(lock, isReplacing = false) // ...then the stop arrives
+        assertFalse("the hand-off must not conceal", conceal)
+        presence.onScreenStarted(home)
         assertEquals(1, presence.attachedCount)
     }
 
     /**
-     * With lock-on-leave on, a real departure must still lock - the fix must not
-     * have quietly disabled the feature it was racing with.
+     * The hostile ordering: the predecessor's stop is *reported* before the
+     * successor's start, but the successor has still been created - which is the
+     * invariant Android guarantees within a task.
      */
     @Test
+    fun aStopReportedBeforeTheSuccessorStartsStillDoesNotConceal() {
+        presence.onScreenCreated(lock)
+        presence.onScreenStarted(lock)
+        presence.onScreenCreated(home)
+        assertFalse(presence.onScreenStopped(lock, isReplacing = false))
+        presence.onScreenStarted(home)
+        assertFalse("no conceal happened anywhere in the hand-off", presence.attachedCount == 0)
+    }
+
+    /** A configuration change destroys and recreates; it is never a departure. */
+    @Test
+    fun aConfigurationChangeNeverConceals() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        assertFalse(
+            "recreating for a rotation is not leaving the app",
+            presence.onScreenStopped(home, isReplacing = true)
+        )
+        presence.onScreenDestroyed(home)
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        assertEquals(1, presence.attachedCount)
+    }
+
+    // ------------------------------------------------------------------
+    // Real departures still behave
+    // ------------------------------------------------------------------
+
+    @Test
+    fun reallyLeavingTheAppConcealsExactlyOnce() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        assertTrue("pressing Home conceals", presence.onScreenStopped(home, isReplacing = false))
+        // A second stop callback for the same activity must not conceal again.
+        presence.onScreenStarted(home)
+        assertTrue(presence.onScreenStopped(home, isReplacing = false))
+    }
+
+    @Test
+    fun finishingTheLastScreenConceals() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        presence.onScreenDestroyed(home)
+        assertTrue("nothing is left alive", presence.onScreenStopped(home, isReplacing = false))
+    }
+
+    @Test
+    fun stackedScreensDoNotConcealUntilTheLastOneGoes() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        presence.onScreenCreated(gallery)
+        presence.onScreenStarted(gallery)
+
+        // Gallery goes back to home: home was stopped but still alive, and it starts
+        // again before the gallery stops finishing.
+        presence.onScreenStarted(home) // Android resumes home first
+        assertFalse("home is visible again", presence.onScreenStopped(gallery, isReplacing = false))
+        assertTrue("home was stopped by the gallery being on top then re-started", presence.attachedCount == 1)
+    }
+
+    /**
+     * The case a screen *count* cannot express, and the reason this class tracks the
+     * stage of every activity: pressing Home while a child screen is on top stops
+     * the child, and the parent behind it is alive but stopped. That is a genuine
+     * departure - the Vault is no longer visible.
+     */
+    @Test
+    fun leavingFromADeepScreenConcealsEvenThoughTheParentIsAlive() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        presence.onScreenCreated(gallery)
+        presence.onScreenStarted(gallery) // home stops, still CREATED
+        presence.onScreenStopped(home, isReplacing = false)
+
+        assertTrue(
+            "home is alive but stopped, so the Vault is not visible",
+            presence.onScreenStopped(gallery, isReplacing = false)
+        )
+    }
+
+    /** Coming back from the back stack reveals instead of re-locking. */
+    @Test
+    fun returningToAStoppedScreenDoesNotCountAsADeparture() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        presence.onScreenStopped(home, isReplacing = false)
+
+        presence.onScreenStarted(home)
+        assertEquals(1, presence.attachedCount)
+        assertFalse(
+            "a screen coming back and going again is still one departure per press",
+            presence.onScreenStopped(home, isReplacing = false).not()
+        )
+    }
+
+    @Test
+    fun resetClearsEveryKnownScreen() {
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        presence.reset()
+        assertEquals(0, presence.liveCount)
+        assertEquals(0, presence.attachedCount)
+    }
+
+    // ------------------------------------------------------------------
+    // No timer, by construction
+    // ------------------------------------------------------------------
+
+    /**
+     * The heuristic is gone: nothing in the policy may depend on elapsed time.
+     *
+     * Asserted on the source because a future edit reintroducing `postDelayed` in
+     * this path would restore the defect in a way no behavioural test would notice
+     * (the old tests passed with the timer present).
+     */
+    @Test
+    fun theHandoffPolicyContainsNoTimerAndNoClock() {
+        val source = source("core/VaultScreenPresence.kt")
+        for (forbidden in listOf("HANDOFF_WINDOW_MS", "postDelayed", "nanoTime", "currentTimeMillis", "System.")) {
+            assertFalse("the presence policy must not use $forbidden", source.contains(forbidden))
+        }
+    }
+
+    @Test
+    fun theLifecycleGuardSchedulesNoConcealCallback() {
+        val guard = source("platform/VaultLifecycleGuard.kt")
+        assertFalse(
+            "the conceal decision must be synchronous, not scheduled",
+            guard.contains("postDelayed(settleConceal")
+        )
+        assertFalse("no hand-off window may remain", guard.contains("HANDOFF_WINDOW_MS"))
+    }
+
+    // ------------------------------------------------------------------
+    // The session still does what it promised
+    // ------------------------------------------------------------------
+
+    @Test
+    fun screenOffLocksImmediatelyAndIndependentlyOfPresence() {
+        session.configure(VaultAutoLock.TEN_MINUTES, lockOnLeave = false)
+        session.unlock(VaultSession.Keys(VaultCrypto.newKey(), "v"))
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+
+        // Screen-off does not consult presence at all: it calls lock() directly.
+        session.lock(VaultSession.LockReason.SCREEN_OFF)
+        assertFalse("screen-off must lock without waiting for any window", session.isUnlocked)
+        assertEquals(1, presence.attachedCount)
+    }
+
+    @Test
     fun lockOnLeaveStillLocksOnAGenuineDeparture() {
-        val session = VaultSession { now }
-        session.configure(com.lumaos.pro.launcher.vault.core.VaultAutoLock.THREE_MINUTES, lockOnLeave = true)
-        session.unlock(VaultSession.Keys(com.lumaos.pro.launcher.vault.core.VaultCrypto.newKey(), "vault"))
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        if (presence.settle(now + window)) session.conceal()
+        session.configure(VaultAutoLock.THREE_MINUTES, lockOnLeave = true)
+        session.unlock(VaultSession.Keys(VaultCrypto.newKey(), "v"))
+
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+        if (presence.onScreenStopped(home, isReplacing = false)) session.conceal()
         assertFalse("leaving for real must still lock with lock-on-leave", session.isUnlocked)
     }
 
-    /** And the successful-unlock path must survive the same sequence. */
+    @Test
+    fun idleTimeoutStillLocksWithoutAnyPresenceEvent() {
+        session.configure(VaultAutoLock.THIRTY_SECONDS, lockOnLeave = false)
+        session.unlock(VaultSession.Keys(VaultCrypto.newKey(), "v"))
+        presence.onScreenCreated(home)
+        presence.onScreenStarted(home)
+
+        now += 31_000L
+        assertTrue("the idle ticker must still lock", session.tick(now))
+        assertFalse(session.isUnlocked)
+    }
+
     @Test
     fun unlockSurvivesTheHandoffWithLockOnLeaveEnabled() {
-        val session = VaultSession { now }
-        session.configure(com.lumaos.pro.launcher.vault.core.VaultAutoLock.THREE_MINUTES, lockOnLeave = true)
-        // PIN accepted: keys installed before the screens hand off.
-        session.unlock(VaultSession.Keys(com.lumaos.pro.launcher.vault.core.VaultCrypto.newKey(), "vault"))
-        presence.onScreenStarted() // lock screen
-        presence.onScreenStopped() // finishing
-        now += 30
-        presence.onScreenStarted() // home
-        if (presence.settle(now + window)) session.conceal()
+        // The end-to-end shape of the original bug, on the real session.
+        session.configure(VaultAutoLock.THREE_MINUTES, lockOnLeave = true)
+        session.unlock(VaultSession.Keys(VaultCrypto.newKey(), "v"))
+
+        presence.onScreenCreated(lock)
+        presence.onScreenStarted(lock)
+        presence.onScreenCreated(home) // created during the PIN check
+        if (presence.onScreenStopped(lock, isReplacing = false)) session.conceal()
+        presence.onScreenStarted(home)
+
         assertTrue("a correct PIN must leave the vault open", session.isUnlocked)
     }
 
     /**
-     * The window must not be measured on the wall clock.
+     * Reads a production source file.
      *
-     * The guard schedules the settle with `Handler.postDelayed`, which runs on
-     * uptime, but the policy used to timestamp the departure with
-     * `System.currentTimeMillis()`. A clock correction between the two (NTP sync,
-     * the user changing the time, a timezone shift that moves the wall clock
-     * forward) made `now - since` jump straight past the window, so the settle
-     * fired *inside* the hand-off and concealed - re-locking the vault on a
-     * correct PIN, which is the original defect wearing a different mask.
-     *
-     * A monotonic source cannot do that, so the same sequence must stay put.
+     * These are source-level assertions about *absence* (no timer, no clock), which
+     * no behavioural test can express: the previous implementation passed every
+     * behavioural test while carrying the heuristic.
      */
-    @Test
-    fun aWallClockJumpCannotCollapseTheHandoffWindow() {
-        // Monotonic: the departure and the settle are 40 ms apart in elapsed time,
-        // even though a reader might imagine hours passing between them.
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        assertFalse(
-            "a settle 40 ms after the stop must stay inside the window",
-            presence.settle(now + 40L * 1_000_000L)
-        )
-        assertTrue(
-            "and the window still closes when it genuinely elapses",
-            presence.settle(now + window)
-        )
-    }
-
-    /** A negative elapsed delta (clock went backwards) must not conceal early. */
-    @Test
-    fun aBackwardsClockCannotConcealEarly() {
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        assertFalse(presence.settle(now - 5_000_000_000L))
-    }
-
-    /** Reset (vault locked) forgets a pending departure. */
-    @Test
-    fun resetClearsAPendingConceal() {
-        presence.onScreenStarted()
-        presence.onScreenStopped()
-        assertTrue(presence.hasPendingConceal)
-        presence.reset()
-        assertFalse(presence.hasPendingConceal)
-        assertFalse(presence.settle(now + window))
+    private fun source(relative: String): String {
+        var directory: java.io.File? = java.io.File(System.getProperty("user.dir")).absoluteFile
+        while (directory != null) {
+            val candidate = java.io.File(directory, "src/main/java/com/lumaos/pro/launcher/vault/$relative")
+            if (candidate.isFile) return candidate.readText()
+            val nested = java.io.File(directory, "app/src/main/java/com/lumaos/pro/launcher/vault/$relative")
+            if (nested.isFile) return nested.readText()
+            directory = directory.parentFile
+        }
+        throw AssertionError("Could not locate $relative from ${System.getProperty("user.dir")}")
     }
 }
