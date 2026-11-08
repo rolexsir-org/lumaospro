@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.vault.core.VaultScreenPresence
 import com.lumaos.pro.launcher.vault.core.VaultSession
 
 /**
@@ -35,8 +36,17 @@ class VaultLifecycleGuard(
 
     private val handler = Handler(Looper.getMainLooper())
     private var started = false
-    private var visibleVaultScreens = 0
     private var lastScreenOnMs = System.currentTimeMillis()
+
+    /**
+     * Decides when a Vault screen departure really means "the user left".
+     *
+     * Counting screens alone is not enough: `startActivity()` is asynchronous, so
+     * the count briefly touches zero during a normal hand-off from the lock screen
+     * to the home screen. Conflating that with leaving the app concealed (and, with
+     * lock-on-leave, locked) the vault the moment the PIN was accepted.
+     */
+    private val presence = VaultScreenPresence()
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -97,6 +107,8 @@ class VaultLifecycleGuard(
         runCatching { context.unregisterReceiver(screenReceiver) }
         manager.session.removeListener(sessionListener)
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(settleConceal)
+        presence.reset()
     }
 
     // ------------------------------------------------------------------
@@ -105,7 +117,7 @@ class VaultLifecycleGuard(
 
     override fun onActivityStarted(activity: Activity) {
         if (activity !is VaultScreen) return
-        visibleVaultScreens++
+        presence.onScreenStarted()
         manager.session.reveal()
     }
 
@@ -116,10 +128,24 @@ class VaultLifecycleGuard(
 
     override fun onActivityStopped(activity: Activity) {
         if (activity !is VaultScreen) return
-        visibleVaultScreens = (visibleVaultScreens - 1).coerceAtLeast(0)
-        if (visibleVaultScreens == 0) {
-            // Every vault screen is gone: hide content now and start the timeout.
-            manager.session.conceal()
+        if (!presence.onScreenStopped()) return
+        // The last Vault screen went away. Do not conceal on this frame: the next
+        // Vault screen may be starting in the same transition. Give the hand-off
+        // window to resolve, then settle.
+        handler.removeCallbacks(settleConceal)
+        handler.postDelayed(settleConceal, VaultScreenPresence.HANDOFF_WINDOW_MS)
+    }
+
+    /**
+     * Runs after the hand-off window and conceals only if no Vault screen attached.
+     *
+     * This is the single place that decides the vault became invisible, so the
+     * auto-lock timer and "lock when leaving" both start from a real departure
+     * rather than from an activity transition.
+     */
+    private val settleConceal = object : Runnable {
+        override fun run() {
+            if (presence.settle()) manager.session.conceal()
         }
     }
 

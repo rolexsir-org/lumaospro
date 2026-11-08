@@ -92,6 +92,9 @@ class VaultHomeActivity : VaultScreenActivity() {
         addTile("Scanner", "Documents to encrypted PDF", VaultIcons.scanner(this)) {
             open(VaultCaptureActivity::class.java, VaultCaptureActivity.EXTRA_MODE to VaultCaptureActivity.MODE_SCAN)
         }
+        addTile("Hidden Apps", hiddenSubtitle(), VaultIcons.hiddenApps(this)) {
+            open(VaultHiddenAppsActivity::class.java)
+        }
         addTile("Security Centre", "PIN, biometrics, recovery key, backup", VaultIcons.security(this)) {
             open(VaultSecurityActivity::class.java)
         }
@@ -129,6 +132,19 @@ class VaultHomeActivity : VaultScreenActivity() {
         })
     }
 
+    /**
+     * The count is launcher metadata only: it says how many apps the drawer is
+     * currently filtering out, not that anything was disabled on the device.
+     */
+    private fun hiddenSubtitle(): String {
+        val hidden = manager.hiddenApps().size
+        return when (hidden) {
+            0 -> "Hide apps from the LumaOS drawer"
+            1 -> "1 app hidden from the LumaOS drawer"
+            else -> "$hidden apps hidden from the LumaOS drawer"
+        }
+    }
+
     private fun addTile(title: String, subtitle: String, icon: android.graphics.drawable.Drawable?, onClick: () -> Unit) {
         container.addView(VaultUi.tile(this, icon, title, subtitle, onClick))
     }
@@ -146,9 +162,18 @@ class VaultHomeActivity : VaultScreenActivity() {
         startActivity(Intent(this, target).apply { if (extra != null) putExtra(extra.first, extra.second) })
     }
 
+    /**
+     * Locks the vault and leaves Vault entirely.
+     *
+     * `finishAffinity()` was wrong here: Vault's activities share the launcher's
+     * task affinity, so finishing the affinity closed the *launcher's* task and
+     * dropped the user onto whatever was behind it (usually the system home
+     * screen), which reads as "the app crashed". The vault is part of LumaOS Pro,
+     * so "leave Vault" means: lock, then return to the launcher's own home screen.
+     */
     private fun lockAndReturn() {
         manager.lock(VaultSession.LockReason.USER)
-        finishAffinity()
+        returnToLauncher()
     }
 
     private fun formatBytes(bytes: Long): String = when {

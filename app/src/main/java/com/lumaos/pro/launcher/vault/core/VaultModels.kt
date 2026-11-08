@@ -186,7 +186,20 @@ data class VaultSettings(
     /** Set only after the user confirms they stored the recovery key. */
     val recoveryConfirmedAtMs: Long = 0L,
     val recoveryRotatedAtMs: Long = 0L,
-    val backup: VaultBackupSettings = VaultBackupSettings()
+    val backup: VaultBackupSettings = VaultBackupSettings(),
+    /**
+     * Launcher entries the user has moved into the Vault's Hidden Apps section.
+     *
+     * Stored here, inside the encrypted index, rather than in plain preferences:
+     * the list of apps someone chose to hide is itself private, and on the old
+     * launcher-level implementation it sat in DataStore in the clear. The launcher
+     * still reads it (it has to, to keep the drawer clean) but only through the
+     * Vault's authenticated manager, and only as a set of component names.
+     *
+     * Additive: an index written before this field existed reads as an empty set,
+     * and an older build ignores it, so the format stays compatible both ways.
+     */
+    val hiddenApps: List<HiddenApp> = emptyList()
 ) {
     fun toMap(): Map<String, Any?> = linkedMapOf(
         "autoLockMs" to autoLock.millis,
@@ -194,7 +207,8 @@ data class VaultSettings(
         "biometricEnabled" to biometricEnabled,
         "recoveryConfirmedAt" to recoveryConfirmedAtMs,
         "recoveryRotatedAt" to recoveryRotatedAtMs,
-        "backup" to backup.toMap()
+        "backup" to backup.toMap(),
+        "hiddenApps" to hiddenApps.map { it.toMap() }
     )
 
     companion object {
@@ -206,7 +220,88 @@ data class VaultSettings(
                 biometricEnabled = map["biometricEnabled"] as? Boolean ?: false,
                 recoveryConfirmedAtMs = (map["recoveryConfirmedAt"] as? Number)?.toLong() ?: 0L,
                 recoveryRotatedAtMs = (map["recoveryRotatedAt"] as? Number)?.toLong() ?: 0L,
-                backup = VaultBackupSettings.fromMap(map["backup"] as? Map<*, *>)
+                backup = VaultBackupSettings.fromMap(map["backup"] as? Map<*, *>),
+                hiddenApps = (map["hiddenApps"] as? List<*>)
+                    ?.mapNotNull { HiddenApp.fromMap(it as? Map<*, *>) }
+                    .orEmpty()
+            )
+        }
+    }
+}
+
+/**
+ * A launcher entry the user wants removed from the drawer.
+ *
+ * Deliberately a plain data holder with no Android types: it is what the Vault UI
+ * hands to [com.lumaos.pro.launcher.vault.platform.VaultManager] and what the
+ * launcher needs back to filter its drawer, so the whole hide/restore path can be
+ * unit-tested without a device.
+ */
+data class VaultHiddenApp(
+    val packageName: String,
+    val className: String,
+    val userSerial: Long = 0L,
+    val label: String = "",
+    val hiddenAtMs: Long = 0L
+) {
+    /** Canonical text form, matching `ComponentKey.serialize()`. */
+    val componentKey: String get() = "$userSerial:$packageName/$className"
+
+    companion object {
+        /** Parses the launcher's `serial:pkg/cls` form; null when malformed. */
+        fun fromComponentKey(value: String, label: String = ""): VaultHiddenApp? {
+            val colon = value.indexOf(':')
+            if (colon <= 0) return null
+            val serial = value.substring(0, colon).toLongOrNull() ?: return null
+            val slash = value.indexOf('/', colon + 1)
+            if (slash <= colon + 1 || slash == value.length - 1) return null
+            val pkg = value.substring(colon + 1, slash)
+            val cls = value.substring(slash + 1)
+            if (pkg.isBlank() || cls.isBlank()) return null
+            return VaultHiddenApp(pkg, cls, serial, label)
+        }
+    }
+}
+
+/**
+ * One launcher entry hidden from the drawer.
+ *
+ * Only what is needed to restore it: the component, a label for the Vault UI, the
+ * profile it belongs to, and when it was hidden. The label is the launcher's own
+ * label, not anything the app supplies at runtime, and it is inside the encrypted
+ * index like every other piece of Vault metadata.
+ */
+data class HiddenApp(
+    val packageName: String,
+    val className: String,
+    val userSerial: Long = 0L,
+    val label: String = "",
+    val hiddenAtMs: Long = 0L
+) {
+
+    /** Canonical text form, matching `ComponentKey.serialize()`. */
+    val componentKey: String get() = "$userSerial:$packageName/$className"
+
+    fun toMap(): Map<String, Any?> = linkedMapOf(
+        "pkg" to packageName,
+        "cls" to className,
+        "user" to userSerial,
+        "label" to label,
+        "at" to hiddenAtMs
+    )
+
+    companion object {
+        fun fromMap(map: Map<*, *>?): HiddenApp? {
+            if (map == null) return null
+            val pkg = map["pkg"] as? String ?: return null
+            val cls = map["cls"] as? String ?: return null
+            if (pkg.isBlank() || cls.isBlank()) return null
+            return HiddenApp(
+                packageName = pkg,
+                className = cls,
+                userSerial = (map["user"] as? Number)?.toLong() ?: 0L,
+                label = map["label"] as? String ?: "",
+                hiddenAtMs = (map["at"] as? Number)?.toLong() ?: 0L
             )
         }
     }
@@ -229,7 +324,9 @@ enum class VaultEventType(val id: String, val label: String) {
     BACKUP_OK("backup_ok", "Encrypted backup verified"),
     BACKUP_FAILED("backup_failed", "Encrypted backup failed"),
     RESTORED("restored", "Vault restored from backup"),
-    FAILED_ATTEMPTS("failed_attempts", "Failed unlock attempts");
+    FAILED_ATTEMPTS("failed_attempts", "Failed unlock attempts"),
+    HIDDEN_APP_ADDED("hidden_added", "App hidden in the vault"),
+    HIDDEN_APP_REMOVED("hidden_removed", "App restored to the launcher");
 
     companion object {
         fun fromId(id: String?): VaultEventType? = entries.firstOrNull { it.id == id }
@@ -280,6 +377,25 @@ data class VaultIndex(
 
     fun withSettings(newSettings: VaultSettings): VaultIndex =
         copy(settings = newSettings, updatedAtMs = System.currentTimeMillis())
+
+    /** Adds [app] to the hidden set, replacing any stale entry for the same component. */
+    fun withHiddenApp(app: HiddenApp): VaultIndex = copy(
+        settings = settings.copy(
+            hiddenApps = settings.hiddenApps.filterNot { it.componentKey == app.componentKey } + app
+        ),
+        updatedAtMs = System.currentTimeMillis()
+    )
+
+    /** Removes the hidden entry for [componentKey]; a no-op when it is not hidden. */
+    fun withoutHiddenApp(componentKey: String): VaultIndex = copy(
+        settings = settings.copy(
+            hiddenApps = settings.hiddenApps.filterNot { it.componentKey == componentKey }
+        ),
+        updatedAtMs = System.currentTimeMillis()
+    )
+
+    /** The hidden component keys, as the launcher's drawer wants them. */
+    fun hiddenComponentKeys(): Set<String> = settings.hiddenApps.mapTo(LinkedHashSet()) { it.componentKey }
 
     fun withEvent(type: VaultEventType, atMs: Long = System.currentTimeMillis()): VaultIndex =
         copy(events = (events + VaultEvent(type, atMs)).takeLast(MAX_EVENTS), updatedAtMs = atMs)

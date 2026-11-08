@@ -24,7 +24,7 @@ minSdk 26, targetSdk 36, AGP 8.13.2, Kotlin 2.2.21) with:
 | UI | Home and drawer are platform **Views**; settings, Wallpaper Studio and onboarding are **Compose**. Glass surfaces live in `ui/glass`, tokens in `ui/theme/LumaTokens.kt`, fonts are bundled Inter/Space Grotesk files. |
 | State | One hand-written holder, `core/LumaCore.kt`, created by `core/LumaApp.kt`; no DI framework. |
 | Persistence | DataStore Preferences only (`core/prefs/LumaPrefs.kt`); SQLite is used solely by the diagnostics store. No Room, no SQLCipher. |
-| Existing "hiding" feature | Per-profile **hidden apps** (`LumaPrefs.hiddenApps`, drawer/search filtering, `hiddenLock`). This is app-visibility filtering, **not** private content storage. It is untouched by Vault. |
+| Hide Apps | Formerly per-profile hidden apps in `LumaPrefs` (drawer/search filtering). **Now part of Vault**: the selection lives in the Vault's encrypted index and is only readable or editable after unlocking. Still app-visibility filtering, **not** private content storage or OS isolation. |
 | Backup | Launcher settings JSON backup (`backup/BackupCodec.kt`) plus Android Auto Backup rules that already include only `sharedpref` and `datastore/`. |
 | Monetisation | Theme premium state only; no billing library, nothing for Vault to disturb. |
 | Tests | 74 JVM/Robolectric test classes under `app/src/test`. |
@@ -40,7 +40,10 @@ Integration risks identified and handled:
    keys must never be reachable from the home screen; the guard hooks only Vault screens.
 4. **`LumaCore` growth** — Vault is one lazily-initialised field plus one lifecycle
    guard; nothing is constructed on the ordinary launcher start path beyond that.
-5. **Hidden apps** — left exactly as it was. Vault is *not* implemented on top of it.
+5. **Hidden apps** — moved *into* Vault. The list is now `VaultSettings.hiddenApps` in the
+   encrypted index; the old per-profile preference is imported once, additively, on the
+   first unlock (see §3 "Hidden Apps") and is never deleted. Hiding remains a launcher
+   filter: nothing is uninstalled, disabled or cleared.
 
 ---
 
@@ -82,13 +85,14 @@ Integration points (the only changes outside the new package):
 |---|---|
 | `core/LumaCore.kt` | one `val vault: VaultManager`, one `VaultLifecycleGuard`, started in `start()`, locked in `shutdown()` |
 | `settings/SettingsScreen.kt` | one "Private → LumaOS Vault" navigation row |
-| `AndroidManifest.xml` | nine unexported, recents-excluded Vault activities; `CAMERA` and `RECORD_AUDIO` permissions; two optional hardware features |
+| `AndroidManifest.xml` | ten unexported, recents-excluded Vault activities; `CAMERA` and `RECORD_AUDIO` permissions; two optional hardware features |
 | `res/values/strings.xml` | four strings |
 | `res/xml/backup_rules.xml`, `data_extraction_rules.xml` | comments only (semantics already excluded Vault by location) |
 
-**No existing behaviour was rewritten, no dependency was added, and no Gradle, DataStore,
-navigation, hidden-app, theme or backup code path was replaced.** Vault has zero new
-third-party dependencies: everything is `android.jar`, `javax.crypto` and
+**No dependency was added and no Gradle, DataStore, theme or backup code path was
+replaced.** The original Vault work touched no existing behaviour; the follow-up change
+that moved Hide Apps into the Vault did edit the launcher's hidden-app path, and that is
+described in §3. Vault has zero new third-party dependencies: everything is `android.jar`, `javax.crypto` and
 `java.security`. That is a deliberate cost/benefit call (see §8).
 
 ---
@@ -245,6 +249,47 @@ Executed as unit tests against the real code paths (all passing):
 * the Android backup rules, extraction rules and manifest are parsed and asserted: no
   rule names the vault directory, no Vault activity is exported.
 
+### 7.1 Hidden Apps inside the Vault
+
+Hiding an app used to be a plain launcher preference: `hidden_apps_<profile>` in
+DataStore, written by a Settings dialog and a drawer long-press action, guarded
+(optionally) by a `KeyguardManager` prompt. It moved into the Vault for one reason —
+*which* apps someone hides is private, and a plaintext preference is readable by any
+backup, bug-report or file manager.
+
+What is stored, and where:
+
+* one entry per hidden launcher component in `VaultSettings.hiddenApps`
+  (`pkg`, `cls`, `user`, `label`, `at`), inside `meta.bin`, encrypted under the
+  metadata key derived from the master key. `at` is a timestamp, `label` is the
+  display label the launcher already shows;
+* nothing about the application itself — no data path, no state, no content.
+
+What the launcher can see: only `VaultManager.hiddenComponentKeys()`, a set of
+`serial:pkg/cls` strings, and only while the vault is unlocked. A locked vault reports
+"nothing is hidden", which is why a locked device shows every app in the drawer.
+
+Migration, in order of what could go wrong:
+
+* **nothing is deleted.** The legacy preference is read once, converted, imported, and
+  left in place;
+* **the import only adds.** `importLegacyHiddenApps` skips entries already present,
+  de-duplicates by component key and never rewrites or removes an existing entry, so
+  running it twice is a no-op;
+* **it runs once, but only when it can prove it ran.** A success is recorded in
+  `launch.migrated` (outside the encrypted index; a migration name, never a secret). A
+  failed import leaves no marker and is retried at the next unlock. If the legacy list
+  has not been read yet (DataStore is asynchronous), the migration deliberately does
+  *not* mark itself done rather than mistaking "unknown" for "empty";
+* **a corrupt entry is dropped, not guessed at.** `HiddenAppKeys.parse` returns null and
+  the loader skips it — a malformed key must never turn into "hide a different app".
+
+What "hidden" does not mean, and the UI says so verbatim: the app is not uninstalled,
+disabled, suspended, force-stopped or cleared; it keeps running with its data intact;
+any other launcher or Android settings can still open it; and this is not the Android
+work-profile isolation feature. A static test fails the build if that copy, the
+non-exported manifest declaration, or the "no uninstall/disable/clear" property is lost.
+
 ---
 
 ## 8. Deliberate deviations, and why
@@ -352,7 +397,7 @@ None of those harness files are committed; the scripts live outside the reposito
 
 | # | Criterion | State | Evidence |
 |---|---|---|---|
-| 1 | One installable APK containing the Vault | ✅ | Vault is a package inside `app`; no second module, no new dependency; manifest declares nine unexported activities |
+| 1 | One installable APK containing the Vault | ✅ | Vault is a package inside `app`; no second module, no new dependency; manifest declares ten unexported activities |
 | 2 | Unique 256-bit VMK per vault | ✅ | `VaultKeyring.create` uses `VaultCrypto.randomKey()`; `VaultKeyringTests.keyringRoundTripsThroughJson` and `…vaultIdBindingRejectsAnotherVault` |
 | 3 | Independent per-object keys | ✅ | `VaultObjectStore` seals a random DEK per object; `VaultStorageTests.identicalContentProducesDifferentCiphertext` and `…wrappedKeyCannotOpenAnotherObject` |
 | 4 | PIN and biometric unlock both work | 🟡 | PIN path fully tested at the core level; biometric path uses the platform prompt + Keystore and compiles but has never run on hardware |

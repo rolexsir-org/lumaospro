@@ -70,23 +70,56 @@ abstract class VaultScreenActivity : Activity(), VaultLifecycleGuard.VaultScreen
     /** Build the screen; called once, before the first frame. */
     protected abstract fun onCreateContent(): View
 
-    /** Called when the vault locks while this screen is showing. */
+    /**
+     * Called when the vault locks while this screen is showing.
+     *
+     * The lock screen is started **before** this one finishes, so there is always
+     * an attached Vault screen. Finishing first would drop the presence count to
+     * zero for a frame, which is exactly the hand-off race that used to re-lock
+     * (or bounce to the launcher) at a moment the user had done nothing wrong.
+     */
     protected open fun onVaultLocked() {
+        openLockScreen()
         finish()
-        startActivity(
-            Intent(this, VaultLockActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        )
+    }
+
+    /**
+     * Brings the vault door to the front, reusing the existing instance.
+     *
+     * `CLEAR_TOP | SINGLE_TOP` keeps one lock activity in the Vault stack instead
+     * of stacking a new one per lock; the flag set is unchanged from the original
+     * implementation, only the ordering around `finish()` is now correct.
+     */
+    protected fun openLockScreen() {
+        runCatching {
+            startActivity(
+                Intent(this, VaultLockActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            )
+        }
+    }
+
+    /**
+     * Leaves Vault and returns to the launcher's home screen.
+     *
+     * Never `finishAffinity()`: Vault shares the launcher's task affinity, so that
+     * finished the whole task and left the user on the system home screen - the
+     * "the app closed itself" symptom. [HomeLaunch.intent] is the launcher's own
+     * HOME intent, kept out of this package so Vault does not depend on the
+     * launcher's classes (the dependency runs the other way: the launcher reads
+     * hidden apps from the Vault).
+     */
+    protected fun returnToLauncher() {
+        runCatching { HomeLaunch.start(this) }
+        finish()
     }
 
     override fun onResume() {
         super.onResume()
         if (requiresUnlockedVault() && !manager.session.isUnlocked) {
-            // Never show a screen whose keys are gone.
-            startActivity(
-                Intent(this, VaultLockActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            )
+            // Never show a screen whose keys are gone. Start the lock screen first,
+            // then leave, so the app is never briefly screen-less.
+            openLockScreen()
             finish()
             return
         }
@@ -209,6 +242,11 @@ abstract class VaultScreenActivity : Activity(), VaultLifecycleGuard.VaultScreen
             val result = runCatching(work)
             main.post { if (!isFinishing && !isDestroyed) then(result) }
         }
+    }
+
+    /** Short, non-sensitive user feedback. Never used for anything private. */
+    protected fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     protected fun runOnUiThreadIfAlive(action: () -> Unit) {

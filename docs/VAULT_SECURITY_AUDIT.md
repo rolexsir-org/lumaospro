@@ -1,11 +1,11 @@
 # LumaOS Vault — pre-release security audit & hardening report
 
 **Date:** 2026-11-07 · **Scope:** the Vault package already in this repository
-(`com.lumaos.pro.launcher.vault`, 29 source files) and the five integration points it
+(`com.lumaos.pro.launcher.vault`, 34 source files) and the five integration points it
 touches.
 
 **Verdict up front: not release-ready.** The cryptography, storage layout and backup
-format hold up under review and under the automated tests in this repository (105
+format hold up under review and under the automated tests in this repository (180
 executed here, 0 failing), and seven findings were fixed in this pass — but the Gradle
 build, lint, R8 and every on-device behaviour are **unverified** in this environment,
 and no hardware testing has been performed. §9 lists exactly what must happen before
@@ -26,9 +26,9 @@ release.
 
 | Activity | Performed | Evidence |
 |---|---|---|
-| Read the full Vault implementation and its integration points | yes | 29 Vault sources, `LumaCore`, `SettingsScreen`, manifest, backup/data-extraction rules |
-| Static type-check against a real `android-36/android.jar` | yes | Kotlin 2.2.21 compiler, 29 sources, 160 classes, no errors |
-| Execute the automated tests | yes | 105 tests, 0 failures (§8) |
+| Read the full Vault implementation and its integration points | yes | 34 Vault sources, `LumaCore`, `SettingsScreen`, manifest, backup/data-extraction rules |
+| Static type-check against a real `android-36/android.jar` | yes | Kotlin 2.2.21 compiler, 34 sources, no errors. The launcher, settings and Compose sources cannot be compiled here (AndroidX is unreachable); those edits were reviewed by reading, and are listed as unverified in the remediation report. |
+| Execute the automated tests | yes | 180 tests, 0 failures (§8). Scope: the pure-Kotlin JVM suites under `vault/` and `launcher/model/`; the Robolectric and Compose suites cannot build offline. |
 | Review Android platform surface (manifest, providers, intents, clipboard, backup rules) | yes | §7, plus two automated manifest tests |
 | `./build.sh assembleDebug`, `test`, `lint` | **no** | no Gradle, no Android SDK, no Google Maven in this sandbox |
 | Any device or emulator run | **no** | no device, no emulator |

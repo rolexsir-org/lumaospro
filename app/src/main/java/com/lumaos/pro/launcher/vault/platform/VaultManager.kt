@@ -12,6 +12,8 @@ import com.lumaos.pro.launcher.vault.core.VaultCryptoException
 import com.lumaos.pro.launcher.vault.core.VaultEncoding
 import com.lumaos.pro.launcher.vault.core.VaultEventType
 import com.lumaos.pro.launcher.vault.core.VaultFiles
+import com.lumaos.pro.launcher.vault.core.HiddenApp
+import com.lumaos.pro.launcher.vault.core.VaultHiddenApp
 import com.lumaos.pro.launcher.vault.core.VaultIndex
 import com.lumaos.pro.launcher.vault.core.VaultItem
 import com.lumaos.pro.launcher.vault.core.VaultItemKind
@@ -107,6 +109,20 @@ class VaultManager(private val context: Context) {
     }
 
     private var unlocked: Unlocked? = null
+
+    /**
+     * Ticks whenever the set of hidden apps can have changed.
+     *
+     * The launcher's drawer is a ViewModel-scoped flow, so it cannot poll; it maps
+     * this counter to [hiddenComponentKeys]. Emitting on unlock, lock, hide and
+     * restore covers every transition, and the counter carries no content itself.
+     */
+    private val _hiddenAppsRevision = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    val hiddenAppsRevision: kotlinx.coroutines.flow.StateFlow<Long> = _hiddenAppsRevision
+
+    private fun bumpHiddenApps() {
+        _hiddenAppsRevision.value = _hiddenAppsRevision.value + 1
+    }
 
     /** A lock happened while the index could still be written; record it next time. */
     private var pendingLockEvent = false
@@ -261,6 +277,7 @@ class VaultManager(private val context: Context) {
             unlocked = Unlocked(vaultId, masterKey, metadata, objects, seeded)
             session.configure(seeded.settings.autoLock, seeded.settings.lockOnLeave)
             session.unlock(VaultSession.Keys(masterKey, vaultId))
+            bumpHiddenApps()
             LumaLog.i("Vault created") // never logs identifiers or content
             CreateResult.Success(VaultRecoveryCode.format(recoverySecret), vaultId).also {
                 VaultCrypto.zeroize(recoverySecret)
@@ -422,6 +439,12 @@ class VaultManager(private val context: Context) {
             session.configure(withEvent.settings.autoLock, withEvent.settings.lockOnLeave)
             session.unlock(VaultSession.Keys(masterKey, keyFile.vaultId))
             guard.recordSuccess()
+            // The old launcher-level Hide Apps list becomes Vault data exactly once.
+            // A failure here must not stop an otherwise valid unlock: the legacy
+            // preference is still there and the migration retries next time.
+            runCatching { completeLegacyHiddenAppMigration() }
+                .onFailure { LumaLog.e("Legacy hidden-app import did not complete", it) }
+            bumpHiddenApps()
             // Anything left in staging belongs to an operation that died with the
             // process; it is never the only copy of anything.
             paths.clearStaging()
@@ -462,6 +485,7 @@ class VaultManager(private val context: Context) {
         }
         unlocked = null
         session.lock(reason)
+        bumpHiddenApps()
         paths.clearStaging()
         VaultMediaCache.clear()
         VaultTransientFiles.purge(paths)
@@ -888,6 +912,149 @@ class VaultManager(private val context: Context) {
         return updated
     }
 
+    // ------------------------------------------------------------------
+    // Hidden apps
+    // ------------------------------------------------------------------
+
+    /**
+     * The launcher entries the user has moved into the Vault.
+     *
+     * This is the *only* way the launcher learns what to hide, and it returns an
+     * empty set while the vault is locked - which is exactly why the drawer of a
+     * locked device shows every app, and why hiding state cannot be read without
+     * authenticating. The list itself is encrypted at rest inside `meta.bin`.
+     */
+    @Synchronized
+    fun hiddenApps(): List<VaultHiddenApp> =
+        synchronized(this) { unlocked?.index }?.settings?.hiddenApps.orEmpty().map {
+            VaultHiddenApp(it.packageName, it.className, it.userSerial, it.label, it.hiddenAtMs)
+        }
+
+    /** The hidden component keys in `serial:pkg/cls` form, or empty when locked. */
+    fun hiddenComponentKeys(): Set<String> =
+        synchronized(this) { unlocked?.index }?.hiddenComponentKeys() ?: emptySet()
+
+    /**
+     * Hides [app] from the launcher drawer.
+     *
+     * Nothing is done to the application itself: it is not uninstalled, disabled,
+     * suspended or cleared. The only change is this encrypted list plus the
+     * drawer's filter, so the app keeps running and keeps its data - and any
+     * other launcher on the device still shows it. `VaultHiddenApps` in the UI
+     * says so in plain words, because "hidden" is not "isolated".
+     */
+    @Synchronized
+    fun hideApp(app: VaultHiddenApp): Boolean {
+        val current = unlocked ?: throw IllegalStateException("Vault is locked")
+        if (app.packageName.isBlank() || app.className.isBlank()) return false
+        if (current.index.settings.hiddenApps.any { it.componentKey == app.componentKey }) return true
+        commit(
+            current,
+            current.index.withHiddenApp(
+                HiddenApp(app.packageName, app.className, app.userSerial, app.label, System.currentTimeMillis())
+            ).withEvent(VaultEventType.HIDDEN_APP_ADDED)
+        )
+        bumpHiddenApps()
+        return true
+    }
+
+    /**
+     * Restores a hidden app to the drawer.
+     *
+     * Removing the entry is the whole operation: the app was never touched, so
+     * there is nothing to undo beyond forgetting that it was hidden.
+     */
+    @Synchronized
+    fun unhideApp(componentKey: String): Boolean {
+        val current = unlocked ?: throw IllegalStateException("Vault is locked")
+        if (current.index.settings.hiddenApps.none { it.componentKey == componentKey }) return false
+        commit(current, current.index.withoutHiddenApp(componentKey).withEvent(VaultEventType.HIDDEN_APP_REMOVED))
+        bumpHiddenApps()
+        return true
+    }
+
+    /**
+     * Moves hidden-app selections from the old plain-preferences list into the
+     * encrypted index. Runs once per vault, and only ever *adds*.
+     *
+     * The previous implementation kept `hidden_apps_<profile>` in DataStore. Users
+     * who already hid apps must not see them reappear on upgrade, so on the first
+     * unlock after this change the entries are imported. The caller passes the
+     * legacy keys; an entry already present (or written concurrently) is skipped,
+     * so running this twice changes nothing. The legacy preference itself is left
+     * in place - the migration is additive and reversible, and nothing is deleted
+     * from the user's existing data.
+     *
+     * Returns the number of entries imported, for the security log and tests.
+     */
+    @Synchronized
+    fun importLegacyHiddenApps(legacy: List<VaultHiddenApp>): Int {
+        val current = unlocked ?: return 0
+        if (legacy.isEmpty()) return 0
+        val existing = current.index.settings.hiddenApps.mapTo(HashSet()) { it.componentKey }
+        val additions = legacy
+            .filter { it.packageName.isNotBlank() && it.className.isNotBlank() }
+            .filter { it.componentKey !in existing }
+            .distinctBy { it.componentKey }
+            .map { HiddenApp(it.packageName, it.className, it.userSerial, it.label, System.currentTimeMillis()) }
+        if (additions.isEmpty()) return 0
+        var index = current.index
+        additions.forEach { index = index.withHiddenApp(it) }
+        commit(current, index.withEvent(VaultEventType.HIDDEN_APP_ADDED))
+        bumpHiddenApps()
+        return additions.size
+    }
+
+    /**
+     * Runs [importLegacyHiddenApps] once per vault, on the first unlock.
+     *
+     * The marker is written only after a successful commit. A device that upgrades
+     * from the old launcher-level Hide Apps therefore keeps every hidden app, and a
+     * process that dies mid-import simply tries again next unlock - the import is
+     * additive and idempotent, so re-running it cannot duplicate or resurrect
+     * anything.
+     *
+     * If there is nothing to import, the marker is still written: the prefs are
+     * empty, so there is nothing to return for, and leaving it unset would re-read
+     * them on every unlock for the life of the install.
+     */
+    @Synchronized
+    private fun completeLegacyHiddenAppMigration() {
+        if (paths.launchMigration.isFile) return
+        // Null means "not known yet". The old list lives in DataStore, which has no
+        // synchronous read, so the caller caches it in the background at startup.
+        // Unlocking before that first read must not be mistaken for "no legacy list":
+        // it would mark the migration done and strand the selection in the old pref.
+        val legacy = runCatching { legacyHiddenAppReader() }.getOrNull() ?: return
+        val imported = importLegacyHiddenApps(legacy)
+        if (legacy.isNotEmpty() && imported == 0 && !legacyEntriesPresent(legacy)) {
+            // Nothing was written and nothing was already there: treat as unfinished
+            // so a transient failure is retried rather than silently losing the list.
+            return
+        }
+        runCatching {
+            paths.ensureDirectories()
+            paths.launchMigration.writeText(LAUNCH_MIGRATION_VERSION)
+        }.onFailure { LumaLog.e("Could not record launch migration marker", it) }
+    }
+
+    /** True when every legacy entry is already in the index (a no-op import). */
+    private fun legacyEntriesPresent(legacy: List<VaultHiddenApp>): Boolean {
+        val existing = hiddenComponentKeys()
+        return legacy.all { it.componentKey in existing }
+    }
+
+    /**
+     * Supplies the old Hide Apps preference, or null while that value has not been
+     * read yet.
+     *
+     * Set by [com.lumaos.pro.launcher.core.LumaCore] at startup, so the Vault does
+     * not have to depend on the preference layer. The default returns an empty list,
+     * which keeps unit tests and a fresh install trivial.
+     */
+    @Volatile
+    var legacyHiddenAppReader: () -> List<VaultHiddenApp>? = { emptyList() }
+
     /**
      * Removes an item: index first, payload second, stale generations last.
      *
@@ -1274,5 +1441,7 @@ class VaultManager(private val context: Context) {
 }
 
 /** Process-wide accessor; the manager is owned by [com.lumaos.pro.launcher.core.LumaCore]. */
+private const val LAUNCH_MIGRATION_VERSION = "1:legacy-hidden-apps"
+
 internal fun android.content.Context.vault(): VaultManager =
     (applicationContext as com.lumaos.pro.launcher.core.LumaApp).core.vault

@@ -227,6 +227,12 @@
             android:theme="@style/Theme.LumaOS.Settings" />
 
         <activity
+            android:name=".vault.ui.VaultHiddenAppsActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
             android:name=".vault.ui.VaultGalleryActivity"
             android:exported="false"
             android:excludeFromRecents="true"

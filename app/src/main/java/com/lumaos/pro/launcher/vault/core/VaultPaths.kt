@@ -11,6 +11,7 @@ import java.io.IOException
  * <root>/                       noBackupFilesDir/vault  (never in an Android backup)
  *   keyring.json                wrapped copies of the master key (ciphertext only)
  *   guard.json                  failed-attempt counters and lockout deadlines
+ *   launch.migrated             which one-time launch migrations have run
  *   meta.bin                    encrypted metadata index (names, kinds, settings)
  *   meta.bin.bak                previous generation, used if a commit was interrupted
  *   objects/<id>.obj            encrypted object payloads, opaque names
@@ -27,6 +28,15 @@ class VaultPaths(val root: File) {
     val metadata: File get() = File(root, "meta.bin")
     val metadataBackup: File get() = File(root, "meta.bin.bak")
     val guard: File get() = File(root, "guard.json")
+
+    /**
+     * Marker for one-time launch migrations that are *not* secrets.
+     *
+     * It records only that a migration ran ("legacy hidden apps imported"), never
+     * what was migrated, so it is deliberately outside the encrypted index: it has
+     * to be readable before the vault is unlocked, and it must survive a lock.
+     */
+    val launchMigration: File get() = File(root, "launch.migrated")
     val objects: File get() = File(root, "objects")
     val staging: File get() = File(root, "staging")
 

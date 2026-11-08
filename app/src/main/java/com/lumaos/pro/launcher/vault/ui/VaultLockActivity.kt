@@ -57,6 +57,8 @@ class VaultLockActivity : VaultScreenActivity() {
      * soon as they are no longer needed.
      */
     private var firstPin: CharArray = CharArray(0)
+    /** Guards against a double-tap queueing the same recovery check twice. */
+    private var recoveryCheckInFlight = false
     private var recoveryCodeForSetup: String = ""
     private var setupVaultId: String = ""
 
@@ -70,6 +72,27 @@ class VaultLockActivity : VaultScreenActivity() {
     private val biometricGate: VaultBiometricGate by lazy { VaultBiometricGate(this) }
 
     override fun requiresUnlockedVault(): Boolean = false
+
+    companion object {
+        /**
+         * Screen to open once the vault is unlocked.
+         *
+         * Set when the caller's intent is "authenticate, then take me somewhere",
+         * e.g. the drawer's "Hide apps in the Vault" entry. Without it every entry
+         * point landed on the Vault home and the user had to find the section
+         * again after typing a PIN - and the drawer's menu entry would look like it
+         * had done nothing.
+         */
+        const val EXTRA_DESTINATION = "com.lumaos.pro.launcher.vault.DESTINATION"
+        const val DESTINATION_HIDDEN_APPS = com.lumaos.pro.launcher.vault.core.VaultDestination.HIDDEN_APPS
+
+        /** Lock screen intent that continues into [destination] after unlocking. */
+        fun intent(context: android.content.Context, destination: String? = null): Intent =
+            Intent(context, VaultLockActivity::class.java).apply {
+                if (destination != null) putExtra(EXTRA_DESTINATION, destination)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+    }
 
     override fun onCreateContent(): View {
         stage = if (manager.isVaultCreated()) Stage.UNLOCK_PIN else Stage.SETUP_PIN
@@ -358,10 +381,27 @@ class VaultLockActivity : VaultScreenActivity() {
         actionButton.alpha = if (actionButton.isEnabled) 1f else 0.4f
     }
 
+    /**
+     * Shows an inline error.
+     *
+     * `messageView` is created by [buildPinPad], which the recovery-key and
+     * new-PIN stages do not call - so an incorrect recovery key used to throw
+     * `UninitializedPropertyAccessException` and take the process down. A wrong
+     * recovery key is a normal event and must produce a message, never a crash.
+     * When there is no inline view yet, the message is attached to this stage's
+     * body instead, so it is still visible and still belongs to this screen.
+     */
     private fun showMessage(text: String, color: Int = VaultDesign.colorDanger) {
-        messageView.text = text
-        messageView.setTextColor(color)
-        messageView.visibility = View.VISIBLE
+        if (::messageView.isInitialized) {
+            messageView.text = text
+            messageView.setTextColor(color)
+            messageView.visibility = View.VISIBLE
+            return
+        }
+        val inline = VaultUi.message(this, text, color)
+        if (::body.isInitialized) {
+            body.addView(inline)
+        }
     }
 
     // ------------------------------------------------------------------
@@ -450,8 +490,39 @@ class VaultLockActivity : VaultScreenActivity() {
         }
     }
 
+    /**
+     * Enters the vault after a successful authentication.
+     *
+     * Order matters. `startActivity` is asynchronous, so the home screen is not yet
+     * started when the next line runs; finishing first therefore left a frame with
+     * no attached Vault screen. With lock-on-leave enabled the lifecycle guard read
+     * that frame as "the user left" and re-locked the vault, sending the user back
+     * to this screen right after typing the correct PIN. Starting home first (and
+     * letting the presence window absorb the transition) means a correct PIN
+     * always lands, and stays, on the Vault home screen.
+     *
+     * `FLAG_ACTIVITY_CLEAR_TOP | SINGLE_TOP` reuses an existing home screen rather
+     * than stacking a second one after repeated unlocks.
+     */
     private fun openHome() {
-        startActivity(Intent(this, VaultHomeActivity::class.java))
+        // Read once from the launch intent, then consume it: a later lock/unlock on
+        // this same activity must not navigate away from the home screen again.
+        val destination = this.intent?.getStringExtra(EXTRA_DESTINATION)
+        this.intent?.removeExtra(EXTRA_DESTINATION)
+        val target = if (com.lumaos.pro.launcher.vault.core.VaultDestination.opensHiddenApps(destination)) {
+            VaultHiddenAppsActivity::class.java
+        } else {
+            VaultHomeActivity::class.java
+        }
+        val next = Intent(this, target)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        runCatching { startActivity(next) }
+            .onFailure {
+                // The only realistic failure is a misconfigured manifest. Say so
+                // instead of finishing silently, which looked like a crash.
+                showMessage("The Vault screen could not be opened. Please restart LumaOS Pro.")
+                return
+            }
         finish()
     }
 
@@ -503,8 +574,11 @@ class VaultLockActivity : VaultScreenActivity() {
     }
 
     private fun unlockWithRecovery(code: String) {
+        if (recoveryCheckInFlight) return
+        recoveryCheckInFlight = true
         body.addView(VaultUi.busyRow(this, "Checking your recovery key…"))
         io({ manager.unlockWithRecovery(code) }) { result ->
+            recoveryCheckInFlight = false
             when (result.getOrNull()) {
                 VaultManager.UnlockResult.Success -> {
                     buffer.clear()

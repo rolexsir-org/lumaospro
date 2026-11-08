@@ -132,8 +132,6 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val DRAWER_PRESENTATION = stringPreferencesKey("drawer_presentation")
         val DRAWER_CATEGORIES = booleanPreferencesKey("drawer_categories")
         val SUGGESTIONS_ENABLED = booleanPreferencesKey("suggestions_enabled")
-        val HIDDEN_SEARCH = booleanPreferencesKey("hidden_search")
-        val HIDDEN_LOCK = booleanPreferencesKey("hidden_lock")
     }
 
     // --- Appearance -------------------------------------------------------
@@ -528,14 +526,6 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     val suggestionsEnabled: Flow<Boolean> = read(Keys.SUGGESTIONS_ENABLED) { true }
     suspend fun setSuggestionsEnabled(value: Boolean) = write(Keys.SUGGESTIONS_ENABLED, value)
 
-    /** Hidden apps are excluded from search unless the user opts in. */
-    val hiddenInSearch: Flow<Boolean> = read(Keys.HIDDEN_SEARCH) { false }
-    suspend fun setHiddenInSearch(value: Boolean) = write(Keys.HIDDEN_SEARCH, value)
-
-    /** Require the device screen lock before showing or changing the hidden-apps list. */
-    val hiddenLock: Flow<Boolean> = read(Keys.HIDDEN_LOCK) { false }
-    suspend fun setHiddenLock(value: Boolean) = write(Keys.HIDDEN_LOCK, value)
-
     // --- Backup -----------------------------------------------------------
 
     /** Every stored value keyed by preference name (the backup codec filters it). */
@@ -685,19 +675,16 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     suspend fun setProfileSchedule(profile: ContextProfile, schedule: ProfileSchedule) =
         write(scheduleKey(profile), ProfileSchedule.encode(schedule))
 
-    fun hiddenApps(profile: ContextProfile): Flow<Set<ComponentKey>> =
-        read(hiddenAppsKey(profile)) { "" }.map { raw ->
-            raw.split('|').mapNotNullTo(linkedSetOf()) { ComponentKey.parse(it) }
-        }
+    /**
+     * The pre-Vault hidden-app list, exactly as stored.
+     *
+     * Read-only, and read only by the one-time migration into the Vault: hiding is
+     * owned by the Vault now, so nothing writes this key any more. It is kept (and
+     * never cleared) so an interrupted or failed import can be retried, and so a
+     * downgrade to an older build still finds the user's selection.
+     */
+    fun hiddenAppsRaw(profile: ContextProfile): Flow<String> = read(hiddenAppsKey(profile)) { "" }
 
-    suspend fun setAppHidden(profile: ContextProfile, key: ComponentKey, hidden: Boolean) {
-        dataStore.edit { prefs ->
-            val prefKey = hiddenAppsKey(profile)
-            val current = prefs[prefKey].orEmpty().split('|').mapNotNullTo(linkedSetOf()) { ComponentKey.parse(it) }
-            if (hidden) current.add(key) else current.remove(key)
-            prefs[prefKey] = current.joinToString("|") { it.serialize() }
-        }
-    }
 
     /** Explicit favourites for the vertical/grid drawer, independent per context. */
     fun pinnedApps(profile: ContextProfile): Flow<List<ComponentKey>> =

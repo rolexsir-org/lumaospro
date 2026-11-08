@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RefreshCoalescer
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
+import com.lumaos.pro.launcher.launcher.model.HiddenAppKeys
 import com.lumaos.pro.launcher.launcher.model.HomeGridSpec
 import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
@@ -69,8 +70,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val activeContextProfile: StateFlow<ContextProfile> = prefs.activeContextProfile
         .stateIn(viewModelScope, SharingStarted.Eagerly, ContextProfile.PERSONAL)
 
-    private val hiddenKeys: StateFlow<Set<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::hiddenApps)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+    /**
+     * Hidden apps now live in the Vault, not in preferences.
+     *
+     * The drawer still needs them, so the manager publishes a revision counter that
+     * ticks on unlock, lock and every hide/restore. Mapping that to the manager's
+     * authenticated list means the drawer is told "nothing is hidden" whenever the
+     * vault is locked, and exactly what is hidden while it is open - no separate
+     * plaintext copy of the selection exists for the launcher to read.
+     */
+    private val hiddenKeys: StateFlow<Set<ComponentKey>> =
+        core.vault.hiddenAppsRevision.map { HiddenAppKeys.toComponentKeys(core.vault.hiddenComponentKeys()) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     private val pinnedKeys: StateFlow<List<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::pinnedApps)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -78,11 +89,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, DrawerSort.ALPHABETICAL)
     val suggestionsEnabled: StateFlow<Boolean> = prefs.suggestionsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    private val hiddenInSearch: StateFlow<Boolean> = combine(prefs.hiddenInSearch, prefs.hiddenLock) { include, locked ->
-        // A restored backup may contain both flags. Protection wins: hidden
-        // entries are only exposed through the authenticated manager.
-        include && !locked
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    /**
+     * Hidden apps are never searchable from the drawer.
+     *
+     * The old opt-in let a locked drawer reveal a hidden app (and launch it) by
+     * searching for it, which defeated the point of hiding it behind the Vault.
+     * Search now only ever looks at visible apps; the Vault's own search is the
+     * one place hidden apps can be found, and it requires authentication.
+     */
+    private val hiddenInSearch: StateFlow<Boolean> = MutableStateFlow(false)
     val categoriesEnabled: StateFlow<Boolean> = prefs.drawerCategoriesEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     private val drawerColumns: StateFlow<Int> = prefs.drawerColumns
@@ -692,10 +707,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { prefs.setAppPinned(activeContextProfile.value, key, pinned) }
     }
 
-    /** Hides an app in the active context profile (reversible in Settings). */
-    fun hideApp(key: ComponentKey) {
-        viewModelScope.launch { prefs.setAppHidden(activeContextProfile.value, key, true) }
-    }
+    /**
+     * True only while the Vault is open.
+     *
+     * The drawer menu uses this to decide whether to offer the "Hide in Vault"
+     * entry at all: hiding is a Vault owned operation, so the menu must not offer a
+     * shortcut that would either fail or change a locked vault behind the lock.
+     */
+    fun isVaultUnlocked(): Boolean = core.vault.session.isUnlocked
+
+    /**
+     * Removes an app from the drawer by moving it into the Vault.
+     *
+     * Requires an unlocked vault: hiding is now a Vault-owned operation, so the
+     * caller must have authenticated first (the long-press menu routes through the
+     * Vault, which asks for the PIN when it is locked).
+     */
+    fun hideApp(key: ComponentKey, label: String): Boolean = core.vault.hideApp(
+        com.lumaos.pro.launcher.vault.core.VaultHiddenApp(key.packageName, key.className, key.userSerial, label)
+    )
 
     /** Widget ids referenced by any profile's layout (for orphan clean-up). */
     suspend fun allWidgetIds(): Set<Int> = ContextProfile.entries.flatMapTo(HashSet()) { profile ->

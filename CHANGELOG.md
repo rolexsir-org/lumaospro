@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased — Hide Apps moves into the Vault; PIN hand-off fixes
+
+Two related changes: the launcher-level **Hide Apps** feature is now part of the
+Vault, and the three defects behind "correct PIN bounces you back to the launcher"
+are fixed.
+
+### Hide Apps is a Vault section
+
+- Hidden apps are selected, stored and restored inside the Vault, in the
+  `Hidden Apps` section of the Vault home. The list lives in the Vault's encrypted
+  index (`VaultSettings.hiddenApps`), not in a plaintext DataStore preference.
+- The standalone entry points are gone: the Settings "Manage hidden apps" dialog,
+  the "Find hidden apps in search" and "Protect hidden apps with screen lock"
+  switches, and the drawer long-press action that wrote the preference directly.
+  Settings now has one row that opens the section, and the drawer's long-press
+  entry routes into the Vault instead of changing a locked vault's state.
+- **Migration is additive and never discards the old selection.** On the first
+  unlock after upgrading, the per-profile `hidden_apps_<profile>` preference is
+  converted and imported. The import only adds, is idempotent, is recorded by a
+  marker file outside the encrypted index, and the old preference is left in place
+  so an interrupted import can retry and a downgrade still finds it.
+- Hidden apps stay out of the drawer **and** out of launcher search; the old
+  "show hidden apps in search" opt-in is removed rather than left inert.
+- **What did not change, by design:** hiding is launcher-level metadata. No app is
+  uninstalled, disabled, suspended, force-stopped or cleared, and the screen says
+  so, including that any other launcher can still open a hidden app and that this
+  is not Android work-profile isolation.
+
+### Vault PIN hand-off
+
+- **Correct PIN re-locked the Vault.** `startActivity()` is asynchronous but
+  `finish()` is immediate, so the count of attached Vault screens dropped through
+  zero during the lock→home transition; the lifecycle guard read that frame as
+  "the user left" and, with lock-on-leave on, locked the vault the moment the PIN
+  was accepted. `VaultScreenPresence` now treats a short depart-while-starting
+  window as provisional and cancels it when the next screen attaches.
+- **`finishAffinity()` finished the launcher's task.** The Vault shares the
+  launcher's affinity, so "lock and return" closed the whole task and dropped the
+  user to the system home — "the app closed itself". Vault now starts the
+  launcher's own HOME intent instead.
+- **Wrong recovery key crashed.** `messageView` was only created by `buildPinPad()`,
+  so `showMessage()` threw `UninitializedPropertyAccessException` on the recovery
+  screen. It is now guarded and falls back to a message view in the body.
+- The lock screen is started before the old screen finishes, and unlocks can carry
+  a destination (`EXTRA_DESTINATION`) so the drawer's entry lands on Hidden Apps
+  rather than the Vault home.
+
+**Verification:** see `docs/VAULT_REMEDIATION_2026-11.md`. 180 JVM tests pass and
+34 Vault sources compile; Gradle, lint, R8, the debug APK and on-device checks
+could not run in the offline sandbox and are reported as blocked, not as passing.
+
 ## Unreleased — LumaOS Vault targeted remediation
 
 The seven findings from the maintainer's remediation brief, plus one defect found while

@@ -2,6 +2,7 @@ package com.lumaos.pro.launcher.vault.ui
 
 import android.content.Context
 import android.graphics.drawable.Drawable
+import com.lumaos.pro.launcher.R
 
 /**
  * Vault's icons.
@@ -32,6 +33,18 @@ object VaultIcons {
     fun recorder(context: Context) = of(context, "recorder")
     fun scanner(context: Context) = of(context, "notes")
     fun security(context: Context) = of(context, "settings")
+
+    /**
+     * The eye-with-a-slash vector from the launcher's icon set, tinted to match the
+     * text colour so it sits beside the other Vault tiles. This one is a vector
+     * (there is no living_icons drawing for it), which is why it is tinted here
+     * rather than loaded as a finished PNG.
+     */
+    fun hiddenApps(context: Context): Drawable? = runCatching {
+        context.getDrawable(R.drawable.ic_rx_hide)
+            ?.mutate()
+            ?.apply { setTint(VaultDesign.colorTextPrimary) }
+    }.getOrNull()
     fun video(context: Context) = of(context, "music")
     fun document(context: Context) = of(context, "downloads")
 

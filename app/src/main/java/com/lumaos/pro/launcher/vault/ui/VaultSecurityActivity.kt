@@ -442,7 +442,7 @@ class VaultSecurityActivity : VaultScreenActivity() {
         container.addView(VaultUi.spacer(this, VaultDesign.spaceLG))
         container.addView(VaultUi.primaryButton(this, "Lock the Vault now") {
             manager.lock(VaultSession.LockReason.USER)
-            finishAffinity()
+            returnToLauncher()
         })
     }
 
@@ -467,9 +467,7 @@ class VaultSecurityActivity : VaultScreenActivity() {
         if (timestampMs <= 0L) "-"
         else SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(timestampMs))
 
-    private fun toast(message: String) {
-        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
-    }
+
 
     override fun onPause() {
         super.onPause()
