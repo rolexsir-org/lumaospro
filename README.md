@@ -529,8 +529,7 @@ validate it on supported physical devices before release; no verified APK/AAB
 is checked into this repository.
 
 ## Known limitations
-
-LumaOS Pro Shield, a Brave integration, and location/calendar/physical-activity
+location/calendar/physical-activity
 context triggers are not part of this release. Home-screen widgets are
 implemented, but their provider consent, configuration and interaction still
 need real-device validation. Android widget host IDs are not remapped after
