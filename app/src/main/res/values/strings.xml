@@ -192,4 +192,9 @@
     <!-- Common -->
     <string name="common_ok">OK</string>
     <string name="common_cancel">Cancel</string>
+
+    <!-- LumaOS Vault (see app/src/main/java/com/lumaos/pro/launcher/vault) -->
+    <string name="settings_group_private">Private</string>
+    <string name="vault_entry_title">LumaOS Vault</string>
+    <string name="vault_entry_subtitle">An encrypted space for private photos, files, notes and recordings.</string>
 </resources>

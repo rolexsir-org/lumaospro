@@ -24,6 +24,19 @@
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <!--
+        Vault permissions. Both are requested at the moment of use and both are
+        optional parts of the product: if the user refuses the microphone, the
+        recorder explains it and every other Vault surface still works; if they
+        refuse the camera, the scanner and private camera say so and existing
+        content stays accessible.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!--
         Package visibility (Android 11+). These are declarations, not
         permissions: they let LumaOS Pro see only apps that answer these intents.
           * launcher activities (the app list itself);
@@ -184,6 +197,77 @@
             android:name=".wallpaper.WallpaperActivity"
             android:exported="false"
             android:label="@string/wallpaper_studio_title"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <!--
+            LumaOS Vault.
+
+            Every Vault activity is unexported: nothing outside LumaOS Pro can start
+            one, so no other app can drive the vault's UI. They are also excluded
+            from recents, and every one of them sets FLAG_SECURE at runtime, so the
+            task switcher never renders private content.
+
+            There is deliberately no launcher intent filter and no separate
+            package: the Vault is reached from inside LumaOS Pro (Settings →
+            Vault, or the Security Centre entry), exactly like the launcher's other
+            built-in surfaces.
+        -->
+        <activity
+            android:name=".vault.ui.VaultLockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultHomeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultGalleryActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultFilesActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultNotesActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultRecorderActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultCaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultViewerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
+
+        <activity
+            android:name=".vault.ui.VaultSecurityActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.LumaOS.Settings" />
 
         <activity

@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — LumaOS Vault
+
+A private, fully offline encrypted space inside LumaOS Pro. No new dependency, no
+second APK, and no change to existing launcher behaviour.
+
+- **Security foundation.** Per-vault 256-bit master key, per-object random data keys,
+  AES-256-GCM for small objects and a chunked streaming AEAD (Tink-style framing) for
+  large ones, HKDF-SHA-256 domain separation, PBKDF2-HMAC-SHA-256 PIN stretching
+  calibrated per device, a checksummed 256-bit recovery key, and a device-bound
+  Keystore wrapper for biometric unlock.
+- **Private capture.** Camera (Camera2), document scanner (multi-page PDF via
+  `PdfDocument`), and voice recorder (MediaRecorder) all write ciphertext only — no
+  DCIM, no MediaStore, no plaintext scratch outside the vault's own staging directory.
+- **Private library.** Gallery with in-memory thumbnails, files with SAF import/export,
+  notes, and a viewer that plays encrypted audio/video through a seekable decrypting
+  source.
+- **Session security.** Lock on screen-off, immediate concealing on background,
+  configurable inactivity timeout, `FLAG_SECURE` everywhere, key zeroization on lock,
+  progressive retry throttling.
+- **Encrypted backup and restore.** Ciphertext-only container, recovery-key restore on a
+  new phone, integrity verified before success is reported.
+- **Security Centre.** PIN change, biometric enrolment, recovery-key rotation, auto-lock,
+  backup status, restore and a content-free security log.
+- **Tests.** 87 new JVM tests covering cryptography, storage privacy, session policy,
+  throttling, backup/restore, backup-rule exclusions and manifest hygiene.
+- Integration is limited to `LumaCore`, one Settings row, the manifest and four strings.
+
+
+
 Notable changes to LumaOS Pro. Entries use the app's `versionName`; the Play
 `versionCode` is derived as `major * 100 + minor * 10 + patch` (1.0.0 → 100).
 

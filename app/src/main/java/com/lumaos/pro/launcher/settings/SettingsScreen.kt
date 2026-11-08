@@ -138,6 +138,10 @@ fun SettingsRoot(
             }
             Spacer(Modifier.height(20.dp))
 
+            CleanGroupTitle(R.string.settings_group_private)
+            CleanSection { VaultRow() }
+            Spacer(Modifier.height(20.dp))
+
             CleanGroupTitle(R.string.settings_group_advanced)
             var advancedOpen by rememberSaveable { mutableStateOf(false) }
             CleanSection {
@@ -588,6 +592,30 @@ private fun ActiveThemeBanner(
             }
         }
     }
+}
+
+/**
+ * The Launcher's entry point into LumaOS Vault.
+ *
+ * Vault is part of this app, not a second one: it opens here, in the launcher's
+ * own settings, and every Vault screen is unexported so nothing else on the device
+ * can launch it. The lock screen it opens authenticates before anything is
+ * decrypted.
+ */
+@Composable
+private fun VaultRow() {
+    val context = LocalContext.current
+    CleanNavigationRow(
+        title = stringResource(R.string.vault_entry_title),
+        subtitle = stringResource(R.string.vault_entry_subtitle),
+        onClick = {
+            runCatching {
+                context.startActivity(
+                    Intent(context, com.lumaos.pro.launcher.vault.ui.VaultLockActivity::class.java)
+                )
+            }
+        }
+    )
 }
 
 @Composable

@@ -25,6 +25,8 @@ import com.lumaos.pro.launcher.icons.LivingIconManager
 import com.lumaos.pro.launcher.launcher.home.WallpaperBitmaps
 import com.lumaos.pro.launcher.ui.theme.LumaThemeManager
 import com.lumaos.pro.launcher.ui.theme.ThemeRepository
+import com.lumaos.pro.launcher.vault.platform.VaultLifecycleGuard
+import com.lumaos.pro.launcher.vault.platform.VaultManager
 import com.lumaos.pro.launcher.wallpaper.WallpaperImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +83,18 @@ class LumaCore(private val application: Application) {
     /** Launches made through LumaOS Pro (on-device only). */
     val launchHistory: LaunchHistoryStore = LaunchHistoryStore(application, coreScope)
 
+    /**
+     * LumaOS Vault.
+     *
+     * Constructed here for the same reason as everything else in this class: one
+     * owner, no service, no reflective dependency graph. Nothing is opened or
+     * decrypted until the user authenticates, so an ordinary launcher start pays
+     * a few field initialisations and nothing more.
+     */
+    val vault: VaultManager = VaultManager(application)
+
+    private val vaultGuard: VaultLifecycleGuard = VaultLifecycleGuard(application, vault)
+
     val shortcuts: ShortcutRepository = ShortcutRepository(application)
     val iconPacks: IconPackManager = IconPackManager(application)
     val livingIcons: LivingIconManager = LivingIconManager(application)
@@ -92,6 +106,9 @@ class LumaCore(private val application: Application) {
         )
 
         intelligence.attach()
+        // Screen-off locking, background concealing and the idle ticker. This is
+        // the only place Vault touches the app-wide lifecycle.
+        vaultGuard.start()
         themes.start()
         themeManager.start()
         effects.start()
@@ -221,6 +238,12 @@ class LumaCore(private val application: Application) {
 
     fun shutdown() {
         idleCacheReleaseJob?.cancel()
+        // Drop the vault's key material before anything else: a shutting-down
+        // process must never leave an unlocked session behind.
+        runCatching {
+            vault.lock(com.lumaos.pro.launcher.vault.core.VaultSession.LockReason.PROCESS_DEATH)
+            vaultGuard.stop()
+        }
         intelligence.shutdown()
         // The diagnostics store owns the process's single SQLite connection.
         // Closing it here (and only here) is what makes "never close the

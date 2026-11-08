@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <!-- Cloud backup: settings and home layout only; measurements are excluded
-         by omission and will be re-taken on the new device. -->
+         by omission and will be re-taken on the new device.
+
+         LumaOS Vault is never included in either section. Its content lives in
+         noBackupFilesDir, which these rules cannot even name, and only ciphertext
+         ever leaves the device through the user-initiated encrypted backup. -->
     <cloud-backup>
         <include domain="sharedpref" path="." />
         <include domain="file" path="datastore/" />
