@@ -73,6 +73,29 @@ class VaultLockActivity : VaultScreenActivity() {
 
     override fun requiresUnlockedVault(): Boolean = false
 
+    /**
+     * A lock while this screen is showing must **not** close it.
+     *
+     * The base class starts the lock screen and finishes, which is right for a
+     * content screen holding decrypted pixels. Here it is the opposite of what the
+     * user needs: screen-off, the idle timeout, or a biometric failure would
+     * finish the door and leave no attached Vault screen at all - so the vault
+     * concealed, and the user was dropped out of the app instead of being asked
+     * for a PIN. This screen already *is* the locked state; it only has to reset
+     * itself to the PIN entry and say why.
+     */
+    override fun onVaultLocked() {
+        recoveryCheckInFlight = false
+        buffer.clear()
+        retryAtMs = 0L
+        stage = if (manager.isVaultCreated()) Stage.UNLOCK_PIN else Stage.SETUP_PIN
+        render()
+        showMessage(
+            "The Vault locked. Enter your PIN to continue.",
+            VaultDesign.colorTextSecondary
+        )
+    }
+
     companion object {
         /**
          * Screen to open once the vault is unlocked.

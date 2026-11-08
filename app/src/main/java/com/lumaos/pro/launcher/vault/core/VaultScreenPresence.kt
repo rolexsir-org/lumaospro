@@ -30,18 +30,30 @@ package com.lumaos.pro.launcher.vault.core
  * reliably reproduce.
  */
 class VaultScreenPresence(
-    private val clock: () -> Long = System::currentTimeMillis
+    /**
+     * Elapsed-time source, **not** wall-clock time.
+     *
+     * The window is measured against the same clock the caller's `postDelayed`
+     * runs on (Android's `Handler` uses uptime). Mixing the two reintroduced the
+     * original defect in a different disguise: after an NTP correction or a
+     * timezone/clock change, wall time can jump forward by more than the window
+     * between scheduling the settle and running it, so the settle fires
+     * *immediately* inside a normal hand-off and conceals - then re-locks - on a
+     * correct PIN. `System.nanoTime` is monotonic, moves with device uptime, and
+     * is unaffected by the user changing the clock.
+     */
+    private val clock: () -> Long = System::nanoTime
 ) {
 
     private var attached = 0
-    private var hiddenAtMs = 0L
-    private var pendingConcealSinceMs: Long? = null
+    private var lastHiddenNanos = 0L
+    private var pendingConcealAtNanos: Long? = null
 
     /** Screens currently started (between `onStart` and `onStop`). */
     val attachedCount: Int get() = attached
 
     /** True while a conceal is waiting for the hand-off window to elapse. */
-    val hasPendingConceal: Boolean get() = pendingConcealSinceMs != null
+    val hasPendingConceal: Boolean get() = pendingConcealAtNanos != null
 
     /**
      * A Vault screen became visible.
@@ -51,7 +63,7 @@ class VaultScreenPresence(
      */
     fun onScreenStarted() {
         attached++
-        pendingConcealSinceMs = null
+        pendingConcealAtNanos = null
     }
 
     /**
@@ -63,7 +75,7 @@ class VaultScreenPresence(
     fun onScreenStopped(): Boolean {
         if (attached > 0) attached--
         if (attached > 0) return false
-        if (pendingConcealSinceMs == null) pendingConcealSinceMs = clock()
+        if (pendingConcealAtNanos == null) pendingConcealAtNanos = clock()
         return true
     }
 
@@ -75,23 +87,23 @@ class VaultScreenPresence(
      * that was already resolved) returns false and does nothing.
      */
     fun settle(nowMs: Long = clock()): Boolean {
-        val since = pendingConcealSinceMs ?: return false
+        val since = pendingConcealAtNanos ?: return false
         if (attached > 0) {
-            pendingConcealSinceMs = null
+            pendingConcealAtNanos = null
             return false
         }
-        if (nowMs - since < HANDOFF_WINDOW_MS) return false
-        pendingConcealSinceMs = null
-        hiddenAtMs = nowMs
+        if (nowMs - since < windowNanos) return false
+        pendingConcealAtNanos = null
+        lastHiddenNanos = nowMs
         return true
     }
 
-    /** When the vault last became fully hidden, for diagnostics. */
-    val lastHiddenAtMs: Long get() = hiddenAtMs
+    /** Elapsed-time value (see [clock]) of the last real conceal, for diagnostics. */
+    internal val lastHiddenAtNanos: Long get() = lastHiddenNanos
 
     /** The vault was locked or reset: forget any pending departure. */
     fun reset() {
-        pendingConcealSinceMs = null
+        pendingConcealAtNanos = null
     }
 
     companion object {
@@ -106,5 +118,10 @@ class VaultScreenPresence(
          * locks immediately through a different path that does not wait at all.
          */
         const val HANDOFF_WINDOW_MS = 400L
+
+        /** [HANDOFF_WINDOW_MS] in the monotonic unit [clock] returns. */
+        private const val NANOS_PER_MILLI = 1_000_000L
+
+        private val windowNanos: Long get() = HANDOFF_WINDOW_MS * NANOS_PER_MILLI
     }
 }

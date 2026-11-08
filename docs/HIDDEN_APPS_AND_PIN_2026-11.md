@@ -9,9 +9,9 @@ exercises it and passed when run for this report. Everything that needs a phone,
 lint, R8 or an APK is marked **not run** in §5. Nothing here is called complete because it
 compiles.
 
-**Headline:** the PIN defect had **three** independent causes, not one (§2). Hide Apps is
+**Headline:** the PIN defect had **six** independent causes, not one (§2). Hide Apps is
 now a Vault section with an additive, idempotent migration of the old selection (§3). This
-round adds 55 tests to the 126 that existed: **180 passing, 0 failing**, plus a 34-source
+round adds 61 tests to the 126 that existed: **187 passing, 0 failing**, plus a 34-source
 type-check against a real `android-36/android.jar`. Gradle, lint, R8, the debug APK and
 every on-device check **could not be run** in this offline sandbox (§5) — none of them are
 reported as passing.
@@ -90,6 +90,52 @@ Also corrected while in this path: `openHome()` now reports a failed `startActiv
 instead of finishing silently, and consumes its destination extra so a later lock/unlock
 does not navigate away again.
 
+### The three further causes found while stress-testing the first three
+
+The first three fixes were correct but incomplete: re-reading the hand-off with the
+screens' wiring and both clocks showed three more defects in the same class, each
+capable of reproducing "correct PIN, no way in".
+
+### D-04 — The hand-off window was measured on the wall clock
+
+`VaultScreenPresence` timestamped the departure with `System.currentTimeMillis()`, while
+the guard schedules the settle with `Handler.postDelayed`, which runs on **uptime**. Those
+are different clocks. An NTP correction, a timezone/clock change or a manual time set
+between the two makes `now - since` jump past the window, so the settle fires *immediately
+inside* a normal hand-off — concealing, and with lock-on-leave re-locking, on a correct
+PIN. The original defect, wearing a different mask.
+
+*Fix:* the policy runs on a monotonic source (`System.nanoTime`), the fields are named for
+their unit (`pendingConcealAtNanos`), and the window is converted once
+(`HANDOFF_WINDOW_MS * 1_000_000`). Tests: `aWallClockJumpCannotCollapseTheHandoffWindow`,
+`aBackwardsClockCannotConcealEarly`, plus a static guard tying the policy to `nanoTime`.
+
+### D-05 — The lock screen closed itself when the vault locked
+
+`VaultLockActivity` inherited `onVaultLocked()` from the base class, which starts the lock
+screen and **finishes**. That is right for a content screen holding decrypted pixels, and
+exactly wrong for the door itself: screen-off, the idle timeout or a failed biometric
+finished the only attached Vault screen, so the presence check concealed and the user was
+dropped **out of the app** instead of being asked for a PIN. It also made "screen-off
+returns you to the PIN pad" false.
+
+*Fix:* the lock screen overrides `onVaultLocked()` to reset itself to PIN entry and explain
+why, and never finishes. Content screens keep the base behaviour (still leaves when
+locked), which a test pins as well so neither side can drift into the other.
+
+### D-06 — `lateinit` crashes in the camera screen
+
+`showCameraProblem()` read `statusLabel` and `previewHost`, and `savePhoto` / `savePdf` /
+`resetFooter` wrote `statusLabel`, `footer` and `shutter` — all `lateinit`, and all
+reachable from a permission result or a camera callback dispatched on a **background**
+handler. Any of those running before the views exist (or after a configuration change)
+threw `UninitializedPropertyAccessException` from a background thread, taking the process
+down. Same class as D-03, different screen.
+
+*Fix:* a `setStatus()` helper that no-ops when the screen is gone or the view was never
+built, the same guard on `showCameraProblem`, and initialisation checks before touching
+`footer` / `shutter` from I/O completions.
+
 ---
 
 ## 3. Hide Apps moved into the Vault
@@ -154,13 +200,14 @@ All commands were run from the repository root in this sandbox, against the real
 | # | Command | Result |
 |---|---|---|
 | 1 | `bash /home/user/harness/check.sh` (Kotlin 2.2.21 against real `android-36/android.jar`) | **34 Vault sources, 0 errors** |
-| 2 | `bash /home/user/harness/test.sh` (JVM) | **180 passing, 0 failing** |
+| 2 | `bash /home/user/harness/test.sh` (JVM) | **187 passing, 0 failing** |
 | 3 | `bash /home/user/harness/test.sh VaultPresenceTests` | 9 passing, 0 failing |
 | 4 | `bash /home/user/harness/test.sh VaultHiddenAppsTests` | 13 passing, 0 failing |
 | 5 | `bash /home/user/harness/test.sh VaultLegacyHiddenAppsMigrationTests` | 9 passing, 0 failing |
 | 6 | `bash /home/user/harness/test.sh HiddenAppMigrationTests` | 9 passing, 0 failing |
 | 7 | `bash /home/user/harness/test.sh VaultDestinationTests` | 4 passing, 0 failing |
 | 8 | `bash /home/user/harness/test.sh VaultHiddenAppsScreenTests` | 5 passing, 0 failing |
+| 8b | `bash /home/user/harness/test.sh VaultPinHandoffRegressionTests` | 5 passing, 0 failing — and **2 of them fail** when D-04/D-05 are re-injected, so the guards are load-bearing |
 | 9 | `bash /home/user/harness/test.sh HiddenAppKeysTests` | 5 passing, 0 failing |
 | 10 | `grep -rn "finishAffinity()" app/src/main/java/com/lumaos/pro/launcher/vault \| grep -v '\*'` | no matches (3 comment-only mentions remain, by design) |
 | 11 | `grep -rn "hidden_manage\|pref_hidden_search\|pref_hidden_lock\|setAppHidden" app/src` | no matches |
@@ -194,7 +241,8 @@ so no reader mistakes "the Vault package compiles" for "the app was built".
    device rebooted into a locked Vault displays the apps until the first unlock — including
    the post-upgrade case, where the legacy list is imported on that first unlock.
 3. **The 400 ms hand-off window** in `VaultScreenPresence` is a heuristic; screen-off and
-   idle timeout lock independently of it.
+   idle timeout lock independently of it. It is now measured on a monotonic clock, so a
+   wall-clock change cannot collapse it (D-04).
 4. **`launch.migrated` is not encrypted** — it names a migration, never an app or a key.
 5. **Deleting `guard.json` still resets the retry delay** (unchanged; it never bypasses PIN
    verification).

@@ -290,7 +290,7 @@ class VaultCaptureActivity : VaultScreenActivity() {
             MODE_SCAN -> {
                 pages.add(bytes)
                 runOnUiThreadIfAlive {
-                    statusLabel.text = "Page ${pages.size} captured · add more or finish"
+                    setStatus("Page ${pages.size} captured · add more or finish")
                 }
             }
             else -> savePhoto(bytes)
@@ -306,7 +306,7 @@ class VaultCaptureActivity : VaultScreenActivity() {
     private fun savePhoto(bytes: ByteArray) {
         val name = "Photo ${SimpleDateFormat("yyyy-MM-dd HH.mm.ss", Locale.getDefault()).format(Date())}.jpg"
         runOnUiThreadIfAlive {
-            statusLabel.text = "Saving encrypted…"
+            setStatus("Saving encrypted…")
         }
         io({
             ByteArrayInputStream(bytes).use { stream ->
@@ -314,10 +314,10 @@ class VaultCaptureActivity : VaultScreenActivity() {
             }
         }) { result ->
             if (result.isSuccess) {
-                statusLabel.text = "Saved to the Vault · it is not in your gallery"
+                setStatus("Saved to the Vault · it is not in your gallery")
                 android.widget.Toast.makeText(this, "Photo encrypted into the Vault", android.widget.Toast.LENGTH_SHORT).show()
             } else {
-                statusLabel.text = "The photo was not saved"
+                setStatus("The photo was not saved")
                 android.widget.Toast.makeText(this, "The photo could not be saved. Nothing was added.", android.widget.Toast.LENGTH_LONG).show()
             }
         }
@@ -381,10 +381,11 @@ class VaultCaptureActivity : VaultScreenActivity() {
     }
 
     private fun resetFooter() {
+        if (!::footer.isInitialized || !::shutter.isInitialized) return
         footer.removeAllViews()
         footer.addView(shutter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         footer.addView(VaultUi.secondaryButton(this, "Finish · save encrypted PDF") { finishScan() })
-        statusLabel.text = "Page ${pages.size} captured · add more or finish"
+        setStatus("Page ${pages.size} captured · add more or finish")
     }
 
     /**
@@ -392,6 +393,7 @@ class VaultCaptureActivity : VaultScreenActivity() {
      * encrypted object. The PDF bytes never touch the filesystem.
      */
     private fun savePdf() {
+        if (!::footer.isInitialized) return
         footer.removeAllViews()
         footer.addView(VaultUi.busyRow(this, "Assembling encrypted PDF…"))
         val pagesSnapshot = ArrayList(pages)
@@ -431,6 +433,7 @@ class VaultCaptureActivity : VaultScreenActivity() {
             }
         }) { result ->
             val pdf = result.getOrNull()
+            if (!::footer.isInitialized) return@io
             if (pdf == null) {
                 footer.addView(VaultUi.message(this, "The PDF could not be assembled. The pages are still in memory only."))
                 resetFooter()
@@ -446,6 +449,7 @@ class VaultCaptureActivity : VaultScreenActivity() {
                     pdf.fill(0)
                 }
             }) { saveResult ->
+                if (!::footer.isInitialized) return@io
                 if (saveResult.isSuccess) {
                     pages.clear()
                     android.widget.Toast.makeText(this, "Scan encrypted into the Vault", android.widget.Toast.LENGTH_LONG).show()
@@ -462,8 +466,43 @@ class VaultCaptureActivity : VaultScreenActivity() {
 
     private fun hasCameraPermission(): Boolean = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
-    private fun showCameraProblem(message: String) {
+    /**
+     * Sets the status line, or does nothing if the screen is not there any more.
+     *
+     * `statusLabel` is `lateinit` and is written from background callbacks (camera
+     * still capture, the vault's I/O lane). `runOnUiThreadIfAlive` covers the usual
+     * case, but a configuration change can leave the activity finishing while a
+     * queued callback still runs; reading the field then throws
+     * `UninitializedPropertyAccessException` and takes the process down from a
+     * background thread, which is unrecoverable and blamed on the camera.
+     */
+    private fun setStatus(message: String) {
+        if (isFinishing || isDestroyed) return
+        if (!::statusLabel.isInitialized) return
         statusLabel.text = message
+    }
+
+    /**
+     * Reports a camera problem in the screen and returns.
+     *
+     * Every field it touches is `lateinit`, and this is reachable from paths that
+     * can run **before** the UI exists: a permission result that arrives after the
+     * activity was recreated, or a camera callback dispatched on the background
+     * handler while a refresh is rebuilding the views. Reading `statusLabel` or
+     * `previewHost` then throws `UninitializedPropertyAccessException` - the same
+     * defect class as the recovery-key crash, and just as invisible in a stack
+     * trace that only says "the camera failed".
+     *
+     * A failure is never allowed to crash the screen: if there is no view to put
+     * the message in, the caller is told to restart and the state stays consistent.
+     */
+    private fun showCameraProblem(message: String) {
+        if (isFinishing || isDestroyed) return
+        if (!::previewHost.isInitialized || !::statusLabel.isInitialized) {
+            LumaLog.e("Vault camera problem before the screen was built: $message")
+            return
+        }
+        setStatus(message)
         previewHost.removeAllViews()
         val column = VaultUi.column(this).apply {
             gravity = Gravity.CENTER

@@ -43,11 +43,22 @@ are fixed.
 - **Wrong recovery key crashed.** `messageView` was only created by `buildPinPad()`,
   so `showMessage()` threw `UninitializedPropertyAccessException` on the recovery
   screen. It is now guarded and falls back to a message view in the body.
+- **The hand-off window was on the wall clock.** The policy timestamped departures
+  with `currentTimeMillis()` while the settle runs on `Handler` uptime, so a clock
+  correction could collapse the window and re-lock the vault mid-transition. It now
+  uses a monotonic source.
+- **The lock screen closed itself when the vault locked.** Screen-off, the idle
+  timeout or a failed biometric finished the only attached Vault screen, dropping the
+  user out of the app instead of back to PIN entry. The lock screen now resets itself
+  and never finishes on a lock.
+- **`lateinit` crashes in the camera screen.** `showCameraProblem`, `savePhoto`,
+  `savePdf` and `resetFooter` touched views from background callbacks before those
+  views existed. Guarded; a failure no longer takes the process down.
 - The lock screen is started before the old screen finishes, and unlocks can carry
   a destination (`EXTRA_DESTINATION`) so the drawer's entry lands on Hidden Apps
   rather than the Vault home.
 
-**Verification:** see `docs/VAULT_REMEDIATION_2026-11.md`. 180 JVM tests pass and
+**Verification:** see `docs/HIDDEN_APPS_AND_PIN_2026-11.md`. 187 JVM tests pass and
 34 Vault sources compile; Gradle, lint, R8, the debug APK and on-device checks
 could not run in the offline sandbox and are reported as blocked, not as passing.
 
