@@ -67,7 +67,16 @@ class VaultDeviceKeyGuard(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val manager = context.getSystemService(android.hardware.biometrics.BiometricManager::class.java)
                 ?: return Availability.NO_HARDWARE
-            return when (manager.canAuthenticate(BIOMETRIC_STRONG)) {
+            // The authenticator-mask overload arrived in Android 11. Android 10
+            // exposes only the no-argument check; both paths require the normal
+            // USE_BIOMETRIC manifest permission.
+            val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                manager.canAuthenticate(BIOMETRIC_STRONG)
+            } else {
+                @Suppress("DEPRECATION")
+                manager.canAuthenticate()
+            }
+            return when (status) {
                 android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS -> Availability.AVAILABLE
                 android.hardware.biometrics.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> Availability.NOT_ENROLLED
                 android.hardware.biometrics.BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> Availability.NO_HARDWARE

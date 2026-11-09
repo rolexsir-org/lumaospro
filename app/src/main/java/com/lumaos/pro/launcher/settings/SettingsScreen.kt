@@ -504,7 +504,7 @@ private fun ActiveThemeBanner(
             Spacer(Modifier.height(LumaDesignTokens.SP_5.dp))
 
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(LumaDesignTokens.SP_4.dp)
             ) {
                 ThemePresets.PREMIUM.forEach { spec ->
@@ -513,7 +513,7 @@ private fun ActiveThemeBanner(
                         theme = rememberShippedTheme(spec, environment),
                         selected = resolved.id == spec.id,
                         miniatureHeight = 112.dp,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.width(148.dp),
                         onClick = { apply(spec.id) }
                     )
                 }
