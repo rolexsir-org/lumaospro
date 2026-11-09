@@ -327,19 +327,26 @@ internal fun AccentSwatchRow(
             val cd = stringResource(R.string.accent_cd, label)
             Box(
                 Modifier
-                    .size(36.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .border(if (chosen) 2.dp else 0.dp, if (chosen) ring else Color.Transparent, CircleShape)
-                    .padding(if (chosen) 4.dp else 0.dp)
-                    .clip(CircleShape)
-                    .background(Color(color))
                     .clickable { onSelected(if (isThemeAccent) null else color) }
                     .semantics {
                         role = Role.RadioButton
                         this.selected = chosen
                         contentDescription = cd
-                    }
-            )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .border(if (chosen) 2.dp else 0.dp, if (chosen) ring else Color.Transparent, CircleShape)
+                        .padding(if (chosen) 4.dp else 0.dp)
+                        .clip(CircleShape)
+                        .background(Color(color))
+                )
+            }
         }
     }
 }

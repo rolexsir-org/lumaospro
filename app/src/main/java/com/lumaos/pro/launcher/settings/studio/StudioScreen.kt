@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -102,26 +103,13 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         }
         return
     }
-    // Staged draft: controls edit ONLY this value; Apply is the single path to
-    // persistence, so previewing can never overwrite the applied configuration.
-    val history = remember { StudioHistory(saved) }
-    var draft by remember { mutableStateOf(history.current) }
-    var lastSaved by remember { mutableStateOf(saved) }
-    fun edit(next: StudioConfiguration) {
-        history.edit(next)
-        draft = history.current
-    }
-    fun resetDraft(value: StudioConfiguration) {
-        history.reset(value)
-        draft = value
-    }
-    LaunchedEffect(saved) {
-        val wasClean = draft == lastSaved
-        lastSaved = saved
-        // Clean draft, or our own Apply just landed: start a fresh history so
-        // Undo cannot resurrect an already-applied configuration as "unsaved".
-        if (wasClean || draft == saved) resetDraft(saved)
-    }
+    // Staged draft: Apply alone persists. The ViewModel owns the session so
+    // switching Settings tabs does not silently discard unsaved edits or Undo.
+    LaunchedEffect(saved) { viewModel.syncStudioDraft(saved) }
+    val session = viewModel.studioDraft.collectAsState().value
+    val draft = session?.current ?: saved
+    fun edit(next: StudioConfiguration) = viewModel.editStudioDraft(next)
+    fun resetDraft(value: StudioConfiguration) = viewModel.resetStudioDraft(value)
     val studioPreset by viewModel.studioPreset.collectAsState()
     val dirty = draft != saved
     val applyState by viewModel.studioApplyState.collectAsState()
@@ -157,7 +145,8 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         draft.livingIconsEnabled,
         draft.theme.iconStyle,
         previewDepth,
-        iconSizeDp
+        iconSizeDp,
+        activeProfile
     ) {
         value = viewModel.loadPreviewIcons(
             theme = resolved,
@@ -188,9 +177,14 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     val homeIcons = remember(bitmaps) { bitmaps.home.map { it.asImageBitmap() } }
     val dockIcons = remember(bitmaps) { bitmaps.dock.map { it.asImageBitmap() } }
     val locale = Locale.getDefault()
-    val now = remember { Date() }
-    val timeText = remember { SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(now) }
-    val dateText = remember { SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "EEE MMM d"), locale).format(now) }
+    val now by produceState(Date()) {
+        while (true) {
+            value = Date()
+            kotlinx.coroutines.delay(30_000L)
+        }
+    }
+    val timeText = remember(now, locale) { SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(now) }
+    val dateText = remember(now, locale) { SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "EEE MMM d"), locale).format(now) }
     val activePackage = remember(draft.theme.themeId) { ThemeLauncherPackage.forTheme(draft.theme.themeId) }
 
     Column(
@@ -237,12 +231,10 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         Spacer(Modifier.height(10.dp))
 
         // --- Status & Instant Apply Bar ---
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(Modifier.weight(1f)) {
+        // Give the readout its own line; controls scroll rather than shrinking
+        // labels off-screen on compact phones and at larger text scales.
+        Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(
                         Modifier
@@ -267,58 +259,71 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                             dirty -> R.string.studio_unsaved
                             else -> R.string.studio_applied
                         }
-                    ) + " · ${contrastRatio}:1 AAA",
+                    ) + " · ${contrastRatio}:1",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .clickable(enabled = history.canUndo && !applying) { draft = history.undo() }
-                        .semantics { contentDescription = "Undo" }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        stringResource(R.string.studio_undo),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = if (history.canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
-                    )
-                }
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .clickable(enabled = history.canRedo && !applying) { draft = history.redo() }
-                        .semantics { contentDescription = "Redo" }
-                ) {
-                    Text(
-                        stringResource(R.string.studio_redo),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = if (history.canRedo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
-                    )
-                }
-                if (dirty) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.clickable(enabled = !applying) { resetDraft(saved) }
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable(enabled = session?.canUndo == true && !applying) { viewModel.undoStudioDraft() }
+                            .semantics { contentDescription = "Undo" }
                     ) {
                         Text(
-                            stringResource(R.string.studio_revert),
+                            stringResource(R.string.studio_undo),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            color = if (session?.canUndo == true) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
                         )
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable(enabled = session?.canRedo == true && !applying) { viewModel.redoStudioDraft() }
+                            .semantics { contentDescription = "Redo" }
+                    ) {
+                        Text(
+                            stringResource(R.string.studio_redo),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                            color = if (session?.canRedo == true) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
+                    if (dirty) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.heightIn(min = 48.dp).clickable(enabled = !applying) { resetDraft(saved) }
+                        ) {
+                            Text(
+                                stringResource(R.string.studio_revert),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
                     }
                 }
                 Surface(
                     shape = MaterialTheme.shapes.small,
                     color = if (dirty && !applying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.clickable(enabled = dirty && !applying) { viewModel.applyStudio(draft) }
+                    modifier = Modifier.heightIn(min = 48.dp).clickable(enabled = dirty && !applying) { viewModel.applyStudio(draft) }
                 ) {
                     Text(
                         stringResource(R.string.studio_apply),
@@ -382,7 +387,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         // --- Themes: the premium collection first, every other identity after ---
         StudioSectionHeader(stringResource(R.string.studio_section_themes))
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(LumaDesignTokens.SP_4.dp)
         ) {
             ThemePresets.PREMIUM.forEach { spec ->
@@ -390,7 +395,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     spec = spec,
                     theme = rememberShippedTheme(spec, environment),
                     selected = resolved.id == spec.id,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.width(148.dp),
                     onClick = {
                         previewFocus = spec.id
                         edit(draft.withThemeSelection(spec.id))

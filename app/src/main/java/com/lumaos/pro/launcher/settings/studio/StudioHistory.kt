@@ -10,6 +10,31 @@ package com.lumaos.pro.launcher.settings.studio
  * Nothing here touches persistence — applying the draft remains the single
  * `SettingsViewModel.applyStudio` path.
  */
+class StudioDraftSession<T>(initial: T) {
+    private val history = StudioHistory(initial)
+    private var lastSaved = initial
+
+    val current: T get() = history.current
+    val canUndo: Boolean get() = history.canUndo
+    val canRedo: Boolean get() = history.canRedo
+
+    /** Keep an unsaved draft when a tab is removed; accept external edits only if clean. */
+    fun syncSaved(saved: T) {
+        if (saved == lastSaved) return
+        val wasClean = current == lastSaved
+        lastSaved = saved
+        if (wasClean || current == saved) history.reset(saved)
+    }
+
+    fun edit(next: T) = history.edit(next)
+    fun undo(): T = history.undo()
+    fun redo(): T = history.redo()
+    fun reset(saved: T) {
+        lastSaved = saved
+        history.reset(saved)
+    }
+}
+
 class StudioHistory<T>(initial: T) {
 
     private val undoStack = ArrayDeque<T>()

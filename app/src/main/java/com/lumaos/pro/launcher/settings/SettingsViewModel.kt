@@ -33,6 +33,7 @@ import com.lumaos.pro.launcher.motion.MotionPreference
 import com.lumaos.pro.launcher.optimizer.OptimizationAction
 import com.lumaos.pro.launcher.optimizer.OptimizationResult
 import com.lumaos.pro.launcher.optimizer.Optimizer
+import com.lumaos.pro.launcher.settings.studio.StudioDraftSession
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
@@ -129,6 +130,8 @@ data class StudioConfiguration(
     }
 }
 
+data class StudioDraftState(val current: StudioConfiguration, val canUndo: Boolean, val canRedo: Boolean)
+
 data class StudioPreviewIcons(val home: List<Bitmap>, val dock: List<Bitmap>)
 
 enum class StudioApplyState { IDLE, APPLYING, FAILED }
@@ -184,6 +187,44 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             motion = motion
         )
     }.stateIn<StudioConfiguration?>(viewModelScope, SharingStarted.Eagerly, null)
+
+    // The Studio tab leaves composition when another tab is selected. Keep its
+    // unapplied transaction and undo stack here instead of recreating them from
+    // preferences each time the user returns. This is session state, not a save.
+    private var studioSession: StudioDraftSession<StudioConfiguration>? = null
+    private val _studioDraft = MutableStateFlow<StudioDraftState?>(null)
+    val studioDraft: StateFlow<StudioDraftState?> = _studioDraft.asStateFlow()
+
+    private fun publishStudioDraft() {
+        val session = studioSession ?: return
+        _studioDraft.value = StudioDraftState(session.current, session.canUndo, session.canRedo)
+    }
+
+    fun syncStudioDraft(saved: StudioConfiguration) {
+        val session = studioSession ?: StudioDraftSession(saved).also { studioSession = it }
+        session.syncSaved(saved)
+        publishStudioDraft()
+    }
+
+    fun editStudioDraft(next: StudioConfiguration) {
+        studioSession?.edit(next)
+        publishStudioDraft()
+    }
+
+    fun undoStudioDraft() {
+        studioSession?.undo()
+        publishStudioDraft()
+    }
+
+    fun redoStudioDraft() {
+        studioSession?.redo()
+        publishStudioDraft()
+    }
+
+    fun resetStudioDraft(saved: StudioConfiguration) {
+        studioSession?.reset(saved)
+        publishStudioDraft()
+    }
 
     /**
      * Session-only Studio preset: a candidate configuration the user can save,

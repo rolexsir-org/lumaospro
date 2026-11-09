@@ -41,6 +41,40 @@ class StudioHistoryTest {
         assertFalse(h.canUndo); assertFalse(h.canRedo)
     }
 
+    @Test fun `switching tabs keeps an unsaved draft and its undo history`() {
+        val session = StudioDraftSession(0)
+        session.edit(1)
+        session.edit(2)
+        session.syncSaved(0) // Re-entering Studio without applying.
+        assertEquals(2, session.current)
+        assertTrue(session.canUndo)
+        assertEquals(1, session.undo())
+        session.syncSaved(3) // External preference change must not discard edits.
+        assertEquals(1, session.current)
+        session.reset(3)
+        assertEquals(3, session.current)
+        assertFalse(session.canUndo)
+    }
+
+    @Test fun `returning to an unchanged saved value retains undo even when draft matches it`() {
+        val session = StudioDraftSession(0)
+        session.edit(1)
+        session.edit(0)
+        session.syncSaved(0)
+        assertTrue(session.canUndo)
+        assertEquals(1, session.undo())
+    }
+
+    @Test fun `applied draft clears history and clean session follows external updates`() {
+        val session = StudioDraftSession(0)
+        session.edit(1)
+        session.syncSaved(1) // Apply completed.
+        assertEquals(1, session.current)
+        assertFalse(session.canUndo)
+        session.syncSaved(2)
+        assertEquals(2, session.current)
+    }
+
     @Test fun `previewing a theme package never mutates the applied configuration`() {
         val applied = StudioConfiguration()
         val h = StudioHistory(applied)
