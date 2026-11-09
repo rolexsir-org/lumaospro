@@ -39,9 +39,9 @@ import kotlin.math.min
 
 /**
  * Miniature of the home screen using the real atmosphere plan, theme roles,
- * typography, user icons and the shared Liquid Glass recipes. There is no
- * decorative chronometer and no context chip: one clock/date, one search entry
- * and one dock. When the backdrop is the wallpaper, reported wallpaper colours
+ * typography, user icons and the shared material recipes. Clock, date, readout
+ * and grid visibility follow the selected home composition. When the backdrop
+ * is the wallpaper, reported wallpaper colours
  * stand in because LumaOS Pro does not request storage permission.
  */
 @Suppress("UNUSED_PARAMETER")
@@ -82,12 +82,9 @@ fun HomePreview(
             val isMonolith = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH
             val isAtmosphere = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE
             val centered = when (theme.id) {
-                com.lumaos.pro.launcher.ui.theme.ThemeId.SIGNATURE -> preset.clock != ClockStyle.COMPACT
                 com.lumaos.pro.launcher.ui.theme.ThemeId.ATMOSPHERE,
-                com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH,
-                com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_GLASS,
-                com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO -> false
-                else -> preset.clock != ClockStyle.COMPACT
+                com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH -> false
+                else -> preset.clock == ClockStyle.HERO
             }
             val top = when {
                 isMonolith -> h * 0.045f
@@ -113,23 +110,22 @@ fun HomePreview(
             }
             val dateFormatted = if (theme.typography.readoutCaps) dateText.uppercase() else dateText
             val x = if (centered) w / 2f else gutter
-            val clockTextSize = when {
-                isMonolith -> unit * 23.5f
-                isAtmosphere -> unit * 16.5f
-                preset.clock == ClockStyle.COMPACT -> unit * 13f
-                else -> unit * 18.5f
-            }
+            val clockTextSize = unit * 18.5f * (theme.clockSp / 64f) *
+                (if (preset.clock == ClockStyle.COMPACT) 0.82f else 1f)
             clockPaint.textSize = clockTextSize
             val clockBaseline = top + clockTextSize * 0.88f
             val dateBaseline = clockBaseline + unit * 6.2f
+            val detailBaseline = if (preset.showDate) dateBaseline else clockBaseline
             drawContext.canvas.nativeCanvas.drawText(timeText, x, clockBaseline, clockPaint)
-            drawContext.canvas.nativeCanvas.drawText(dateFormatted, x, dateBaseline, readPaint)
+            if (preset.showDate) {
+                drawContext.canvas.nativeCanvas.drawText(dateFormatted, x, dateBaseline, readPaint)
+            }
 
-            if (readout.isNotBlank()) {
+            if (preset.showContextLine && readout.isNotBlank()) {
                 val contextFormatted = if (theme.typography.readoutCaps) readout.uppercase() else readout
                 when {
                     isMonolith -> {
-                        val ruleY = dateBaseline + unit * 2.8f
+                        val ruleY = detailBaseline + unit * 2.8f
                         drawLine(
                             Color(c.outline),
                             Offset(gutter, ruleY),
@@ -154,7 +150,7 @@ fun HomePreview(
                         val textW = readPaint.measureText(contextFormatted)
                         val chipW = textW + unit * 5f
                         val chipH = unit * 5.2f
-                        val chipY = dateBaseline + unit * 2.2f
+                        val chipY = detailBaseline + unit * 2.2f
                         drawRoundRect(
                             Brush.verticalGradient(listOf(Color(chipSpec.fillTop), Color(chipSpec.fillBottom))),
                             Offset(gutter, chipY),
@@ -175,29 +171,52 @@ fun HomePreview(
                             readPaint.apply { color = chipSpec.content }
                         )
                     }
+                    theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_GLASS ||
+                        theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO -> {
+                        val readSpec = palette[GlassRole.SETTINGS_CONTROL]
+                        val chip = readSpec.rest
+                        val textW = readPaint.measureText(contextFormatted)
+                        val chipH = unit * 5.2f
+                        val chipY = detailBaseline + unit * 2.2f
+                        val radius = (readSpec.radiusDp / GlassGeometry.SEARCH_HEIGHT_DP * chipH)
+                            .coerceAtMost(chipH / 2f)
+                        drawRoundRect(
+                            Color(chip.fillTop), Offset(gutter, chipY),
+                            Size(textW + unit * 5f, chipH), CornerRadius(radius)
+                        )
+                        drawRoundRect(
+                            Color(chip.edgeTop), Offset(gutter, chipY),
+                            Size(textW + unit * 5f, chipH), CornerRadius(radius),
+                            style = Stroke(unit * 0.25f)
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            contextFormatted, gutter + unit * 2.5f,
+                            chipY + chipH * 0.68f, readPaint.apply { color = chip.content }
+                        )
+                    }
                     else -> {
                         drawContext.canvas.nativeCanvas.drawText(
                             contextFormatted,
                             x,
-                            dateBaseline + unit * 4.6f,
+                            detailBaseline + unit * 4.6f,
                             readPaint
                         )
                     }
                 }
             }
 
-            // Clean, aligned icon grid. Rows are laid out only in the space
-            // between the readout and the search field, so an icon (and its
-            // label) can never be drawn underneath the search pill.
+            // Follow the selected row count, including six-row layouts. Fit
+            // icons into the space above search rather than drawing under it.
             val muted = Color(c.homeMuted)
             val columns = 4
             val pillTop = h - unit * 34f
-            val rows = if (preset.showGrid) min(preset.defaultRows, 4) else 0
-            val gridTop = dateBaseline + unit * 13f
+            val rows = if (preset.showGrid) preset.defaultRows else 0
+            val gridTop = detailBaseline + unit * (if (preset.showContextLine && readout.isNotBlank()) 13f else 8f)
             val cellW = (w - gutter * 2f) / columns
-            val iconSize = min(cellW * 0.58f, unit * 14f)
-            val rowPitch = iconSize + unit * 8.5f
             val gridBottom = pillTop - unit * 3f
+            val available = (gridBottom - gridTop).coerceAtLeast(0f)
+            val rowPitch = if (rows > 0) min(unit * 22.5f, available / rows) else unit * 22.5f
+            val iconSize = min(min(cellW * 0.58f, unit * 14f), (rowPitch - unit * 4.5f).coerceAtLeast(unit * 7f))
             var index = 0
             for (r in 0 until rows) for (col in 0 until columns) {
                 val img = icons.getOrNull(index++) ?: continue

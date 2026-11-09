@@ -1646,11 +1646,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun applyTheme(target: ResolvedTheme, animate: Boolean) {
         val from = appliedTheme
-        // Cross-fade on the incoming theme's own clock, not a fixed duration.
-        backdrop.setTheme(target, if (animate) target.motionProfile.themeChangeMs.toLong() else 0L)
+        // Cross-fade on the incoming identity's clock, but never animate the
+        // backdrop when system or launcher reduced-motion is active.
+        val shouldAnimate = animate && motion.enabled && !motion.reduced
+        backdrop.setTheme(target, if (shouldAnimate) target.motionProfile.themeChangeMs.toLong() else 0L)
         backdrop.setEffects(effects.ambientMotion, effects.ambientFps, effects.atmosphereDetail)
         updateWallpaperFlag(target)
-        if (animate && from != null) {
+        if (shouldAnimate && from != null) {
             themeAnimator?.cancel()
             themeAnimating = true
             val animator = SpringAnimator(0f) { t ->
@@ -1810,7 +1812,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             placeholderText = folderColors.muted,
             labelAlpha = LumaTokens.typeAppLabelAlpha
         )
-        styleHomeContext(t)
+        // Keep readout geometry stable during the colour cross-fade; replace its
+        // material once with typography and icons at the committed theme frame.
+        if (!themeAnimating) styleHomeContext(t)
         undoBar?.let { styleUndoBar(it, t) }
         if (::homeAdapter.isInitialized && !themeAnimating) {
             forEachHomeAdapter { adapter ->
@@ -1838,6 +1842,23 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false)
                 homeContext.setPadding(dp(12), dp(5), dp(12), dp(5))
                 homeContext.setTextColor(chipSpec.rest.content)
+            }
+            ThemeId.LUMA_GLASS -> {
+                // A compact instrument readout, rather than Atmosphere's softer
+                // floating capsule. Its small corners echo the search and tiles.
+                val chipSpec = glassPalette[GlassRole.SETTINGS_CONTROL]
+                homeContext.background = GlassViews.drawable(chipSpec, d, ripple = false)
+                homeContext.setPadding(dp(10), dp(5), dp(10), dp(5))
+                homeContext.setTextColor(chipSpec.rest.content)
+            }
+            ThemeId.LUMA_MONO -> {
+                homeContext.background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(ColorMath.opaque(c.surface1))
+                    setStroke(dp(1).coerceAtLeast(1), ColorMath.opaque(c.outline))
+                    cornerRadius = t.radius(RadiusRole.EXTRA_SMALL) * d
+                }
+                homeContext.setPadding(dp(10), dp(5), dp(10), dp(5))
+                homeContext.setTextColor(c.homeForeground)
             }
             ThemeId.MONOLITH -> {
                 val ruleHeight = dp(1).coerceAtLeast(1)
@@ -2154,13 +2175,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         headerActions.visibility = View.GONE
         homeContext.visibility = if (showClock && preset.showContextLine) View.VISIBLE else View.GONE
 
-        val clockSp = when {
-            theme.id == ThemeId.MONOLITH -> theme.clockSp
-            theme.id == ThemeId.ATMOSPHERE -> theme.clockSp
-            theme.id == ThemeId.SIGNATURE -> theme.clockSp
-            preset.clock == ClockStyle.COMPACT -> theme.clockSp * 0.82f
-            else -> theme.clockSp
-        }
+        // The spatial preset takes precedence over identity: Compact must fit
+        // narrow screens even when the identity has an oversized display clock.
+        val clockSp = if (preset.clock == ClockStyle.COMPACT) theme.clockSp * 0.82f else theme.clockSp
 
         // Signature centers the editorial clock; Atmosphere, Monolith, Horizon, and Grid align left.
         val centered = when (theme.id) {

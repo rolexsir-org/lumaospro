@@ -29,6 +29,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -121,6 +123,7 @@ class SettingsActivity : ComponentActivity() {
                     stringResource(R.string.tab_studio),
                     stringResource(R.string.dash_title)
                 )
+                val compactTabs = LocalConfiguration.current.screenWidthDp < 400
 
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -156,6 +159,7 @@ class SettingsActivity : ComponentActivity() {
                                                 maxLines = 1,
                                                 softWrap = false,
                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                fontSize = if (compactTabs) 14.sp else MaterialTheme.typography.titleMedium.fontSize,
                                                 fontWeight = if (tab == index) androidx.compose.ui.text.font.FontWeight.SemiBold
                                                 else androidx.compose.ui.text.font.FontWeight.Normal
                                             )

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -185,7 +187,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
     }
     val timeText = remember(now, locale) { SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(now) }
     val dateText = remember(now, locale) { SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "EEE MMM d"), locale).format(now) }
-    val activePackage = remember(draft.theme.themeId) { ThemeLauncherPackage.forTheme(draft.theme.themeId) }
+    val activePackage = remember(resolved.id) { ThemeLauncherPackage.forTheme(resolved.id) }
 
     Column(
         Modifier
@@ -194,77 +196,71 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // --- Live Interactive Launcher Preview ---
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(292.dp)
-                .border(
-                    0.8.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
-                    MaterialTheme.shapes.large
-                )
-        ) {
-            HomePreview(
-                theme = resolved,
-                preset = draft.homePreset,
-                dock = draft.dockStyle ?: draft.homePreset.dock,
-                icons = homeIcons,
-                dockIcons = dockIcons,
-                wallpaper = wallpaper,
-                artwork = artwork,
-                focalX = previewFocalX,
-                focalY = previewFocalY,
-                timeText = timeText,
-                dateText = dateText,
-                readout = activeProfile.title,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // --- Status & Instant Apply Bar ---
-        // Give the readout its own line; controls scroll rather than shrinking
-        // labels off-screen on compact phones and at larger text scales.
-        Column(Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(Color(resolved.colors.accent))
-                    )
-                    Text(
-                        text = "${resolved.displayName} · ${activePackage.subtitle}",
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+        // Keep the launcher in its portrait proportions, even on a compact phone.
+        // The adjacent readout gives the preview a clear identity without covering it.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val previewWidth = (maxWidth * 0.48f).coerceAtMost(188.dp)
+            Row(
+                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.shapes.medium)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.width(previewWidth).height(292.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                ) {
+                    HomePreview(
+                        theme = resolved,
+                        preset = draft.homePreset,
+                        dock = draft.dockStyle ?: draft.homePreset.dock,
+                        icons = homeIcons,
+                        dockIcons = dockIcons,
+                        wallpaper = wallpaper,
+                        artwork = artwork,
+                        focalX = previewFocalX,
+                        focalY = previewFocalY,
+                        timeText = timeText,
+                        dateText = dateText,
+                        readout = activeProfile.title,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
-                Spacer(Modifier.height(2.dp))
-                val contrastRatio = String.format(locale, "%.1f", ColorMath.contrast(resolved.colors.onSurface, resolved.colors.surface1))
-                Text(
-                    text = stringResource(
-                        when {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.studio_preview_label).uppercase(locale), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                        color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                    Text(resolved.displayName, style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface)
+                    Text(activePackage.subtitle, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(20.dp))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(resolved.colors.accent)))
+                    Spacer(Modifier.height(8.dp))
+                    val contrastRatio = String.format(locale, "%.1f", ColorMath.contrast(resolved.colors.onSurface, resolved.colors.surface1))
+                    Text(
+                        text = stringResource(when {
                             applying -> R.string.studio_applying
                             dirty -> R.string.studio_unsaved
                             else -> R.string.studio_applied
-                        }
-                    ) + " · ${contrastRatio}:1",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        }),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (dirty) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(stringResource(R.string.studio_contrast_short, contrastRatio), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Spacer(Modifier.height(8.dp))
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Actions remain visible next to their staged preview, not buried below options.
+        Column(Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -395,7 +391,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     spec = spec,
                     theme = rememberShippedTheme(spec, environment),
                     selected = resolved.id == spec.id,
-                    modifier = Modifier.width(148.dp),
+                    modifier = Modifier.width(132.dp),
                     onClick = {
                         previewFocus = spec.id
                         edit(draft.withThemeSelection(spec.id))
@@ -806,14 +802,10 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Optional Fine-Tune Overrides (Collapsible) ---
         var advancedOpen by rememberSaveable { mutableStateOf(false) }
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { advancedOpen = !advancedOpen }
-        ) {
-            Row(Modifier.fillMaxWidth().padding(LumaDesignTokens.SP_5.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth().clickable { advancedOpen = !advancedOpen }
+            .padding(horizontal = LumaDesignTokens.SP_2.dp, vertical = LumaDesignTokens.SP_5.dp),
+            verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         stringResource(if (advancedOpen) R.string.studio_advanced_hide else R.string.studio_advanced_show),
@@ -826,7 +818,6 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     )
                 }
                 Text(if (advancedOpen) "−" else "+", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 18.sp)
-            }
         }
 
         if (advancedOpen) {
@@ -867,7 +858,6 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             StudioSectionHeader(stringResource(R.string.studio_theme_additional))
             StudioCard {
                 CompactThemeRow(
-                    heading = stringResource(R.string.studio_theme_additional),
                     presets = ThemePresets.ADDITIONAL,
                     selectedId = draft.theme.themeId,
                     onSelected = { id ->
@@ -935,72 +925,25 @@ private fun LauncherEffectsReadoutCard(
     }
 
     StudioCard {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EffectBadge(
-                    label = "COMPOSITION",
-                    value = "${preset.displayName} · ${theme.clockSp.toInt()}sp",
-                    modifier = Modifier.weight(1f)
-                )
-                EffectBadge(
-                    label = "DOCK SURFACE",
-                    value = dockText,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EffectBadge(
-                    label = "MATERIAL",
-                    value = blurText,
-                    modifier = Modifier.weight(1f)
-                )
-                EffectBadge(
-                    label = "ICONS & PHYSICS",
-                    value = "$iconText · $motionText",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EffectBadge(
-                    label = "BACKDROP",
-                    value = backdropText,
-                    modifier = Modifier.weight(1f)
-                )
-                EffectBadge(
-                    label = "ICON PACK",
-                    value = iconPackText,
-                    modifier = Modifier.weight(1f)
-                )
+        listOf(
+            "COMPOSITION" to "${preset.displayName} · ${theme.clockSp.toInt()}sp",
+            "DOCK SURFACE" to dockText,
+            "MATERIAL" to blurText,
+            "ICONS & PHYSICS" to "$iconText · $motionText",
+            "BACKDROP" to backdropText,
+            "ICON PACK" to iconPackText
+        ).forEachIndexed { index, (label, value) ->
+            if (index > 0) HorizontalDividerThin()
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(label, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(0.4f))
+                Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(0.6f), textAlign = TextAlign.End)
             }
         }
-    }
-}
-
-@Composable
-private fun EffectBadge(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-            .padding(horizontal = 10.dp, vertical = 7.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -1026,15 +969,14 @@ private fun StudioSectionHeader(
             .padding(
                 start = LumaDesignTokens.SP_2.dp,
                 end = LumaDesignTokens.SP_1.dp,
-                top = LumaDesignTokens.SP_2.dp,
-                bottom = LumaDesignTokens.SP_3.dp
+                bottom = LumaDesignTokens.SP_4.dp
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
         if (status != null) {
@@ -1061,12 +1003,9 @@ private fun StudioSectionHeader(
 
 @Composable
 private fun StudioCard(content: @Composable () -> Unit) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column { content() }
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        content()
     }
 }
 
@@ -1075,24 +1014,17 @@ private fun HorizontalDividerThin() {
     HorizontalDivider(
         thickness = 0.6.dp,
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(start = 16.dp)
     )
 }
 
 @Composable
 private fun CompactThemeRow(
-    heading: String,
     presets: List<ThemeSpec>,
     selectedId: ThemeId,
     onSelected: (ThemeId) -> Unit
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(
-            heading,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1149,22 +1081,28 @@ private fun <T> CompactChoiceRow(
     onSelected: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
+            .onFocusChanged { focused = it.hasFocus }
+            .background(if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent)
+            .heightIn(min = 56.dp)
             .clickable { expanded = true }
             .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
-        Text(selected, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), maxLines = 2)
+        Text(selected, modifier = Modifier.widthIn(max = 132.dp), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.width(6.dp))
         Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
     }
     if (expanded) {
         Dialog(onDismissRequest = { expanded = false }) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, tonalElevation = 6.dp) {
-                Column(Modifier.padding(vertical = 8.dp).width(280.dp)) {
+                Column(Modifier.padding(vertical = 8.dp).width(280.dp)
+                    .heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                     options.forEach { opt ->
                         val text = labelFor(opt)
                         val isSel = text == selected
@@ -1212,11 +1150,7 @@ private fun CompactNavRow(title: String, subtitle: String, onClick: () -> Unit) 
 
 @Composable
 private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
-    // The selected segment must read at a glance: a raised white pill on
-    // light paper, a lifted onSurface veil on dark glass (surface-on-surface
-    // was nearly invisible on the dark themes).
-    val dark = com.lumaos.pro.launcher.settings.LocalLumaTheme.current.isDark
-    val selectedFill = if (dark) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f) else Color.White
+    val selectedFill = MaterialTheme.colorScheme.surfaceContainerHighest
     Row(
         Modifier
             .fillMaxWidth()
@@ -1227,12 +1161,17 @@ private fun <T> SegmentedControl(options: List<Pair<T, String>>, selected: T, on
     ) {
         options.forEach { (value, label) ->
             val sel = value == selected
+            var focused by remember(value) { mutableStateOf(false) }
             Surface(
                 shape = MaterialTheme.shapes.small,
                 color = if (sel) selectedFill else Color.Transparent,
-                shadowElevation = if (sel && !dark) 1.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
+                    .heightIn(min = 44.dp)
+                    .onFocusChanged { focused = it.hasFocus }
+                    .border(if (focused) 2.dp else 0.dp,
+                        if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        MaterialTheme.shapes.small)
                     .clickable { onSelected(value) }
                     .semantics {
                         role = Role.RadioButton
@@ -1271,6 +1210,7 @@ private fun SwatchCompact(colors: List<Int>, selected: Int?, onSelected: (Int?) 
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
+                .heightIn(min = 48.dp)
                 .clickable { onSelected(null) }
                 .semantics {
                     role = Role.RadioButton
@@ -1285,13 +1225,13 @@ private fun SwatchCompact(colors: List<Int>, selected: Int?, onSelected: (Int?) 
         }
         colors.forEach { c ->
             val chosen = selected == c
+            var focused by remember(c) { mutableStateOf(false) }
             Box(
                 Modifier
-                    .size(32.dp)
+                    .size(48.dp)
+                    .onFocusChanged { focused = it.hasFocus }
                     .clip(CircleShape)
-                    .background(Color(c))
                     .clickable { onSelected(c) }
-                    .border(if (chosen) 2.dp else 0.dp, if (chosen) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape)
                     .semantics {
                         role = Role.RadioButton
                         this.selected = chosen
@@ -1299,7 +1239,12 @@ private fun SwatchCompact(colors: List<Int>, selected: Int?, onSelected: (Int?) 
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (chosen) Box(Modifier.size(8.dp).clip(CircleShape).background(Color(ThemeEngine.bestTextOn(c))))
+                Box(Modifier.size(36.dp).border(if (chosen || focused) 2.dp else 0.dp,
+                    if (chosen || focused) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                    .padding(if (chosen || focused) 4.dp else 0.dp)
+                    .clip(CircleShape).background(Color(c)), contentAlignment = Alignment.Center) {
+                    if (chosen) Box(Modifier.size(8.dp).clip(CircleShape).background(Color(ThemeEngine.bestTextOn(c))))
+                }
             }
         }
     }

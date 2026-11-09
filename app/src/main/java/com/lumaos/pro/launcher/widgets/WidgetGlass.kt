@@ -3,10 +3,8 @@ package com.lumaos.pro.launcher.widgets
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.RadiusRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
@@ -136,54 +134,37 @@ object WidgetGlassRenderer {
         val palette = WidgetGlassPalette.fromTheme(theme)
         val width = 320
         val height = 180
-        val radius = (radiusDp.coerceIn(16f, 30f) * 1.35f)
-        val stroke = 1.5f
+        // RemoteViews stretches this plate to the host's widget bounds. Keep the
+        // actual theme geometry: Monolith must remain architectural, not a pill.
+        val radius = radiusDp.coerceIn(2f, 38f)
+        val stroke = 1f
 
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val rect = RectF(stroke, stroke, width - stroke, height - stroke)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            shader = LinearGradient(
-                0f, 0f, 0f, height.toFloat(),
-                intArrayOf(
-                    ColorMath.lerp(palette.fillTop, palette.specular, 0.22f),
-                    palette.fillTop,
-                    palette.fillBottom
-                ),
-                floatArrayOf(0f, 0.08f, 1f),
-                Shader.TileMode.CLAMP
+        // A quiet, nearly opaque material makes real metadata legible on external
+        // launcher hosts too; character comes from the theme's colour and shape,
+        // not a synthetic highlight gradient painted over every widget.
+        paint.color = palette.fillTop
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = stroke
+        paint.color = palette.edgeTop
+        canvas.drawRoundRect(rect, radius, radius, paint)
+
+        if (theme.usesBlur) {
+            // One restrained internal keyline distinguishes glass from solid stone.
+            val inset = stroke + 2f
+            paint.color = palette.specular
+            canvas.drawRoundRect(
+                RectF(inset, inset, width - inset, height - inset),
+                (radius - inset).coerceAtLeast(1f),
+                (radius - inset).coerceAtLeast(1f),
+                paint
             )
         }
-        canvas.drawRoundRect(rect, radius, radius, fillPaint)
-
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = stroke
-            shader = LinearGradient(
-                0f, 0f, 0f, height.toFloat(),
-                palette.edgeTop,
-                palette.edgeBottom,
-                Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawRoundRect(rect, radius, radius, borderPaint)
-
-        // Subtle inner top specular reflection inside the corner curvature
-        val specInset = radius * 0.65f
-        val specPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1.1f
-            shader = LinearGradient(
-                specInset, 0f, width - specInset, 0f,
-                intArrayOf(0x00FFFFFF, palette.specular, 0x00FFFFFF),
-                floatArrayOf(0f, 0.5f, 1f),
-                Shader.TileMode.CLAMP
-            )
-        }
-        val specY = stroke + 1.2f
-        canvas.drawLine(specInset, specY, width - specInset, specY, specPaint)
 
         cached = key to bitmap
         return bitmap

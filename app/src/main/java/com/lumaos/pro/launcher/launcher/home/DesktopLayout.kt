@@ -51,9 +51,10 @@ class DesktopLayout @JvmOverloads constructor(
         val innerH = h - paddingTop - paddingBottom
         val leftW = (innerW * headerFraction).toInt()
         val rightW = innerW - leftW
+        val headerMargins = header!!.layoutParams as MarginLayoutParams
         header!!.measure(
-            MeasureSpec.makeMeasureSpec(leftW, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(innerH, MeasureSpec.AT_MOST)
+            MeasureSpec.makeMeasureSpec((leftW - headerMargins.leftMargin - headerMargins.rightMargin).coerceAtLeast(0), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec((innerH - headerMargins.topMargin - headerMargins.bottomMargin).coerceAtLeast(0), MeasureSpec.AT_MOST)
         )
         // Fixed-height children first (pill, dock), then the grid takes the rest.
         var used = 0
@@ -85,9 +86,13 @@ class DesktopLayout @JvmOverloads constructor(
         val innerW = (r - l) - paddingLeft - paddingRight
         val leftW = (innerW * headerFraction).toInt()
         val innerH = (b - t) - paddingTop - paddingBottom
-        // Header vertically centred in its column.
+        // Honour the same horizontal insets as portrait. The bespoke wide
+        // layout previously measured the header across its margins and laid it
+        // out at x=0, pinning the clock and readout to the screen edge.
+        val headerMargins = hdr.layoutParams as MarginLayoutParams
         val hy = paddingTop + (innerH - hdr.measuredHeight) / 2
-        hdr.layout(paddingLeft, hy, paddingLeft + hdr.measuredWidth, hy + hdr.measuredHeight)
+        val hx = paddingLeft + headerMargins.leftMargin
+        hdr.layout(hx, hy, hx + hdr.measuredWidth, hy + hdr.measuredHeight)
         var y = paddingTop
         val x0 = paddingLeft + leftW
         for (child in right) {

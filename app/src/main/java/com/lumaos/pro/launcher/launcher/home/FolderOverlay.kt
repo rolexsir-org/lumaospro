@@ -33,6 +33,7 @@ import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaTokens
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
+import com.lumaos.pro.launcher.ui.theme.ThemeId
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -102,6 +103,8 @@ class FolderOverlay(
         val palette = host.glassPalette()
         val folderSpec = palette[GlassRole.FOLDER]
         val colors = folderSpec.rest
+        val architectural = theme.id == ThemeId.MONOLITH || theme.id == ThemeId.LUMA_MONO
+        val titleGravity = if (architectural) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
         folderId = id
         originalName = name
         isSmartFolder = smart
@@ -142,15 +145,17 @@ class FolderOverlay(
         if (smart) {
             val st = TextView(context).apply {
                 text = name
-                gravity = Gravity.CENTER
+                gravity = titleGravity
                 setTextColor(colors.content)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeHeadingSp)
                 typeface = Typefaces.title(theme.typography)
+                letterSpacing = if (architectural) 0.08f else -0.015f
+                isAllCaps = architectural
                 setPadding(dp(LumaTokens.spaceXS), 0, dp(LumaTokens.spaceXS), 0)
             }
             val sh = TextView(context).apply {
                 text = context.getString(R.string.smart_folder_hint)
-                gravity = Gravity.CENTER
+                gravity = titleGravity
                 setTextColor(colors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
                 typeface = Typefaces.body(theme.typography)
@@ -163,7 +168,7 @@ class FolderOverlay(
         } else {
             titleField = EditText(context).apply {
                 setText(name)
-                gravity = Gravity.CENTER
+                gravity = titleGravity
                 setTextColor(colors.content)
                 setHintTextColor(colors.muted)
                 highlightColor = ColorMath.withAlpha(colors.focusRing, 0.28f)
@@ -419,6 +424,8 @@ class FolderOverlay(
         val palette = host.glassPalette()
         val folderSpec = palette[GlassRole.FOLDER]
         val colors = folderSpec.rest
+        val architectural = theme.id == ThemeId.MONOLITH || theme.id == ThemeId.LUMA_MONO
+        val titleGravity = if (architectural) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
         scrimView?.setBackgroundColor(ColorMath.withAlpha(0xFF000000.toInt(), LumaTokens.folderScrimAlpha))
         GlassViews.apply(
             view = p,
@@ -430,16 +437,21 @@ class FolderOverlay(
         smartTitleView?.apply {
             setTextColor(colors.content)
             typeface = Typefaces.title(theme.typography)
+            gravity = titleGravity
+            letterSpacing = if (architectural) 0.08f else -0.015f
+            isAllCaps = architectural
         }
         smartHintView?.apply {
             setTextColor(colors.muted)
             typeface = Typefaces.body(theme.typography)
+            gravity = titleGravity
         }
         titleField?.apply {
             setTextColor(colors.content)
             setHintTextColor(colors.muted)
             highlightColor = ColorMath.withAlpha(colors.focusRing, 0.28f)
             typeface = Typefaces.title(theme.typography)
+            gravity = titleGravity
         }
         emptyView?.apply {
             setTextColor(colors.muted)

@@ -114,6 +114,25 @@ class GlassMaterialTest {
     }
 
     @Test
+    fun `bright wallpaper horizon gets a legibility veil when lower half needs light text`() {
+        val splitWallpaper = WallpaperSeeds(
+            primary = ColorMath.WHITE,
+            secondary = ColorMath.BLACK,
+            supportsDarkText = false,
+            topLuminance = 0.65f,
+            bottomLuminance = 0.04f
+        )
+        val theme = ThemeEngine.resolve(
+            ThemeSettings().pinned(ThemeId.ATMOSPHERE).copy(backdrop = Backdrop.WALLPAPER),
+            envDark.copy(wallpaper = splitWallpaper)
+        )
+        val scrim = GlassBackdrop.scrim(theme)
+        assertEquals(ColorMath.BLACK, scrim.tint)
+        assertTrue(ColorMath.alpha(scrim.top) >= 128)
+        assertTrue(ColorMath.alpha(scrim.top) > ColorMath.alpha(scrim.bottom))
+    }
+
+    @Test
     fun `accent presets keep one appearance instead of a second theme system`() {
         val accent = LumaGlassIdentity.ACCENTS.first()
         val settings = accent.applyTo(ThemeSettings().pinned(ThemeId.VECTOR))

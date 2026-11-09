@@ -409,7 +409,11 @@ class DrawerController(
         }
         title.setTextColor(sheetColors.content)
         title.typeface = Typefaces.title(theme.typography)
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeTitleSp)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, theme.typeScale.screenTitle)
+        val architectural = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH ||
+            theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO
+        title.isAllCaps = architectural
+        title.letterSpacing = if (architectural) 0.06f else -0.02f
         subtitle.typeface = Typefaces.body(theme.typography)
         subtitle.setTextColor(sheetColors.muted)
         emptyView.setTextColor(sheetColors.muted)

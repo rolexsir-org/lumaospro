@@ -34,6 +34,8 @@
     <string name="theme_selected_cd">%1$s, selected</string>
     <string name="theme_card_cd">%1$s theme. %2$s</string>
     <string name="advanced_summary_premium">Every accent, typography voice, retained palettes and context themes</string>
+    <string name="settings_active_identity">Your look</string>
+    <string name="studio_contrast_short">%1$s:1 contrast</string>
     <string name="settings_theme_premium">Premium</string>
     <string name="settings_theme_more">More</string>
 </resources>
