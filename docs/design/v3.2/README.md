@@ -92,9 +92,11 @@ values and the engine keeps its enforced floors.
 
 ## Release
 
-This is the design system **shipped in LumaOS Pro 1.0.0** (`versionCode` 100).
+This is the design system **shipped in LumaOS Pro 1.2.0** (`versionCode` 120).
 Version format: `versionName` `major.minor.patch`; `versionCode` is
-`major * 100 + minor * 10 + patch`.
+`major * 100 + minor * 10 + patch` (1.2.0 → 120). The bundle itself is versioned
+independently as Design System **v3.2** — that is the token-schema version in
+`tokens.json`, not the app release.
 
 ## What this adoption does **not** claim
 

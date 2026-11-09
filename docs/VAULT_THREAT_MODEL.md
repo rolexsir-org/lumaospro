@@ -1,9 +1,10 @@
 # LumaOS Vault — threat model
 
 **Scope:** the Vault feature in `com.lumaos.pro.launcher.vault` (this repository).
-**Companion documents:** `docs/VAULT.md` (design and behaviour), `docs/VAULT_SECURITY_AUDIT.md`
-(findings and evidence), `docs/VAULT_REMEDIATION_2026-11.md` (this pass: what changed, why,
-and what was measured).
+**Companion documents:** `docs/VAULT.md` (design, behaviour and stated limits) and
+`CHANGELOG.md` (what changed in each security pass and why). The dated audit and
+remediation reports that originally accompanied this model have been removed from the
+tree; their findings are reflected in the code and in the `vault/` test sources.
 
 This document exists to say what Vault protects, what it does **not** protect, and where the
 line between the two sits. Every claim below is either backed by code in this repository and a

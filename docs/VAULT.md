@@ -1,16 +1,19 @@
 # LumaOS Vault — implementation report
 
-> **Pre-release security review (2026-11-07):** see
-> [`VAULT_SECURITY_AUDIT.md`](VAULT_SECURITY_AUDIT.md) for the vulnerability report, the
-> seven fixes made in that pass, the executed test results (105 passing) and the hardware
-> checklist that is still outstanding.
+> **Companion documents:** [`VAULT_THREAT_MODEL.md`](VAULT_THREAT_MODEL.md) states what
+> the Vault defends and what it does not. The pre-release security review, the targeted
+> remediation pass and the critical-fix pass that produced the current code were recorded
+> in dated reports that have since been removed from the tree; their outcomes are
+> summarised in [CHANGELOG.md](../CHANGELOG.md) and are covered by the `vault/` test
+> sources under `app/src/test/`.
 
 **Status: source-complete for the security foundation, capture, files, notes, gallery,
-recorder, scanner, backup/restore and the Security Centre. Unit-tested on the JVM
-(87 tests, all passing). Not device-verified: this sandbox has no Android SDK, no
-Gradle, no emulator and no access to Google Maven, so the Gradle build, lint, and any
-on-device behaviour have not been run. Read the "Verification" section before
-treating any of this as release-ready.**
+recorder, scanner, backup/restore and the Security Centre. The `vault/` suites currently
+hold 217 `@Test` methods across 20 test sources; the counts quoted further down are
+historical harness runs and are not a current result. Not device-verified: this sandbox
+has no Android SDK, no Gradle, no emulator and no access to Google Maven, so the Gradle
+build, lint, and any on-device behaviour have not been run. Execute `./build.sh test`
+before treating any of this as release-ready, and read the "Verification" section.**
 
 ---
 
@@ -348,7 +351,7 @@ additions, (c) documentation. The Vault sources were re-typed-checked after (a),
 the four assertions in `VaultPlatformIntegrationTests` were re-evaluated against the
 edited XML files by an equivalent script — both still pass. The harness that hosted
 the JVM run lives outside the repository and is not available in this session, so a
-fresh 87/87 run on the exact final tree is a Gradle-time task.
+fresh run on the exact final tree is a Gradle-time task (`./build.sh test`).
 
 ---
 
@@ -408,7 +411,9 @@ unverified code, the following was done instead:
   stubbed from the project's own `res/values`), which is why every `R.string`, `R.font`
   and Android API reference in the new code is known to resolve.
 * **Compiled and executed the JUnit4 test sources** with local JUnit stand-ins and a
-  small reflective runner: 87 tests, all passing.
+  small reflective runner: 87 tests, all passing *as of that pass*. The Vault suites
+  have grown since (217 `@Test` methods at the time of writing); re-run them with
+  `./build.sh test` for a current result.
 
 None of those harness files are committed; the scripts live outside the repository.
 
@@ -431,9 +436,9 @@ None of those harness files are committed; the scripts live outside the reposito
 | 9 | Fully offline | ✅ | Vault requests no network permission; there is no networking code in the package |
 | 10 | Ciphertext-only backup with verified restore | ✅ | `VaultBackupTests` (7 tests) including integrity rejection and incomplete-vault abort |
 | 11 | Lifecycle locking (screen-off, background, timeout, process death) | ✅ | `VaultSessionTests` (screen-off, idle, conceal, lock-on-leave, process death) — the Android wiring itself is 🟡 |
-| 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the 74 pre-existing test classes were **not** executed here (no Gradle) — must be run before release |
+| 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the rest of the suite (93 test sources project-wide) was **not** executed here (no Gradle) — must be run before release |
 | 13 | No false security claims | ✅ | UI states best-effort shredding, local-only throttling, and "no absolute protection"; see §10 |
-| 14 | Automated tests pass | ✅ | 126/126 on the JVM harness after the 2026-11 remediation pass (`docs/VAULT_REMEDIATION_2026-11.md` §4); the Gradle run is still pending — see criterion 15 |
+| 14 | Automated tests pass | 🟡 | 126/126 on the external JVM harness at the end of the 2026-11 remediation pass. That harness is gone and the suites have since grown to 217 `@Test` methods, so this is **not** a current result — run `./build.sh test`. Gradle has never been executed here; see criterion 15 |
 | 15 | Real-device testing | ⛔ | No device, emulator or SDK in this environment |
 | 16 | Valid build and release configuration | 🟡 | No dependency, no Gradle, no ProGuard change was needed; the Gradle build itself has not been executed here |
 | 17 | Private camera, gallery, files, notes, recorder, scanner | 🟡 | All six surfaces exist; none has run on a device |

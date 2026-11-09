@@ -123,15 +123,16 @@ are fixed.
   a destination (`EXTRA_DESTINATION`) so the drawer's entry lands on Hidden Apps
   rather than the Vault home.
 
-**Verification:** see `docs/HIDDEN_APPS_AND_PIN_2026-11.md`. 187 JVM tests pass and
-34 Vault sources compile; Gradle, lint, R8, the debug APK and on-device checks
-could not run in the offline sandbox and are reported as blocked, not as passing.
+**Verification:** the pure-JVM Vault harness passed and the Vault sources compiled
+at the time of this change; Gradle, lint, R8, the debug APK and on-device checks
+could not run in the offline sandbox and were reported as blocked, not as passing.
+Run `./build.sh test` for the current suite.
 
 ## Unreleased — LumaOS Vault targeted remediation
 
 The seven findings from the maintainer's remediation brief, plus one defect found while
-verifying them. Details, evidence and limits: `docs/VAULT_REMEDIATION_2026-11.md`;
-the written threat model is `docs/VAULT_THREAT_MODEL.md`.
+verifying them. The written threat model is `docs/VAULT_THREAT_MODEL.md`; the design,
+storage layout and stated limits are `docs/VAULT.md`.
 
 - **Deleted items are now cryptographically deleted.** The crash-recovery copy of the
   metadata index (`meta.bin.bak`) still held the wrapped data key of a deleted item, so
@@ -154,7 +155,8 @@ the written threat model is `docs/VAULT_THREAT_MODEL.md`.
 
 ## Unreleased — LumaOS Vault security hardening
 
-Pre-release security review of the Vault (see `docs/VAULT_SECURITY_AUDIT.md`).
+Pre-release security review of the Vault. Its design and honestly-stated limits are
+`docs/VAULT.md`; the threat model is `docs/VAULT_THREAT_MODEL.md`.
 
 - **Backups are staged and verified locally before the destination is touched**, so an
   interrupted upload can no longer leave a truncated file that looks like a backup, and a
@@ -203,13 +205,17 @@ second APK, and no change to existing launcher behaviour.
 
 
 Notable changes to LumaOS Pro. Entries use the app's `versionName`; the Play
-`versionCode` is derived as `major * 100 + minor * 10 + patch` (1.0.0 → 100).
+`versionCode` is derived as `major * 100 + minor * 10 + patch` (1.2.0 → 120).
 
-Nothing in this file is a claim that a build was produced, tested or published.
-See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
-[RELEASE-1.0.0.md](RELEASE-1.0.0.md) for the release checklist.
+The current source is **1.2.0 / `versionCode` 120**. Nothing below has been
+published: the sections headed *Unreleased* are the work that ships as 1.2.0, and
+the 1.0.0 / 1.0.1 identities they sit on were configured but never uploaded to
+Play. Nothing in this file is a claim that a build was produced, tested or
+published. See [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) for the verification
+boundary and the acceptance gate, and the Google Play release checklist in
+[README.md](README.md).
 
-## 1.0.0 — unreleased
+## 1.0.0 / 1.0.1 — never published (rolled into 1.2.0)
 
 ### Notification shade and Quick Controls
 
@@ -249,8 +255,7 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
   hand and records what to restore when it is switched on from a clean state.
 - **No new permission.** The manifest still declares four; four `<queries>`
   intents were added so camera and cast destinations resolve on Android 11+.
-- See [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) for the
-  capability table and the device-test matrix.
+- See [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) §D12 for the device-test matrix.
 
 ### Widget geometry and saved-layout repair
 
@@ -288,7 +293,7 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
   re-derivation of the new arithmetic. **Not compiled, not tested, not linted and
   not run on a device** — this sandbox has no JDK, Gradle, Android SDK, `adb` or
   network route to them. See
-  [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) §8–§10.
+  [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) §D12 and §E.
 
 ### Home editing, gesture-first
 
@@ -335,7 +340,9 @@ See [BUILD_REPORT.md](BUILD_REPORT.md) for the verification boundary and
   Kotlin grammar (no new syntax errors), both XML files parsed, unit tests
   rewritten (`EditModeDesignTest`, plus three new Robolectric assertions in
   `HomeActivityRuntimeTest`). **Not compiled and not run**: this sandbox has no
-  JDK, no Gradle and no network to fetch them — see `BUILD_REPORT.md`.
+  JDK, no Gradle and no network to fetch them. `./build.sh` provisions that
+  toolchain when its hosts are reachable; see §C of
+  [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md).
 
 ### Luma Glass v4.0 (unreleased)
 

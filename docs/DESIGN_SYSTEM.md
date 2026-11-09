@@ -1,14 +1,16 @@
 # LumaOS Pro — Design System
 
-**Release:** 1.0.0 (`versionCode` 100).
+**Release:** 1.2.0 (`versionCode` 120).
 
 > **Verification status (read first).** This document describes the design system as
 > implemented in this checkout. There is no Android SDK, Gradle distribution,
 > emulator or physical device in the current environment, so the Android app has
 > **not** been compiled with Gradle, linked, linted, or rendered on a phone. A
 > standalone Kotlin 2.2.21 compiler on a JRE was bootstrapped locally to compile
-> the pure token/theme layer and run 242 JVM-only unit tests with a JUnit shim;
-> that is not the Gradle test task and does not cover Robolectric or UI rendering.
+> the pure token/theme layer and run 242 JVM-only unit tests with a JUnit shim.
+> That was a historical run: the suite has since grown to 819 `@Test` methods
+> across 93 test sources, and the shim is not the Gradle test task and never
+> covered Robolectric or UI rendering. `./build.sh test` is the real suite.
 > Static resource, XML, delimiter and contract checks are listed in
 > `QA_CHECKLIST.md`. Nothing here should be presented as device-verified until
 > the checklist's manual rows are run.
@@ -165,7 +167,7 @@ Material defaults plus a thin palette, which produced three problems:
 3. **Contrast by luck.** Text colours were chosen per widget; some pairs only
    passed AA on dark surfaces and failed on light ones.
 
-1.0.0 keeps that rule and ships the three-identity system above. The sections
+1.2.0 keeps that rule and ships the three-identity system above. The sections
 that follow (§1–§14) are the reference for the roles; they were written for the
 retained palettes before v3.2 and remain accurate for them.
 
@@ -662,15 +664,14 @@ ThemeEngine.resolve() ──► ResolvedTheme ──► ThemeRepository.theme (S
 
 | File | Contains |
 | --- | --- |
-| `ui/theme/LumaDesignTokens.kt` | **Design System v3.2**: authored colour/shape/material/type tokens per theme, spacing scale, motion tokens (parity-tested against `docs/design/v3.2/tokens`) |
-| `ui/DesignTokens.kt` | Corner base radii, sizes, elevation, `LumaMotion`; `LumaSpacing` converts the v3.2 scale to Compose `Dp` |
+| `ui/theme/LumaDesignTokens.kt` | **Design System v3.2**: authored colour/shape/material/type tokens per theme (parity-tested against `docs/design/v3.2/tokens`), motion tokens, and the whole spacing scale — `SPACING_DP` / `spacing(step)` / `SP_1`…`SP_11`, gutters and gaps, consumed directly as `.dp` by Compose. There is no separate `ui/DesignTokens.kt` and no `LumaSpacing` object; see `QA_CHECKLIST.md` A23 for the off-scale literals that remain in Compose surfaces |
 | `ui/theme/TypeSystem.kt` | Families, weights, faces, `TypeStyle`, `LumaTypeScale`, tracking |
 | `ui/theme/SemanticColors.kt` | Status, interaction, overlay, widget, field roles |
 | `ui/theme/Components.kt` | `ShapeTokens`, `SurfaceTokens`, `SizeTokens`, per-theme material |
 | `ui/theme/MotionIdentity.kt` | Motion characters and profiles |
 | `ui/theme/WallpaperArt.kt` | Art catalogue, focal points, scrims, lightness |
 | `ui/theme/WallpaperResources.kt` | Art → packaged drawable |
-| `ui/IconCatalog.kt` | 45 glyphs, roles, filled variants, fallback |
+| `ui/IconCatalog.kt` | `LumaIcon`: 42 entries → 42 distinct glyphs (39 base + 3 filled), roles, fallback. 60 `ic_rx_*` drawables ship in total; the shade and quick controls reference 17 of them directly |
 | `icons/MonogramDrawable.kt` | Initial-letter fallback for unresolved icons |
 | `launcher/home/Typefaces.kt` | View-system typeface cache |
 | `settings/Theme.kt` | `LumaOSTheme`, Material scheme/type/shape mapping, Compose locals |

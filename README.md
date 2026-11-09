@@ -15,6 +15,31 @@ opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYST
 
 ---
 
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | Every notable change, by release. Current source is 1.2.0 / `versionCode` 120; nothing has been published yet |
+| [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) | Publisher-review draft for the Play Data safety form. Has placeholders — **not** a publishable policy |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Design System v3.2 / Luma Glass reference: tokens, colour, type, iconography, shapes, motion, token map |
+| [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) | What has actually been verified versus what still needs a build or a device, plus the release acceptance gate |
+| [docs/VAULT.md](docs/VAULT.md) | LumaOS Vault: construction, storage layout, backup, known limitations |
+| [docs/VAULT_THREAT_MODEL.md](docs/VAULT_THREAT_MODEL.md) | What the Vault defends, what it does **not**, and where that line sits |
+| [docs/MANAGED_DEVICE_DEPLOYMENT.md](docs/MANAGED_DEVICE_DEPLOYMENT.md) | Optional kiosk / MDM deployment through Android's own `DevicePolicyManager` |
+| [docs/design/v3.2/](docs/design/v3.2/README.md) | The authored v3.2 bundle: [spec](docs/design/v3.2/SPEC.md), one [token file per theme](docs/design/v3.2/tokens), and provenance. `DesignTokensParityTest` reads these JSON files, so they are load-bearing |
+| [design-src/README.md](design-src/README.md) | The studio build the bundle was exported from, and the wallpaper pipeline |
+| [store-assets/README.md](store-assets/README.md) | Play icon and feature graphic. Brand assets, **not** app screenshots |
+| [dist/README.md](dist/README.md) | Why no signed release artifact is checked in |
+| [toolchain/manual-build/README.md](toolchain/manual-build/README.md) | Historical non-Gradle build pipeline, kept for provenance. Not the release path |
+
+Dated point-in-time engineering reports (build, recovery, polish, UI-repair,
+studio, shade, wallpaper/widget and Vault audit passes) were removed from this
+tree. Their outcomes live in the code, in [CHANGELOG.md](CHANGELOG.md), and in
+the `vault/`, `ui/theme/` and `widgets/` test sources; the two documents above
+that stay current are `docs/DESIGN_SYSTEM.md` and `docs/QA_CHECKLIST.md`.
+
+---
+
 ## Quick start
 
 ```bash
@@ -52,7 +77,28 @@ For a release APK, run `./build.sh assembleRelease`; install
 unless valid local upload-key credentials are configured; they are never signed
 with the debug key. Google Play distribution uses the signed AAB from
 `./build.sh bundleRelease` at `app/build/outputs/bundle/release/app-release.aab`.
-See [keystore/README.md](keystore/README.md) for safe upload-key setup.
+
+#### Upload-key setup
+
+Release signing is driven by an optional `keystore.properties` at the repository
+root. It is gitignored, along with `*.jks`, `*.keystore`, `*.p12`, `*.pfx` and
+`*.key`, so no credential or private key is ever committed. Create the file
+locally with all four fields:
+
+```properties
+storeFile=keystore/lumaos-pro-upload.jks
+storePassword=your-store-password
+keyAlias=lumaos-pro-upload
+keyPassword=your-key-password
+```
+
+`storeFile` resolves relative to the repository root. `app/build.gradle.kts`
+fails the build if the file exists but a field is blank or the keystore it
+names is missing — it never falls back to the debug key, so a release output is
+either correctly signed or unsigned. Keep the keystore and its passwords backed
+up outside the repository: with Play App Signing enrolled, losing the upload key
+means losing the ability to publish further updates. No `keystore/` directory
+is checked in.
 
 ### Google Play release checklist
 
@@ -82,7 +128,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
   package namespace, and listing artwork have been updated in source. Confirm
   `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
   clearance before first upload. `versionCode` follows
-  `major * 100 + minor * 10 + patch` (1.0.0 → 100), so increment it on each
+  `major * 100 + minor * 10 + patch` (1.2.0 → 120), so increment it on each
   later upload and follow any account-specific Play testing gates shown in
   Console. The new name and package have not been independently cleared.
 
@@ -96,7 +142,7 @@ See [keystore/README.md](keystore/README.md) for safe upload-key setup.
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 1.0.1 (versionCode 101) |
+| Version | 1.2.0 (versionCode 120) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
@@ -146,7 +192,7 @@ treatment, surface material and motion — not just in accent hue:
 | Tokens | `ui/theme/LumaDesignTokens.kt` | Authored v3.2 colour, shape, material, type, spacing and motion; parity-tested against [docs/design/v3.2/tokens](docs/design/v3.2/tokens) |
 | Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt`, `ThemeEngine.kt` | Authored roles for v3.2 themes, seed-derived for retained palettes and custom colours; contrast enforced on both paths |
 | Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 10-role ladder, five voices |
-| Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 45 glyphs on one 24 dp grid, filled only for selection; per-theme tile shape at 58 dp |
+| Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 60 glyphs on one 24 dp grid; `LumaIcon` exposes 42 of them (39 base + 3 filled, used only for selection), the shade and quick controls reference 17 more directly. Per-theme tile shape at 58 dp |
 | Wallpaper | `ui/theme/WallpaperArt.kt`, `drawable-nodpi` | Authored art for the retained palettes; v3.2 paints its own backdrop or follows the system wallpaper |
 | Shapes | `ResolvedTheme.radius(RadiusRole…)`, `ui/theme/Components.kt` | Authored per-theme radii, with the pre-3.2 scaled path kept for retained palettes |
 | Motion | `ui/theme/MotionIdentity.kt`, `LumaDesignTokens.Motion` | Subtle / cinematic / exact (+ retained quiet, expressive) with hard invariants |
@@ -197,15 +243,15 @@ com.lumaos.pro.launcher
 │   ├── model/       HomeItem, HomeLayout, HomeLayoutOps, HomeLayoutCodec, GestureAction
 │   └── view/        AlphaIndexView, FolderIconDrawable
 ├── intelligence/    DeviceCapability, Profile(+Resolver), Rules, Cooldown,
-│                    IntelligenceEngine, FrameMonitor, MemorySampler, BatterySampler,
-│                    StartupTracker, FrameStats
+│                    IntelligenceEngine, FrameMonitor, Samplers (MemorySampler,
+│                    BatterySampler), StartupTracker, FrameStats
 ├── optimizer/       Optimizer — the four supported actions
-├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), StartupStats, formatting
+├── diagnostics/     Reading<T>, DiagnosticsStore (SQLite), DiagnosticsRepository (StartupStats, formatting)
 ├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
 ├── vault/           LumaOS Vault — core/ (pure crypto + storage), platform/ (Android
 │                    façade), ui/ (Activities). See docs/VAULT.md.
 ├── onboarding/      OnboardingActivity (Compose)
-└── ui/              DesignTokens, ThemeMode compatibility, shared theme engine
+└── ui/              IconCatalog (LumaIcon), ThemeMode compatibility, glass/ components
     └── theme/       ThemeRepository, ThemeEngine, LumaDesignTokens (v3.2),
                      contrast, atmosphere, presets
 ```
@@ -264,8 +310,8 @@ and otherwise uses Android's 30-minute-or-longer widget refresh; the check time
 is displayed. The system may delay updates and notification-listener access may
 be restricted by the device. Existing clock/date UI and third-party providers
 remain available. Weather, calendar, and photo widgets are not supplied by Luma.
-See [docs/WALLPAPER_WIDGET_REPORT.md](docs/WALLPAPER_WIDGET_REPORT.md) for the
-verification boundary and backup limitations.
+The device checks that remain for wallpaper and widgets are
+[docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) §D4 and §D7.
 
 ### Notifications and quick controls
 
@@ -299,9 +345,9 @@ Back, on a tap of the scrim, or on an upward drag from the scrim.
   four `<queries>` intents so the camera and cast destinations can be resolved on
   Android 11+.
 
-See [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md) for the
-per-control capability table, the verification boundary and what still needs a
-physical device.
+The per-control device checks — which tiles must move, which must route to a
+system page, and which cannot be verified without hardware — are
+[docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) §D12.
 
 ### Context profiles
 
@@ -529,8 +575,10 @@ validate it on supported physical devices before release; no verified APK/AAB
 is checked into this repository.
 
 ## Known limitations
-location/calendar/physical-activity
-context triggers are not part of this release. Home-screen widgets are
+
+Location, calendar and physical-activity context triggers are not part of this
+release: context profiles switch on local-time schedules only, and the manifest
+declares no location, calendar or activity-recognition permission. Home-screen widgets are
 implemented, but their provider consent, configuration and interaction still
 need real-device validation. Android widget host IDs are not remapped after
 system backup/restore, so restored placements may need to be added again. Imported
@@ -538,6 +586,7 @@ wallpaper photos are device-local and are not backed up. Some quick controls are
 limited by Android itself rather than by this code — a tile that Android will not
 let a launcher write opens the real system page, hotspot state is not readable
 without carrier privileges, and Bluetooth state reads are restricted on API 33+.
-Each limitation, and which controls are still unverified without a device, is
-listed in [docs/SHADE_CONTROLS_REPORT.md](docs/SHADE_CONTROLS_REPORT.md). See
-[BUILD_REPORT.md](BUILD_REPORT.md) for the release verification boundary.
+Which controls are still unverified without a device is tracked in
+[docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) §D12; the release verification
+boundary — what has actually been executed here versus what the owner must run
+— is §C and the §E acceptance gate.
