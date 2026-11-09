@@ -546,9 +546,35 @@ verified.
   user-confirmed export or the user's own encrypted backup. The Vault requests
   `CAMERA` and `RECORD_AUDIO` only when the private camera, scanner or recorder is
   opened, and it needs no network permission of its own.
-- The merged manifest requests `REQUEST_DELETE_PACKAGES` for the user-confirmed
-  uninstall action. `QUERY_ALL_PACKAGES` is not requested; app discovery uses
-  Android's `LauncherApps` API and the declared launcher-intent query.
+### Every permission the merged manifest declares
+
+Nine, each tied to a specific user-initiated behaviour. Nothing here grants
+silent control over other apps.
+
+| Permission | Why |
+|---|---|
+| `REQUEST_DELETE_PACKAGES` | The user-confirmed uninstall action |
+| `RECEIVE_BOOT_COMPLETED` | Only rebuilds the next inexact context-profile alarm after a reboot |
+| `POST_NOTIFICATIONS` | Requested only if the user enables context alerts |
+| `USE_BIOMETRIC` | Optional platform biometric Vault unlock (normal permission, not runtime) |
+| `USE_FINGERPRINT` | The same path on older Android releases |
+| `SET_WALLPAPER` | User-initiated static wallpaper changes only |
+| `CAMERA` | Vault private camera and scanner; requested at the moment of use |
+| `RECORD_AUDIO` | Vault recorder; requested at the moment of use |
+| `BIND_NOTIFICATION_LISTENER_SERVICE` | The optional notification-access grant shared by the Music widget and the launcher shade |
+
+`CAMERA` and `RECORD_AUDIO` are both optional parts of the product: refusing the
+microphone leaves the recorder explaining itself while every other Vault surface
+still works, and refusing the camera leaves the scanner and private camera saying
+so with existing content still accessible. Both `<uses-feature>` entries
+(`android.hardware.camera.any`, `android.hardware.microphone`) are declared
+`required="false"`, so neither is needed to install.
+
+Deliberately **not** requested: `QUERY_ALL_PACKAGES` (app discovery uses
+Android's `LauncherApps` API plus a declared `<queries>` block), `KILL_BACKGROUND_PROCESSES`
+and `FORCE_STOP` (LumaOS Pro does not terminate other applications), and any
+accessibility or device-admin binding for core features. No network permission is
+declared at all.
 
 ---
 
