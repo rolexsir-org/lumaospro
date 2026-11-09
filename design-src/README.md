@@ -18,11 +18,11 @@ APK, is not referenced by Gradle, and no JavaScript from it runs in the app.
 Screens it shows that the app does not implement yet are design intent — see
 `docs/DESIGN_SYSTEM.md` §14.
 
-`wallpapers/` holds the full-resolution renders the packaged WebP assets were
-exported from (portrait 704×1520, landscape 1376×768). They are stored as WebP to
-keep the repository small; the packaged files live in
-`app/src/main/res/drawable-nodpi` and `app/src/main/res/drawable-land-nodpi` with
-the same resource stem in both:
+`wallpapers/` holds the renders for the **three theme-linked legacy artworks
+only** (portrait 704×1520, landscape 1376×768) — aurora, zen and void, the
+`WallpaperArt` enum. They are stored as WebP to keep the repository small; the
+packaged files live in `app/src/main/res/drawable-nodpi` and
+`app/src/main/res/drawable-land-nodpi` with the same resource stem in both:
 
 | Source | Packaged |
 | --- | --- |
@@ -33,7 +33,14 @@ the same resource stem in both:
 | `void-portrait.webp` | `drawable-nodpi/luma_wall_void.webp` |
 | `void-landscape.webp` | `drawable-land-nodpi/luma_wall_void.webp` |
 
-## Re-export
+The 30 Wallpaper Studio compositions (`luma_wall_01_*` … `luma_wall_30_*`,
+mapped by `WallpaperArtResources.resForKey()` and catalogued in
+`wallpaper/WallpaperCatalog.kt`) are **portrait-only and have no sources here** —
+the packaged WebP files under `drawable-nodpi` are the only copy in the
+repository. Re-cropping or re-exporting them is not possible from this tree; treat
+the packaged assets as the artefacts of record for that set.
+
+## Re-export (legacy trio only)
 
 ```bash
 python3 - <<'PY'
@@ -55,5 +62,5 @@ PY
    runtime.
 4. Set the focal point and scrim strengths in `WallpaperArt`, not in the view.
 
-The packaged assets are the artefacts of record; the sources exist so a future
-change can re-crop without regenerating the art.
+The packaged assets are the artefacts of record; for the legacy trio the sources
+exist so a future change can re-crop without regenerating the art.
