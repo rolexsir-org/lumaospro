@@ -148,7 +148,9 @@
                 android:layout_height="wrap_content"
                 android:clickable="true"
                 android:focusable="true"
-                android:importantForAccessibility="no"
+                android:importantForAccessibility="yes"
+                android:minHeight="48dp"
+                android:gravity="center_vertical"
                 android:textAppearance="@style/TextAppearance.Luma.Overline"
                 android:visibility="gone" />
         </LinearLayout>

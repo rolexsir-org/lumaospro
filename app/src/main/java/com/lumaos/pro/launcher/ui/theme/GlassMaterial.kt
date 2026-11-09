@@ -193,6 +193,15 @@ object GlassBackdrop {
         val topLum = seeds?.topLuminance
         val botLum = seeds?.bottomLuminance
         val topAlpha = when {
+            // A split-horizon wallpaper can have a bright clock region and a dark
+            // lower half. Android then reports light text for the whole image;
+            // the former 8–34% veil left the clock unreadable over pale skies.
+            theme.backdrop == Backdrop.WALLPAPER && !darkText ->
+                // WallpaperColors reports a single weighted luminance on recent
+                // Android releases when the image itself cannot be sampled.
+                // Never mistake a dark lower half for a dark clock region.
+                (0.56f + ((topLum ?: 0.25f) - 0.25f).coerceAtLeast(0f) * 0.22f)
+                    .coerceAtMost(0.70f)
             !darkText && topLum != null && topLum > 0.30f ->
                 (0.08f + (topLum - 0.30f) * 0.55f).coerceIn(0.08f, 0.34f)
             darkText && topLum != null && topLum < 0.25f ->

@@ -21,15 +21,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -198,20 +200,22 @@ internal fun PremiumThemeCard(
     theme: ResolvedTheme,
     selected: Boolean,
     modifier: Modifier = Modifier,
-    miniatureHeight: Dp = 148.dp,
+    miniatureHeight: Dp = 176.dp,
     onClick: () -> Unit
 ) {
     val pkg = remember(spec.id) { ThemeLauncherPackage.forTheme(spec.id) }
-    val shape = RoundedCornerShape(LumaDesignTokens.SP_6.dp)
+    val shape = MaterialTheme.shapes.medium
+    var focused by remember { mutableStateOf(false) }
     val ring by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        if (selected || focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
         tween(LumaDesignTokens.Motion.DUR_2), label = "themeRing"
     )
-    val ringWidth by animateDpAsState(if (selected) 2.dp else 1.dp, tween(LumaDesignTokens.Motion.DUR_2), label = "themeRingWidth")
+    val ringWidth by animateDpAsState(if (selected || focused) 2.dp else 1.dp, tween(LumaDesignTokens.Motion.DUR_2), label = "themeRingWidth")
     val description = stringResource(R.string.theme_card_cd, spec.displayName, pkg.subtitle)
     val selectedDescription = stringResource(R.string.theme_selected_cd, spec.displayName)
     Column(
         modifier
+            .onFocusChanged { focused = it.hasFocus }
             .clip(shape)
             .clickable(onClick = onClick)
             .semantics {
@@ -226,8 +230,8 @@ internal fun PremiumThemeCard(
                 .height(miniatureHeight)
                 .clip(shape)
                 .border(ringWidth, ring, shape)
-                .padding(if (selected) 3.dp else 0.dp)
-                .clip(RoundedCornerShape((LumaDesignTokens.SP_6 - 3f).dp))
+                .padding(if (selected || focused) 3.dp else 0.dp)
+                .clip(shape)
         ) {
             ThemeMiniature(theme, pkg.dock, Modifier.fillMaxSize())
             if (selected) {
@@ -288,7 +292,7 @@ internal fun MoreThemesRow(
                 spec = spec,
                 theme = theme,
                 selected = spec.id == selectedId,
-                miniatureHeight = 96.dp,
+                miniatureHeight = 144.dp,
                 modifier = Modifier.width(112.dp),
                 onClick = { onSelected(spec.id) }
             )
@@ -323,11 +327,13 @@ internal fun AccentSwatchRow(
         swatches.forEach { color ->
             val isThemeAccent = color == themeAccent
             val chosen = if (accentOverride == null) isThemeAccent else ColorMath.opaque(accentOverride) == color
+            var focused by remember(color) { mutableStateOf(false) }
             val label = ColorMath.toHex(color).takeLast(6)
             val cd = stringResource(R.string.accent_cd, label)
             Box(
                 Modifier
                     .size(48.dp)
+                    .onFocusChanged { focused = it.hasFocus }
                     .clip(CircleShape)
                     .clickable { onSelected(if (isThemeAccent) null else color) }
                     .semantics {
@@ -341,8 +347,8 @@ internal fun AccentSwatchRow(
                     Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .border(if (chosen) 2.dp else 0.dp, if (chosen) ring else Color.Transparent, CircleShape)
-                        .padding(if (chosen) 4.dp else 0.dp)
+                        .border(if (chosen || focused) 2.dp else 0.dp, if (chosen || focused) ring else Color.Transparent, CircleShape)
+                        .padding(if (chosen || focused) 4.dp else 0.dp)
                         .clip(CircleShape)
                         .background(Color(color))
                 )

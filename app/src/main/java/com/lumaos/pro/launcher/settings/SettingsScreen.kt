@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -103,12 +105,11 @@ fun SettingsRoot(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            Spacer(Modifier.height(8.dp))
-            HomeRoleHeader(viewModel, onRequestHomeRole, onOpenHomeSettings)
             Spacer(Modifier.height(20.dp))
-
             ActiveThemeBanner(viewModel = viewModel, onOpenStudio = onOpenStudio)
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(32.dp))
+            HomeRoleHeader(viewModel, onRequestHomeRole, onOpenHomeSettings)
+            Spacer(Modifier.height(32.dp))
 
             CleanGroupTitle(R.string.settings_group_make_yours)
             CleanSection {
@@ -116,7 +117,7 @@ fun SettingsRoot(
                 CleanDivider()
                 WidgetsRow(viewModel)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(32.dp))
 
             CleanGroupTitle(R.string.settings_group_fine_tune)
             CleanSection {
@@ -130,11 +131,11 @@ fun SettingsRoot(
             CleanSection {
                 PerformanceSection(viewModel)
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(32.dp))
 
             CleanGroupTitle(R.string.settings_group_private)
             CleanSection { VaultRow() }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(32.dp))
 
             CleanGroupTitle(R.string.settings_group_advanced)
             var advancedOpen by rememberSaveable { mutableStateOf(false) }
@@ -168,26 +169,17 @@ fun SettingsRoot(
 private fun CleanGroupTitle(resId: Int) {
     Text(
         text = stringResource(resId),
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.sp,
-            letterSpacing = 0.8.sp,
-            fontWeight = FontWeight.SemiBold
-        ),
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 4.dp)
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
     )
 }
 
 @Composable
 private fun CleanSection(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Column(Modifier.fillMaxWidth()) { content() }
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        content()
     }
 }
 
@@ -196,7 +188,7 @@ private fun CleanDivider() {
     HorizontalDivider(
         thickness = 0.6.dp,
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(horizontal = 16.dp)
+        modifier = Modifier.padding(start = 16.dp)
     )
 }
 
@@ -210,12 +202,15 @@ private fun CleanRow(
     trailing: @Composable (() -> Unit)? = null
 ) {
     val clickable = onClick != null
+    var focused by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .onFocusChanged { focused = it.hasFocus }
+            .background(if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent)
+            .heightIn(min = 56.dp)
             .clickable(enabled = clickable, onClick = { onClick?.invoke() })
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
@@ -230,17 +225,17 @@ private fun CleanRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -252,7 +247,7 @@ private fun CleanRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 12.dp)
+                modifier = Modifier.padding(start = 8.dp).widthIn(max = 112.dp)
             )
         }
         if (trailing != null) {
@@ -287,20 +282,20 @@ private fun CompactSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
                 )
@@ -329,35 +324,39 @@ private fun ChoiceRowCompact(
     onSelected: (Any) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
     val selectedText = selected
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .onFocusChanged { focused = it.hasFocus }
+            .background(if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent)
+            .heightIn(min = 56.dp)
             .clickable { expanded = true }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f), maxLines = 2
         )
         Text(
             text = selected,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(end = 6.dp)
+            modifier = Modifier.padding(end = 6.dp).widthIn(max = 120.dp)
         )
         Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f), fontSize = 18.sp)
     }
     if (expanded) {
         Dialog(onDismissRequest = { expanded = false }) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, tonalElevation = 6.dp) {
-                Column(Modifier.padding(vertical = 8.dp).width(280.dp)) {
+                Column(Modifier.padding(vertical = 8.dp).width(280.dp)
+                    .heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                     options.forEach { (value, text) ->
                         val isSelected = text == selectedText
                         Row(
@@ -400,54 +399,65 @@ private fun HomeRoleHeader(
     onOpenHomeSettings: () -> Unit
 ) {
     val role by viewModel.roleState.collectAsState()
-    CleanSection {
-        Column(Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(if (role.isDefault) R.string.role_status_default else R.string.role_status_not_default),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.role_explanation),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (!role.isDefault && role.currentDefaultLabel != null) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.section_home_role), style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.Top) {
+            Box(Modifier.padding(top = 5.dp).size(8.dp).clip(CircleShape)
+                .background(if (role.isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(if (role.isDefault) R.string.role_status_default else R.string.role_status_not_default),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = stringResource(R.string.role_current_default, role.currentDefaultLabel ?: ""),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    text = stringResource(R.string.role_explanation),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!role.isDefault) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.clickable { onRequestHomeRole() }
-                    ) {
-                        Text(
-                            text = stringResource(R.string.role_set_default),
-                            style = MaterialTheme.typography.labelMedium.copy(color = Color.White, fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
-                        )
-                    }
-                }
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.clickable { onOpenHomeSettings() }
-                ) {
+                if (!role.isDefault && role.currentDefaultLabel != null) {
                     Text(
-                        text = stringResource(R.string.role_switch_away),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                        text = stringResource(R.string.role_current_default, role.currentDefaultLabel ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        }
+        // Full-width actions remain discoverable on narrow phones and at large
+        // display/font sizes; a horizontally clipped second button does not.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!role.isDefault) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .clickable { onRequestHomeRole() }
+                ) {
+                    Text(
+                        text = stringResource(R.string.role_set_default),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .clickable { onOpenHomeSettings() }
+            ) {
+                Text(
+                    text = stringResource(R.string.role_switch_away),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
             }
         }
     }
@@ -481,23 +491,23 @@ private fun ActiveThemeBanner(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp
-    ) {
-        Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
+    Column(Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.settings_active_identity).uppercase(Locale.getDefault()),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = resolved.displayName,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground
             )
             Text(
                 text = pkg.subtitle + "  ·  " + pkg.effectsSummary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -512,8 +522,8 @@ private fun ActiveThemeBanner(
                         spec = spec,
                         theme = rememberShippedTheme(spec, environment),
                         selected = resolved.id == spec.id,
-                        miniatureHeight = 112.dp,
-                        modifier = Modifier.width(148.dp),
+                        miniatureHeight = 168.dp,
+                        modifier = Modifier.width(132.dp),
                         onClick = { apply(spec.id) }
                     )
                 }
@@ -568,23 +578,25 @@ private fun ActiveThemeBanner(
 
             Spacer(Modifier.height(LumaDesignTokens.SP_5.dp))
 
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { onOpenStudio() }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                Modifier.fillMaxWidth().clickable { onOpenStudio() }
+                    .padding(vertical = LumaDesignTokens.SP_5.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Open Theme Studio",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(vertical = LumaDesignTokens.SP_4.dp)
+                    text = stringResource(R.string.gesture_open_studio),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_rx_chevron_right),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-        }
     }
 }
 
@@ -734,9 +746,9 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
 private fun CleanSectionHeader(resId: Int) {
     Text(
         text = stringResource(resId),
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, letterSpacing = 0.6.sp, fontWeight = FontWeight.SemiBold),
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
     )
 }
 
@@ -1058,8 +1070,8 @@ private fun SliderCompact(label: String, value: Float, range: ClosedFloatingPoin
     var sliderValue by remember(value) { mutableStateOf(value) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
-            Text(if (isFloat) "%.2f×".format(sliderValue) else "${sliderValue.toInt()}$suffix", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.primary)
+            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text(if (isFloat) "%.2f×".format(sliderValue) else "${sliderValue.toInt()}$suffix", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(2.dp))
         androidx.compose.material3.Slider(

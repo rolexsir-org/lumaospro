@@ -23,6 +23,7 @@ import com.lumaos.pro.launcher.ui.theme.GlassPalette
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.GlassSpec
 import com.lumaos.pro.launcher.ui.theme.LumaTokens
+import com.lumaos.pro.launcher.ui.theme.RadiusRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 
 /**
@@ -81,11 +82,11 @@ object GlassViews {
     }
 
     /**
-     * A filter/segment chip: a calm pill whose visible height is [visualHeightDp]
-     * inside a taller touch target. At rest it is a whisper of the content
-     * colour; selected, it fills with the accent (text uses `onAccent`). Shared
-     * by the drawer filters, widget picker categories and other chip rows so
-     * every chip in the launcher has one shape and one selection grammar.
+     * A filter/segment chip with the theme's own small-radius geometry. Its
+     * visible height sits inside a taller touch target. At rest it is a quiet
+     * surface; selected, it fills with the accent (text uses `onAccent`). Shared
+     * by drawer filters and widget categories without turning every theme into
+     * the same capsule.
      */
     fun chip(
         theme: ResolvedTheme,
@@ -100,7 +101,7 @@ object GlassViews {
             com.lumaos.pro.launcher.ui.theme.ColorMath.opaque(c.onSurface),
             if (theme.isDark) 0.09f else 0.06f
         )
-        val radius = visualHeightDp / 2f * density
+        val radius = theme.radius(RadiusRole.SMALL).coerceAtMost(visualHeightDp / 2f) * density
         val pill = GradientDrawable().apply {
             setColor(fill)
             cornerRadius = radius
@@ -121,9 +122,14 @@ object GlassViews {
     /** A quiet vertical veil that keeps text readable over light or dark artwork. */
     fun scrim(theme: ResolvedTheme): Drawable {
         val s = GlassBackdrop.scrim(theme)
+        val lightInkOnWallpaper = theme.backdrop == com.lumaos.pro.launcher.ui.theme.Backdrop.WALLPAPER &&
+            !com.lumaos.pro.launcher.ui.theme.ColorMath.isDark(
+                com.lumaos.pro.launcher.ui.theme.ColorMath.opaque(theme.colors.homeForeground)
+            )
         return GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(s.top, s.center, s.bottom)
+            if (lightInkOnWallpaper) intArrayOf(s.top, s.top, s.center, s.bottom)
+            else intArrayOf(s.top, s.center, s.bottom)
         )
     }
 
