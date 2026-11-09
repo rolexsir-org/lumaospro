@@ -122,13 +122,16 @@ holds either way — including for a hand-edited token file.
 * **Nothing is removed and no key is rewritten.** The pre-3.2 palettes (Aurora, Zen,
   Void, Obsidian, Graphite, Chroma) keep their IDs, storage keys, seeds, geometry
   and voices. They are shown under "Retained palettes" in Studio, below the three
-  v3.2 identities.
+  v3.2 identities and the premium trio.
 * **Defaults.** A fresh install follows the system: **Signature** in dark mode and
-  **Zen** in light mode. The three v3.2 identities are authored dark, and the
-  specification defines a paper *surface* variant for widgets and sheets (§3.1) —
-  not a light theme. Putting a midnight launcher on a light-mode phone would be the
-  wrong default, so the retained paper palette stays the light partner until that
-  variant is implemented. This is a deliberate limitation, not an oversight.
+  **Ivory** in light mode (`ThemePresets.DEFAULT_DARK` / `DEFAULT_LIGHT`). Ivory is
+  an authored light identity — warm paper `#F6F3EC` with a sapphire ink accent —
+  so the light default no longer has to borrow a retained palette. An *upgrade* is
+  different from a fresh install: a stored pre-3.2 `THEME_MODE=light` preference
+  with no explicit theme id still maps to Zen (`ThemeId.PORCELAIN`) in
+  `LumaPrefs.themeSettingsFrom`, so nobody's saved light palette is silently
+  swapped. The three v3.2 identities remain authored dark, and the specification's
+  paper *surface* variant (§3.1) is still not implemented.
 * **Blur is material, not preference.** Monolith's token is 0 dp, so
   `HomeActivity.applyDepth()` draws no blur for it even when the device and the
   effects policy would allow one.
@@ -179,7 +182,7 @@ retained palettes before v3.2 and remain accurate for them.
 | --- | --- |
 | Quiet luxury, not decoration | No gradients on text, no heavy shadows, no outlines that only decorate. Every stroke exists to separate two materials. |
 | One hierarchy, three voices | The type scale is identical everywhere. Themes change family, weight, tracking and motion — never the ladder. |
-| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument). Each theme's radii, borders, elevation and blur follow its material — Monolith's zero blur is a token, not an exception. |
+| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument), and the reference identities theirs (Luma Glass navy liquid glass, Luma Mono one peach ink on solid plates). Each theme's radii, borders, elevation and blur follow its material — Monolith's and Luma Mono's zero blur is a token, not an exception. |
 | Legibility is a guarantee | Text roles are contrast-checked by the theme engine, not chosen by eye. |
 | Motion is feedback, not theatre | Every animation is interruptible, honours the system animation scale, and vanishes under reduced motion. |
 | Identity is preserved | App icons are never recoloured. Bundled glyphs are used only for the interface; app artwork is passed through untouched. |
@@ -190,19 +193,31 @@ retained palettes before v3.2 and remain accurate for them.
 
 ### 2.1 Themes
 
-v3.2 identities first, then the retained palettes.
+Twelve identities ship, in four groups. `ThemePresets.ALL` is
+`PREMIUM + SIGNATURE + ADDITIONAL` and covers the `ThemeId` enum exactly once —
+12 presets for 12 enum members, no duplicates.
 
-| Theme | Storage key | Character | Material | Type voice | Motion |
-| --- | --- | --- | --- | --- | --- |
-| **Signature** | `signature` | Midnight ramp, indigo-violet | Translucent, blur 26, sat 135 % | Inter, refined | Subtle |
-| **Atmosphere** | `atmosphere` | Wallpaper-led, aurora mint | Glass, blur 34, sat 165 % | Inter, airy | Cinematic |
-| **Monolith** | `monolith` | Stone neutrals, vermilion rules | Solid, **no blur** | Space Grotesk + mono | Exact |
-| Aurora (retained) | `aurora` | Midnight ribbon light | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
-| Zen (retained) | `porcelain` | Quiet paper and mist — the light-mode partner | Solid paper, almost no elevation, soft radii | Inter, modern serenity | Quiet |
-| Void (retained) | `vector` | Indigo depth, cyan signal | Layered panels, sharper corners, accent halo | Space Grotesk + Inter | Expressive |
-| Obsidian (retained) | `obsidian` | True black for OLED | Flat black, no glow | Inter | Subtle |
-| Graphite (retained) | `graphite` | Machined grey, amber instrument | Matte panels, 3 dp | Inter | Subtle |
-| Chroma (retained) | `chroma` | Built from the wallpaper | Same as current backdrop | Inter | Subtle |
+| Theme | Storage key | Group | Character | Material | Type voice | Motion |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Signature** | `signature` | v3.2 | Midnight ramp, indigo-violet `#7C86FF` | Translucent, blur 26, sat 135 % | Inter, refined | Subtle |
+| **Atmosphere** | `atmosphere` | v3.2 | Wallpaper-led, aurora mint `#46E0B0` | Glass, blur 34, sat 165 % | Inter, airy | Cinematic |
+| **Monolith** | `monolith` | v3.2 | Stone neutrals, vermilion rules `#FF5A2B` | Solid, **no blur** | Space Grotesk + mono | Exact |
+| **Obsidian** | `obsidian` | premium | True black for OLED, champagne light `#D9BC8C` | Flat black, no glow, AMOLED | Inter, precision | Subtle |
+| **Ivory** | `ivory` | premium | Warm paper `#F6F3EC`, sapphire ink `#2E5AAC`, bronze detail | Translucent, halo atmosphere | Inter, precision | Subtle |
+| **Aurora** | `aurora` | premium | Midnight ribbon light | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
+| Zen | `porcelain` | retained | Quiet paper and mist | Solid paper, almost no elevation, soft radii | Inter, modern serenity | Quiet |
+| Void | `vector` | retained | Indigo depth, cyan signal | Layered panels, sharper corners, accent halo | Space Grotesk + Inter | Expressive |
+| Graphite | `graphite` | retained | Machined grey, amber instrument | Matte panels, 3 dp | Inter | Subtle |
+| Chroma | `chroma` | retained | Built from the wallpaper | Same as current backdrop | Inter | Subtle |
+| **Luma Glass** | `luma_glass` | reference (2026-11) | Deep navy `#050D1F`, sky accent `#5FB8FF`, wallpaper backdrop | Glass, corner scale 1.125 | Inter, ambient | Cinematic |
+| **Luma Mono** | `luma_mono` | reference (2026-11) | Charcoal-brown `#161110`, one peach ink `#F0BE9A` | Solid, **no blur**, tinted icons, corner scale 0.875 | Monospace, monograph | Exact |
+
+Obsidian and Aurora began as pre-3.2 palettes and graduated into the premium
+collection **under their original storage keys**, so a user who had either
+selected is upgraded in place rather than reset. Ivory, Luma Glass and Luma Mono
+were added after v3.2. Studio and Settings present `FEATURED`
+(premium + v3.2 + the two reference identities) first, then the retained
+palettes.
 
 Every legacy storage key — including 0.1's `aurora`, `porcelain`, `vector` — and the
 old light/dark switch are preserved. No saved preference or exported backup is
@@ -335,8 +350,11 @@ every storage key is unchanged.
 
 ### 4.1 Interface glyphs
 
-45 original glyphs in `res/drawable/ic_rx_*.xml`, defined in `ui/IconCatalog.kt`
-as `LumaIcon`.
+60 original glyphs ship in `res/drawable/ic_rx_*.xml`. `ui/IconCatalog.kt`
+exposes 42 of them as the `LumaIcon` enum (39 base + 3 filled variants); the
+notification shade and quick controls reference 17 further glyphs directly, and
+`ic_rx_notifications` is packaged but currently unreferenced. All 60 parse as
+`<vector>`.
 
 | Property | Value |
 | --- | --- |
@@ -372,9 +390,13 @@ into the interface.
 
 ## 5. Wallpaper art direction
 
-Three signature artworks ship with the app, packaged as WebP in `drawable-nodpi`
-(portrait) and `drawable-land-nodpi` (landscape) so neither orientation crops the
-other's composition.
+36 WebP artworks ship: 33 portrait in `drawable-nodpi` and 3 landscape in
+`drawable-land-nodpi`. They fall into two groups.
+
+**Theme-linked legacy art (3).** One per retained palette, and the only artworks
+with a dedicated landscape composition, so neither orientation crops the other's
+composition. These are the `WallpaperArt` enum, resolved by
+`WallpaperArtResources.res(art)`.
 
 | Art | Theme | Palette | Focal point | Scrim (top / bottom) | Text |
 | --- | --- | --- | --- | --- | --- |
@@ -382,10 +404,18 @@ other's composition.
 | **Zen · Morning Mist** | Zen | Porcelain mist, blue-grey, sage | 0.50 / 0.58 | 0.20 / 0.30 | Dark |
 | **Void · Flux** | Void | Indigo-black, violet, cyan lattice | 0.50 / 0.44 | 0.24 / 0.50 | Light |
 
-Source renders live in `design-src/wallpapers/` (not packaged). Each keeps a quiet
-central band so the grid stays readable, and each declares its own lightness in
-`WallpaperArt.supportsDarkText` — the engine uses that property, it does not guess
-from pixel averages at runtime.
+**Wallpaper Studio compositions (30).** Curated pieces offered in Wallpaper
+Studio, grouped into six collections (`liquid_dreams`, `aurora`, `midnight`,
+`minimal`, `himalayan_essence`, `dark_luxe` in `wallpaper/WallpaperCatalog.kt`).
+These are portrait-only at native aspect ratio and are focal-point cropped by
+`launcher/home/WallpaperArtView.kt` and the Studio preview rather than given a
+separate landscape render; `WallpaperArtResources.resForKey()` maps each key to its
+drawable and reports a missing asset cleanly instead of crashing.
+
+Source renders live in `design-src/wallpapers/` (not packaged). Each legacy
+artwork keeps a quiet central band so the grid stays readable, and each declares
+its own lightness in `WallpaperArt.supportsDarkText` — the engine uses that
+property, it does not guess from pixel averages at runtime.
 
 **Rendering** (`launcher/home/WallpaperArtView.kt`):
 
@@ -687,10 +717,12 @@ ThemeEngine.resolve() ──► ResolvedTheme ──► ThemeRepository.theme (S
 * **v3.2 screens that do not exist yet are not claimed.** The bundle specifies 26
   screens, eight widget anatomies, Quick Shelf states, Focus Spaces, a 7-section
   Studio, a Plus plan and Glance surfaces. This adoption ships the token system,
-  the three identities, their typography, geometry, material and motion. Screens
-  beyond that are design intent, not implementation.
+  the three v3.2 identities, their typography, geometry, material and motion.
+  Screens beyond that are design intent, not implementation.
 * **No paper/light variant of the v3.2 identities.** The specification's light
-  surface variant (§3.1: `rgba(255,255,255,.92)` sheets, ink `#0B0F16`) is not
-  implemented; light mode uses the retained Zen palette (see §0.4).
+  surface variant (§3.1: `rgba(255,255,255,.92)` sheets, ink `#0B0F16`) is still
+  not implemented. Light mode is served by the authored **Ivory** identity (the
+  fresh-install default) and the retained **Zen** palette, not by a light cut of
+  Signature, Atmosphere or Monolith (see §0.4).
 * **No bundled Luma Display/Text/Mono faces.** Inter and the platform mono face
   stand in (see `docs/design/v3.2/README.md`).

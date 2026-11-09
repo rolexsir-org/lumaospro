@@ -193,7 +193,7 @@ treatment, surface material and motion — not just in accent hue:
 | Colour | `ui/theme/ThemeModel.kt`, `SemanticColors.kt`, `ThemeEngine.kt` | Authored roles for v3.2 themes, seed-derived for retained palettes and custom colours; contrast enforced on both paths |
 | Type | `ui/theme/TypeSystem.kt`, `res/font/*` | Inter and Space Grotesk (SIL OFL 1.1), one 10-role ladder, five voices |
 | Icons | `ui/IconCatalog.kt`, `res/drawable/ic_rx_*.xml` | 60 glyphs on one 24 dp grid; `LumaIcon` exposes 42 of them (39 base + 3 filled, used only for selection), the shade and quick controls reference 17 more directly. Per-theme tile shape at 58 dp |
-| Wallpaper | `ui/theme/WallpaperArt.kt`, `drawable-nodpi` | Authored art for the retained palettes; v3.2 paints its own backdrop or follows the system wallpaper |
+| Wallpaper | `ui/theme/WallpaperArt.kt`, `ui/theme/WallpaperResources.kt`, `wallpaper/WallpaperCatalog.kt`, `drawable-nodpi` | 36 packaged WebP: 3 theme-linked legacy artworks (the only ones with landscape variants) + 30 Wallpaper Studio compositions across 6 collections. v3.2 paints its own backdrop or follows the system wallpaper |
 | Shapes | `ResolvedTheme.radius(RadiusRole…)`, `ui/theme/Components.kt` | Authored per-theme radii, with the pre-3.2 scaled path kept for retained palettes |
 | Motion | `ui/theme/MotionIdentity.kt`, `LumaDesignTokens.Motion` | Subtle / cinematic / exact (+ retained quiet, expressive) with hard invariants |
 | Home | `res/layout/activity_home.xml`, `launcher/HomeActivity.kt` | One composition; blur, label size and radii come from the theme's tokens |
@@ -206,14 +206,22 @@ treatment, surface material and motion — not just in accent hue:
   was not copied, why Inter stands in for "Luma Display/Text", and two measured
   token discrepancies in the authored colours
 
-**Compatibility.** Nothing is removed. The pre-3.2 palettes — Aurora, Zen, Void,
-Obsidian, Graphite and Chroma — keep their storage keys, seeds, geometry and
-voices; a stored `aurora`, `porcelain` or `vector` still resolves to the same
-palette, and the typography keys `precision`, `serene`, `grotesk`, `serif`, `mono`
-all still load (joined by `ambient` and `monograph`). A fresh install follows the
-system: **Signature** in dark mode, **Zen** (the retained paper palette) in light
-mode, because the v3.2 trio is authored dark and the specification's light
-*surface* variant is not implemented yet.
+**Compatibility.** Nothing is removed. Twelve identities ship: the v3.2 three
+(Signature, Atmosphere, Monolith), a premium trio (Obsidian, Ivory, Aurora), four
+retained palettes (Zen, Void, Graphite, Chroma) and the two 2026-11 reference
+identities (Luma Glass, Luma Mono). The pre-3.2 palettes keep their storage keys,
+seeds, geometry and voices — a stored `aurora`, `porcelain` or `vector` still
+resolves to the same palette — and the typography keys `precision`, `serene`,
+`grotesk`, `serif`, `mono` all still load (joined by `ambient` and `monograph`).
+Obsidian and Aurora graduated into the premium collection under their original
+keys, so an existing choice is upgraded in place rather than reset.
+
+A fresh install follows the system: **Signature** in dark mode and **Ivory** in
+light mode. Ivory is an authored light identity, so the light default no longer
+borrows a retained palette; an *upgrade* still maps a stored pre-3.2
+`THEME_MODE=light` preference to Zen, so nobody's saved palette is swapped. The
+v3.2 trio remains authored dark and the specification's light *surface* variant is
+not implemented yet.
 
 **Status:** the v3.2 adoption has not been compiled, linted or rendered in this
 workspace (no JDK/Android SDK/device). What was checked mechanically: exact
@@ -270,9 +278,11 @@ folders, menus, hosted-widget frames, and Compose settings/Studio:
 - **Monolith** — stone neutrals, a vermilion signal, near-square geometry
   (8/4/2/2/2), **no blur at all**, an 84 sp Space Grotesk clock and mono labels.
 
-Aurora, Zen, Void, Obsidian, Graphite and Chroma remain available as retained
-palettes, with their historical storage keys (`porcelain` and `vector` included)
-so no saved preference is rewritten or used to reset the home layout. Theme
+Ivory, Luma Glass and Luma Mono (`ivory`, `luma_glass`, `luma_mono`) were added
+after v3.2; Obsidian and Aurora were promoted into the premium collection.
+Aurora, Zen, Void, Obsidian, Graphite and Chroma remain available with their
+historical storage keys (`porcelain` and `vector` included) so no saved preference
+is rewritten or used to reset the home layout. Theme
 selection persists through DataStore and does not change app placement,
 folders, widget IDs/configuration, icon-pack choice, or unrelated preferences.
 The Studio keeps custom color/type/icon/backdrop overrides when a preset
