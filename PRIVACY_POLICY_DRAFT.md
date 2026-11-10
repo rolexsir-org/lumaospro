@@ -39,16 +39,34 @@ reads and changes the system interruption filter as described in the app; it
 restores the prior filter when leaving that context where Android still reports
 that the app owns the filter.
 
-The optional Luma Glass Music widget needs Android **notification access** to
-find and control compatible media sessions. Android grants a notification
-listener the capability to receive all notifications, not just music. Luma's
-listener does not inspect, store, or upload notification contents; it queries
-active media sessions and temporarily processes player names, track titles,
-artists, playback state, and available artwork to display the widget. The Android
-widget host may cache the displayed widget content. The user can decline or
-revoke notification access in Android Settings; the widget then cannot access
-other players. This is separate from notification posting and Do Not Disturb
-access.
+**One optional notification-access grant serves two features.** LumaOS Pro
+declares a single `NotificationListenerService`
+(`BIND_NOTIFICATION_LISTENER_SERVICE`), enabled by hand in Android Settings. The
+Luma Glass Music widget and the launcher's own notification shade share that one
+grant; enabling it for either enables it for both. Android grants a notification
+listener the capability to receive **all** notifications, not just music.
+
+- **The Music widget** queries active media sessions and temporarily processes
+  player names, track titles, artists, playback state, and available artwork to
+  render the widget. The Android widget host may cache the displayed content.
+- **The launcher shade** does read notification content: it extracts the posting
+  app's label, icon, title, body, sub-text, expanded text, conversation title,
+  message lines and timestamp in order to draw a card, and it reads an action's
+  `RemoteInput` so the user can reply. Content an app marked secret stays hidden,
+  and a group summary is never listed alongside the children it summarises.
+
+This processing is **in memory only**. Notification content is never written to
+preferences, a database or a file, never uploaded (the app holds no network
+permission), and never logged — the app's logs record failures such as "a
+notification could not be read", not content. At most the 60 newest cards are
+held in RAM, and only for as long as the shade exists. A reply is handed straight
+to the posting app's own `PendingIntent`, so it travels through that app exactly
+as it would from the system shade; the app does not keep a copy.
+
+The user can decline or revoke notification access in Android Settings at any
+time; the widget then cannot reach other players and the shade shows its revoked
+state instead of cards. This grant is separate from notification posting
+(`POST_NOTIFICATIONS`) and Do Not Disturb access.
 
 Wallpaper Studio can copy a photo selected through the Android document picker
 into app-private storage. The original is not deleted. The copy can retain
@@ -60,6 +78,37 @@ backup also excludes photo copies and wallpaper favorites. When a user sets a
 wallpaper, Android stores and presents its own copy and the system or device
 manufacturer controls its crop and retention. The app requests that custom
 photo wallpapers not be backed up by the system; device behavior may vary.
+
+## LumaOS Vault
+
+LumaOS Vault is an optional in-app private space for photos, videos, files,
+notes, recordings and scanned documents.
+
+- **Content is encrypted before it is written.** Vault payloads are stored under
+  Android's `noBackupFilesDir` with opaque generated names, and are excluded from
+  Android cloud backup and device-to-device transfer. Vault content is never
+  placed in MediaStore, never included in a notification, and never logged.
+- **Vault content does not leave the device** except through a user-confirmed
+  export or the user's own encrypted Vault backup, both written to a destination
+  the user chooses.
+- **Camera and microphone.** The Vault requests `CAMERA` and `RECORD_AUDIO` at
+  the moment of use, only for its private camera, document scanner and recorder.
+  Both are optional: refusing the microphone leaves the recorder explaining
+  itself while every other Vault surface still works, and refusing the camera
+  leaves the scanner and private camera saying so with existing content still
+  accessible. Neither is required to install the app.
+- **Biometrics.** `USE_BIOMETRIC` (and `USE_FINGERPRINT` on older releases)
+  support an optional platform biometric unlock. Credential verification is
+  performed by Android; the app receives only a success or failure result and
+  stores no biometric data.
+- **PIN.** The Vault PIN is used to derive a key and is not stored in plaintext.
+  Unlock attempts are rate-limited on the device.
+
+The Vault's design, its storage layout and — importantly — the limits of what it
+protects are documented in the repository at `docs/VAULT.md` and
+`docs/VAULT_THREAT_MODEL.md`. Those limits should be reconciled with any
+marketing claim before release; the Vault does not claim absolute protection
+against a party who controls the device.
 
 ## Optional voice commands
 

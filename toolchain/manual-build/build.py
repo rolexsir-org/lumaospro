@@ -51,8 +51,8 @@ KEYSTORE_PROPS = os.path.join(ROOT, "keystore.properties")
 KEY_ALIAS = "lumaos-pro-upload"
 
 APP_ID = "com.lumaos.pro.launcher"
-VERSION_CODE = 100
-VERSION_NAME = "1.0.0"
+VERSION_CODE = 120
+VERSION_NAME = "1.2.0"
 MIN_SDK = 26
 TARGET_SDK = 36
 
