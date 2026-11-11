@@ -1,0 +1,3 @@
+# Local build scratch: source screenshots, node_modules, downloaded font sources.
+# The campaign is reproducible from marketing/README.md §6.
+.build/
