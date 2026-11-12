@@ -256,7 +256,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     init {
         history.load()
         viewModelScope.launch {
-            activeContextProfile.flatMapLatest(prefs::homeLayoutRaw).collect { raw ->
+            activeContextProfile.flatMapLatest { profile ->
+                prefs.homeLayoutRaw(profile).map { raw -> profile to raw }
+            }.collect { (profile, raw) ->
                 val decoded = HomeLayoutCodec.decode(raw)
                 // A layout that arrives with the same app, folder or widget id twice
                 // would render two cells for one thing, so it is repaired here, where
@@ -265,6 +267,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 // to stay about the file as written, not about repairs we would make.
                 val repaired = HomeLayoutOps.dedupe(decoded)
                 _layout.value = repaired
+                // Each context reopens on its own last page, restored only after
+                // the layout it belongs to: the projection clamps the index into
+                // the restored page count, so restoring it first would destroy it
+                // whenever the previous context had fewer pages. flatMapLatest
+                // also cancels a stale restore when contexts switch in rapid
+                // succession, so the page always matches the layout on screen.
+                _activePageIndex.value = prefs.lastPage(profile).first().coerceAtLeast(0)
                 if (repaired != decoded) healDuplicatedLayout(raw, repaired)
             }
         }
@@ -274,13 +283,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }.collect { display ->
                 _activePageIndex.value = display.activePageIndex
                 _display.value = display
-            }
-        }
-        viewModelScope.launch {
-            // Each context reopens on its own last page; the projection above
-            // clamps a stale index into the restored page count.
-            activeContextProfile.collect { profile ->
-                _activePageIndex.value = prefs.lastPage(profile).first().coerceAtLeast(0)
             }
         }
         viewModelScope.launch(Dispatchers.IO) {

@@ -57,7 +57,29 @@ through one switching path, and every context owns independent persisted state.
   photo ids stay device-local (with a regression test proving the shared
   wallpaper favorites survive restores).
 - New tests: engine decisions, key-set codec, suggestions, DataStore-backed
-  per-context independence, home projection with hidden apps, backup coverage.
+  per-context independence, home projection with hidden apps, schedule
+  boundary computation, backup coverage.
+
+### Audit fixes
+
+- Last-page restore used to race layout restore: when the page landed first,
+  the projection clamped it into the previous context's page count and the
+  restored page was lost. The page is now restored after its own layout in
+  the same collector, and rapid switches cancel stale restores.
+- Long-press app-menu shortcuts bypassed Focus Protection; they now go
+  through the same package-level gate as drawer shortcuts.
+- Manual switches and schedule refreshes are serialized on one mutex, so
+  concurrent triggers (a tap plus an alarm, rapid voice commands) resolve in
+  order instead of interleaving override, profile and alarm writes.
+- The scheduler no longer arms alarms for edges that change nothing (windows
+  shadowed by a higher-priority schedule); with no transition pending the
+  alarm is cancelled.
+- Device-target wallpaper applies (Home/Both) now record the shared image —
+  Android has a single system wallpaper and nothing re-applies it on switch —
+  while the target context keeps its own backdrop choice. Per-context ids are
+  only recorded for Luma home art, which renders in-app and restores exactly.
+  Previously a scoped device id would have been silently wiped by the
+  external-change detector on the first mismatch.
 
 ## Unreleased — three critical Vault fixes
 

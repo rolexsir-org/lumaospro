@@ -884,8 +884,12 @@ private fun WallpaperStudio(
                                     val seeds = store.extractSeeds(chosen, preview)
                                     when (target) {
                                         WallpaperTarget.HOME, WallpaperTarget.BOTH -> {
-                                            // The device image is shared by Android; the record
-                                            // lands on the shared selection plus the target context.
+                                            // The device image is shared by Android, so the shared
+                                            // record always tracks it. A scoped apply additionally
+                                            // keeps the target context's own backdrop choice and
+                                            // drops any wallpaper-id override it held: the context
+                                            // follows the shared record, which now describes the
+                                            // image actually on the device.
                                             core.prefs.recordAppliedWallpaper(
                                                 wallpaperId = chosen.id,
                                                 systemWallpaperId = sysId,
@@ -894,12 +898,8 @@ private fun WallpaperStudio(
                                             if (applyAll) {
                                                 core.prefs.clearWallpaperOverrides()
                                             } else {
-                                                core.prefs.recordAppliedWallpaperFor(
-                                                    profile = contextTarget,
-                                                    wallpaperId = chosen.id,
-                                                    systemWallpaperId = sysId,
-                                                    backdrop = Backdrop.WALLPAPER
-                                                )
+                                                core.prefs.setBackdropFor(contextTarget, Backdrop.WALLPAPER)
+                                                core.prefs.clearWallpaperIdFor(contextTarget)
                                             }
                                             seeds?.let { core.prefs.setCachedWallpaperSeedsRaw(it.encode(chosen.id)) }
                                             core.themes.refresh()
@@ -914,6 +914,8 @@ private fun WallpaperStudio(
                                                 )
                                                 core.prefs.clearWallpaperOverrides()
                                             } else {
+                                                // Luma home art is rendered in-app from the record,
+                                                // so unlike the device image it is truly per-context.
                                                 core.prefs.recordAppliedWallpaperFor(
                                                     profile = contextTarget,
                                                     wallpaperId = chosen.id,

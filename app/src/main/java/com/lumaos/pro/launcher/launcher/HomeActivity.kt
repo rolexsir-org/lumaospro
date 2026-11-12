@@ -2972,6 +2972,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         menu().show(anchor, label, entries) { e ->
             when {
                 e.id >= M_SHORTCUT_BASE -> shortcuts.getOrNull(e.id - M_SHORTCUT_BASE)?.let { sc ->
+                    if (viewModel.isPackageRestricted(sc.packageName)) {
+                        showFocusRestriction(sc.label)
+                        if (drawer.isOpen) drawer.close()
+                        return@let
+                    }
                     val bounds = Rect().also { anchor.getGlobalVisibleRect(it) }
                     if (!core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
                     else if (drawer.isOpen) drawer.close()

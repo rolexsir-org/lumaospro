@@ -111,6 +111,22 @@ class ContextPrefsTest {
         }
     }
 
+    @Test fun `clearing the wallpaper id keeps the backdrop choice`() = runBlocking {
+        val (prefs, scope) = tempPrefs()
+        try {
+            // A device-target apply: the context follows the shared image again
+            // while keeping its own backdrop.
+            prefs.recordAppliedWallpaperFor(ContextProfile.WORK, "art:aurora", null, Backdrop.LUMA)
+            prefs.setBackdropFor(ContextProfile.WORK, Backdrop.WALLPAPER)
+            prefs.clearWallpaperIdFor(ContextProfile.WORK)
+            assertNull(prefs.wallpaperFor(ContextProfile.WORK).first())
+            assertNull(prefs.wallpaperSysIdFor(ContextProfile.WORK).first())
+            assertEquals(Backdrop.WALLPAPER, prefs.backdropFor(ContextProfile.WORK).first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
     @Test fun `manual override round trips and clears`() = runBlocking {
         val (prefs, scope) = tempPrefs()
         try {

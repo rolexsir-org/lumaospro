@@ -4,6 +4,7 @@ import android.content.Context
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -83,22 +84,27 @@ object ContextEngine {
 
     /**
      * Manual switch (selector, gesture, voice, Settings). Records an override
-     * until the next scheduled transition and activates [target].
+     * until the next scheduled transition and activates [target]. The whole
+     * sequence runs under the schedule mutex, so two triggers racing (a tap
+     * plus an alarm, two rapid voice commands) resolve in order instead of
+     * interleaving override, profile and alarm writes.
      */
-    suspend fun switchManual(context: Context, prefs: LumaPrefs, target: ContextProfile) {
-        val now = LocalDateTime.now()
-        val schedules = prefs.profileSchedules.first()
-        val until = ContextScheduleManager.nextBoundary(now, schedules)
-            ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
-            ?: Long.MAX_VALUE
-        prefs.setManualOverride(target, until)
-        prefs.setActiveContextProfile(target)
-        ContextScheduleManager.refresh(context.applicationContext, prefs)
-    }
+    suspend fun switchManual(context: Context, prefs: LumaPrefs, target: ContextProfile) =
+        ContextScheduleManager.switchMutex.withLock {
+            val now = LocalDateTime.now()
+            val schedules = prefs.profileSchedules.first()
+            val until = ContextScheduleManager.nextBoundary(now, schedules)
+                ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+                ?: Long.MAX_VALUE
+            prefs.setManualOverride(target, until)
+            prefs.setActiveContextProfile(target)
+            ContextScheduleManager.refreshLocked(context.applicationContext, prefs)
+        }
 
     /** Drops the manual override and re-applies the schedule immediately. */
-    suspend fun resumeSchedule(context: Context, prefs: LumaPrefs) {
-        prefs.clearManualOverride()
-        ContextScheduleManager.refresh(context.applicationContext, prefs)
-    }
+    suspend fun resumeSchedule(context: Context, prefs: LumaPrefs) =
+        ContextScheduleManager.switchMutex.withLock {
+            prefs.clearManualOverride()
+            ContextScheduleManager.refreshLocked(context.applicationContext, prefs)
+        }
 }

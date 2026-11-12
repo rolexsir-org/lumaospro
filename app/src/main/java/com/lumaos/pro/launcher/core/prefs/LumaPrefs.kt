@@ -829,9 +829,14 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
-     * Per-context Studio wallpaper override. Null follows the shared selection;
-     * an empty string explicitly uses the system wallpaper even when a shared
-     * Studio entry exists; otherwise a Studio entry id (`art:...`/`photo:...`).
+     * Per-context Luma home wallpaper override. Null follows the shared
+     * selection; an empty string explicitly uses the system wallpaper even when
+     * a shared Studio entry exists; otherwise a Studio entry id
+     * (`art:...`/`photo:...`) rendered in-app. Device wallpapers (HOME/BOTH)
+     * are global to Android and always tracked by the shared record instead:
+     * recording a per-context device id could never restore on switch, since
+     * nothing re-applies the system image, and the external-change detector
+     * would silently wipe it on the first mismatch.
      */
     fun wallpaperFor(profile: ContextProfile): Flow<String?> = readNullable(wallpaperKey(profile))
 
@@ -869,6 +874,19 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 p.remove(wallpaperSysIdKey(profile))
                 p.remove(backdropKey(profile))
             }
+        }
+    }
+
+    /**
+     * Drops one context's wallpaper-id override while keeping its backdrop
+     * choice. Used after a device-target apply: the system image is global, so
+     * the context follows the shared record (which now describes that image)
+     * instead of holding a device id that could never restore.
+     */
+    suspend fun clearWallpaperIdFor(profile: ContextProfile) {
+        dataStore.edit { p ->
+            p.remove(wallpaperKey(profile))
+            p.remove(wallpaperSysIdKey(profile))
         }
     }
 
