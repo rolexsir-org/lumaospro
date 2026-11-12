@@ -15,7 +15,9 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.context.ComponentKeySetCodec
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.intelligence.ProfileId
@@ -94,6 +96,8 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val CONTEXT_NOTIFICATIONS_ENABLED = booleanPreferencesKey("context_notifications_enabled")
         val CONTEXT_NOTIFICATION_PROFILES = stringPreferencesKey("context_notification_profiles")
         val CONTEXT_DND_PROFILES = stringPreferencesKey("context_dnd_profiles")
+        val CONTEXT_MANUAL_PROFILE = stringPreferencesKey("context_manual_profile")
+        val CONTEXT_MANUAL_UNTIL = longPreferencesKey("context_manual_until")
         val DND_MANAGED = booleanPreferencesKey("context_dnd_managed")
         val DND_RESTORE_FILTER = intPreferencesKey("context_dnd_restore_filter")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -707,6 +711,189 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     private fun scheduleKey(profile: ContextProfile) = stringPreferencesKey("schedule_${profile.name.lowercase()}")
     private fun hiddenAppsKey(profile: ContextProfile) = stringPreferencesKey("hidden_apps_${profile.name.lowercase()}")
     private fun pinnedAppsKey(profile: ContextProfile) = stringPreferencesKey("pinned_apps_${profile.name.lowercase()}")
+    private fun lastPageKey(profile: ContextProfile) = intPreferencesKey("last_page_${profile.name.lowercase()}")
+    private fun drawerHiddenKey(profile: ContextProfile) = stringPreferencesKey("drawer_hidden_${profile.name.lowercase()}")
+    private fun focusEnabledKey(profile: ContextProfile) = booleanPreferencesKey("focus_enabled_${profile.name.lowercase()}")
+    private fun focusRestrictedKey(profile: ContextProfile) = stringPreferencesKey("focus_restricted_${profile.name.lowercase()}")
+    // context_wallpaper_*, not wallpaper_*: the shared favorites set lives at
+    // wallpaper_favorites, and a wallpaper_ backup prefix would wrongly mark
+    // that device-local set as restorable and wipe it on every restore.
+    private fun wallpaperKey(profile: ContextProfile) = stringPreferencesKey("context_wallpaper_${profile.name.lowercase()}")
+    private fun wallpaperSysIdKey(profile: ContextProfile) = intPreferencesKey("context_wallpaper_sysid_${profile.name.lowercase()}")
+    private fun backdropKey(profile: ContextProfile) = stringPreferencesKey("backdrop_${profile.name.lowercase()}")
+
+    // --- Context engine: independent per-context environments ----------------
+
+    /**
+     * A manual choice stands until the next scheduled transition. Null while
+     * the schedule (or the lack of one) is in charge. Device-local transient
+     * state: intentionally excluded from backups.
+     */
+    val manualOverride: Flow<ManualOverride?> = dataStore.data
+        .catch { e ->
+            if (e is IOException) {
+                LumaLog.e("Preferences read failed, falling back to defaults", e)
+                emit(emptyPreferences())
+            } else throw e
+        }
+        .map { p ->
+            val profile = p[Keys.CONTEXT_MANUAL_PROFILE]?.let { ContextProfile.parse(it) } ?: return@map null
+            val until = p[Keys.CONTEXT_MANUAL_UNTIL] ?: return@map null
+            ManualOverride(profile, until)
+        }
+
+    suspend fun setManualOverride(profile: ContextProfile, untilMillis: Long) {
+        dataStore.edit { p ->
+            p[Keys.CONTEXT_MANUAL_PROFILE] = profile.name
+            p[Keys.CONTEXT_MANUAL_UNTIL] = untilMillis
+        }
+    }
+
+    suspend fun clearManualOverride() {
+        dataStore.edit { p ->
+            p.remove(Keys.CONTEXT_MANUAL_PROFILE)
+            p.remove(Keys.CONTEXT_MANUAL_UNTIL)
+        }
+    }
+
+    /** Last visible home page per context, restored on every switch. */
+    fun lastPage(profile: ContextProfile): Flow<Int> = read(lastPageKey(profile)) { 0 }
+    suspend fun setLastPage(profile: ContextProfile, index: Int) =
+        write(lastPageKey(profile), index.coerceAtLeast(0))
+
+    /**
+     * Apps hidden from [profile]'s home screen and drawer. Install state and
+     * data are untouched: entries stay in the saved layout and reappear when
+     * unhidden or when switching to a context that shows them.
+     */
+    fun drawerHidden(profile: ContextProfile): Flow<Set<ComponentKey>> =
+        readNullable(drawerHiddenKey(profile)).map { ComponentKeySetCodec.decode(it) }
+
+    suspend fun setDrawerHidden(profile: ContextProfile, keys: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            putOrRemove(p, drawerHiddenKey(profile), ComponentKeySetCodec.encode(keys).takeIf { keys.isNotEmpty() })
+        }
+    }
+
+    suspend fun setAppVisible(profile: ContextProfile, key: ComponentKey, visible: Boolean) {
+        dataStore.edit { p ->
+            val prefKey = drawerHiddenKey(profile)
+            val current = ComponentKeySetCodec.decode(p[prefKey]).toMutableSet()
+            if (visible) current.remove(key) else current.add(key)
+            putOrRemove(p, prefKey, ComponentKeySetCodec.encode(current).takeIf { current.isNotEmpty() })
+        }
+    }
+
+    /** Whether [profile] runs Focus Protection while active (Work and Study only). */
+    fun focusEnabled(profile: ContextProfile): Flow<Boolean> = read(focusEnabledKey(profile)) { false }
+    suspend fun setFocusEnabled(profile: ContextProfile, enabled: Boolean) =
+        write(focusEnabledKey(profile), enabled)
+
+    /** Apps intercepted by the restriction screen while [profile]'s focus session runs. */
+    fun focusRestricted(profile: ContextProfile): Flow<Set<ComponentKey>> =
+        readNullable(focusRestrictedKey(profile)).map { ComponentKeySetCodec.decode(it) }
+
+    suspend fun setFocusRestricted(profile: ContextProfile, keys: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            putOrRemove(p, focusRestrictedKey(profile), ComponentKeySetCodec.encode(keys).takeIf { keys.isNotEmpty() })
+        }
+    }
+
+    suspend fun setAppRestricted(profile: ContextProfile, key: ComponentKey, restricted: Boolean) {
+        dataStore.edit { p ->
+            val prefKey = focusRestrictedKey(profile)
+            val current = ComponentKeySetCodec.decode(p[prefKey]).toMutableSet()
+            if (restricted) current.add(key) else current.remove(key)
+            putOrRemove(p, prefKey, ComponentKeySetCodec.encode(current).takeIf { current.isNotEmpty() })
+        }
+    }
+
+    /**
+     * Drops uninstalled apps from [profile]'s visibility, restriction and pin
+     * sets after a successful scan. Called with the same install set as the
+     * layout prune, so all per-context state stays consistent.
+     */
+    suspend fun retainContextKeys(profile: ContextProfile, installed: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            val hiddenKey = drawerHiddenKey(profile)
+            val keptHidden = ComponentKeySetCodec.decode(p[hiddenKey]).filterTo(LinkedHashSet()) { it in installed }
+            putOrRemove(p, hiddenKey, ComponentKeySetCodec.encode(keptHidden).takeIf { keptHidden.isNotEmpty() })
+            val restrictedKey = focusRestrictedKey(profile)
+            val keptRestricted = ComponentKeySetCodec.decode(p[restrictedKey]).filterTo(LinkedHashSet()) { it in installed }
+            putOrRemove(p, restrictedKey, ComponentKeySetCodec.encode(keptRestricted).takeIf { keptRestricted.isNotEmpty() })
+            val pinKey = pinnedAppsKey(profile)
+            val keptPinned = p[pinKey].orEmpty().split('|')
+                .mapNotNull { ComponentKey.parse(it) }.filter { it in installed }.distinct()
+            putOrRemove(p, pinKey, keptPinned.takeIf { it.isNotEmpty() }?.joinToString("|") { it.serialize() })
+        }
+    }
+
+    /**
+     * Per-context Studio wallpaper override. Null follows the shared selection;
+     * an empty string explicitly uses the system wallpaper even when a shared
+     * Studio entry exists; otherwise a Studio entry id (`art:...`/`photo:...`).
+     */
+    fun wallpaperFor(profile: ContextProfile): Flow<String?> = readNullable(wallpaperKey(profile))
+
+    fun wallpaperSysIdFor(profile: ContextProfile): Flow<Int?> = readNullable(wallpaperSysIdKey(profile))
+
+    suspend fun recordAppliedWallpaperFor(
+        profile: ContextProfile,
+        wallpaperId: String?,
+        systemWallpaperId: Int?,
+        backdrop: Backdrop?
+    ) {
+        dataStore.edit { p ->
+            putOrRemove(p, wallpaperKey(profile), wallpaperId)
+            putOrRemove(p, wallpaperSysIdKey(profile), systemWallpaperId)
+            if (backdrop != null) {
+                p[backdropKey(profile)] = backdrop.storageKey
+            }
+        }
+    }
+
+    suspend fun clearWallpaperForIfMatches(profile: ContextProfile, wallpaperId: String) {
+        dataStore.edit { p ->
+            if (p[wallpaperKey(profile)] == wallpaperId) {
+                p.remove(wallpaperKey(profile))
+                p.remove(wallpaperSysIdKey(profile))
+            }
+        }
+    }
+
+    /** "Use for all contexts": every context follows the shared selection again. */
+    suspend fun clearWallpaperOverrides() {
+        dataStore.edit { p ->
+            for (profile in ContextProfile.entries) {
+                p.remove(wallpaperKey(profile))
+                p.remove(wallpaperSysIdKey(profile))
+                p.remove(backdropKey(profile))
+            }
+        }
+    }
+
+    suspend fun clearActiveWallpaperEverywhere(wallpaperId: String) {
+        dataStore.edit { p ->
+            if (p[Keys.ACTIVE_WALLPAPER_ID] == wallpaperId) {
+                p.remove(Keys.ACTIVE_WALLPAPER_ID)
+                p.remove(Keys.ACTIVE_WALLPAPER_SYSTEM_ID)
+            }
+            for (profile in ContextProfile.entries) {
+                if (p[wallpaperKey(profile)] == wallpaperId) {
+                    p.remove(wallpaperKey(profile))
+                    p.remove(wallpaperSysIdKey(profile))
+                }
+            }
+        }
+    }
+
+    /** Per-context home backdrop override; null follows the shared backdrop. */
+    fun backdropFor(profile: ContextProfile): Flow<Backdrop?> =
+        readNullable(backdropKey(profile)).map { Backdrop.fromStorageKey(it) }
+
+    suspend fun setBackdropFor(profile: ContextProfile, backdrop: Backdrop?) {
+        dataStore.edit { p -> putOrRemove(p, backdropKey(profile), backdrop?.storageKey) }
+    }
 
     /** Controls adding widgets; existing placed widgets are never removed by this setting. */
     val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { true }

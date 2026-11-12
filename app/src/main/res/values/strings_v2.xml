@@ -293,4 +293,18 @@
     <string name="toast_icon_overrides_cleared">Custom icon overrides reset</string>
     <string name="onboarding_enter_home">Enter LumaOS Pro</string>
     <string name="onboarding_living_icons_caption">30 optical-glass Living Icons ready out of the box</string>
+
+    <!-- Context engine -->
+    <string name="focus_restriction_title">Focus Protection</string>
+    <string name="focus_restriction_message">%1$s is paused during %2$s.</string>
+    <string name="focus_restriction_note">Restrictions apply to launches from LumaOS Pro. Turn off Focus Protection in Settings to allow this app.</string>
+    <string name="focus_restriction_dismiss">Got it</string>
+    <string name="focus_restriction_manage">Manage focus</string>
+    <string name="wallpaper_for_context">Wallpaper for %1$s</string>
+    <string name="wallpaper_context_note">Each context keeps its own Luma home wallpaper. Device wallpapers are shared by Android.</string>
+    <string name="wallpaper_apply_all">Use for all contexts</string>
+    <string name="context_override_active">Manual override: %1$s until %2$s</string>
+    <string name="context_override_indefinite">Manual override: %1$s until schedules change</string>
+    <string name="context_resume_schedule">Resume automatic schedule</string>
+    <string name="context_schedule_resumed">Automatic schedule resumed</string>
 </resources>

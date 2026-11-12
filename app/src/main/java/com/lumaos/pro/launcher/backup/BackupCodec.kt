@@ -94,7 +94,20 @@ object BackupCodec {
         "hidden_apps_" to ValueType.STRING,
         "pinned_apps_" to ValueType.STRING,
         "gesture_" to ValueType.STRING,
-        "profile_theme_" to ValueType.STRING
+        "profile_theme_" to ValueType.STRING,
+        // Context engine: per-context pages, visibility, focus, wallpapers.
+        // The manual override (context_manual_*) is device-local transient
+        // state and is deliberately not backed up, as are the per-context
+        // system wallpaper ids: WallpaperManager ids are meaningless on
+        // another device, and restoring a stale one would wipe the restored
+        // wallpaper on the first external-change check (the shared
+        // active_wallpaper_system_id is excluded for the same reason).
+        "last_page_" to ValueType.INT,
+        "drawer_hidden_" to ValueType.STRING,
+        "focus_enabled_" to ValueType.BOOLEAN,
+        "focus_restricted_" to ValueType.STRING,
+        "context_wallpaper_" to ValueType.STRING,
+        "backdrop_" to ValueType.STRING
     )
 
     fun expectedType(key: String): ValueType? =
@@ -119,6 +132,7 @@ object BackupCodec {
             val value = coerce(raw, type) ?: continue
             // Private imported photo IDs reference device-local files not carried in backups.
             if (key == "active_wallpaper_id" && !(value as String).startsWith("art:")) continue
+            if (type == ValueType.STRING && key.startsWith("context_wallpaper_") && (value as String).startsWith("photo:")) continue
             val stored = when {
                 isLayoutKey(key) -> sanitizeLayout(value as String)
                 key == "living_icon_overrides" -> LivingIconOverridesCodec.encode(

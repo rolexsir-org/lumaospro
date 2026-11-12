@@ -1,5 +1,64 @@
 # Changelog
 
+## Unreleased — Context Engine: Work, Study, Personal and Sleep as independent environments
+
+The home screen's four-option context selector now drives a real context engine.
+No selector redesign, no new dashboard, no launcher rebuild: every trigger
+(selector menu, swipe gesture, voice command, Settings, scheduled alarm) goes
+through one switching path, and every context owns independent persisted state.
+
+### Independent launcher environments
+
+- Each context keeps its own home pages, icon positions, folders, dock,
+  widget placements, pins, last visible page, app visibility, wallpaper and
+  backdrop. Layouts and pins were already per-context; visibility, wallpapers,
+  backdrops and last pages are new DataStore keys in the existing store.
+- Switching restores the exact saved environment without restarting anything;
+  transient UI (drawer, folders, edit mode, restriction screen, search) is
+  closed on switch so one context never leaks into another.
+- Home layouts keep every entry while the projection hides context-hidden
+  apps, so unhiding or switching back restores placements exactly.
+
+### Context-aware app management
+
+- Settings → Contexts → "Apps in …" picks which installed apps appear in each
+  context's home screen and drawer. Installed apps and their data are never
+  touched; hiding only filters launcher surfaces.
+- A "Use suggestions" starting point (Work: mail/calendar/productivity;
+  Study: notes/books/calculator; Sleep: clock/essentials; Personal: all)
+  is computed from declared app categories plus conservative name matching
+  and is never applied automatically.
+
+### Focus Protection (Work and Study)
+
+- Optional per-context toggle plus a restricted-app picker, configured
+  independently for Work and Study. While a focus session runs, launches made
+  through LumaOS Pro (home, drawer, folders, shortcuts, voice) are intercepted
+  and a native LumaOS restriction screen is shown instead of the app.
+- Sessions start on entering a configured focus context and release the moment
+  the toggle turns off or the user switches to an unrestricted context.
+- Launcher-level enforcement only: no Accessibility Service, device admin or
+  usage access, and no claim of blocking content inside third-party apps.
+
+### Scheduling with manual override
+
+- The existing per-profile schedules and single inexact alarm are kept; a
+  manual switch now records an override that stands until the next scheduled
+  transition (persisted, so it survives reboot), with a "Resume automatic
+  schedule" row in Settings while one is held.
+- Schedules, visibility, focus, wallpapers, alerts and DND for all four
+  contexts are configurable from the existing Settings section without
+  switching to each context first.
+
+### Backup and tests
+
+- Per-context pages, visibility, focus sets, wallpapers and backdrops are
+  included in backups; the manual override, system wallpaper ids and private
+  photo ids stay device-local (with a regression test proving the shared
+  wallpaper favorites survive restores).
+- New tests: engine decisions, key-set codec, suggestions, DataStore-backed
+  per-context independence, home projection with hidden apps, backup coverage.
+
 ## Unreleased — three critical Vault fixes
 
 Follow-up to the Hide Apps / PIN hand-off work below. Each of these is a defect in

@@ -10,8 +10,12 @@ import com.lumaos.pro.launcher.BuildConfig
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.backup.BackupCodec
 import com.lumaos.pro.launcher.core.LumaApp
+import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
+import com.lumaos.pro.launcher.context.ContextAppSuggestions
+import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.core.util.LumaLog
@@ -311,10 +315,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     )
 
+    /** Manual override state; null while the schedule is in charge. */
+    val manualOverride: StateFlow<ManualOverride?> = prefs.manualOverride
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Installed apps for the context visibility / focus pickers. Loaded once:
+     * enumeration is binder-heavy and the pickers only need labels.
+     */
+    private val _installedApps = MutableStateFlow<List<AppEntry>>(emptyList())
+    val installedApps: StateFlow<List<AppEntry>> = _installedApps.asStateFlow()
+
     init {
         refreshRoleStatus()
         refreshHistory()
         refreshIconPacks()
+        refreshInstalledApps()
+    }
+
+    fun refreshInstalledApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _installedApps.value = core.appRepository.refreshSnapshot().apps
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Installed apps could not be listed for context settings", e)
+            }
+        }
     }
 
     fun setSchedule(profile: ContextProfile, schedule: ProfileSchedule) {
@@ -322,7 +350,49 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectContextProfile(profile: ContextProfile) {
-        viewModelScope.launch { prefs.setActiveContextProfile(profile) }
+        viewModelScope.launch { ContextEngine.switchManual(getApplication(), prefs, profile) }
+    }
+
+    fun resumeSchedule() {
+        viewModelScope.launch { ContextEngine.resumeSchedule(getApplication(), prefs) }
+    }
+
+    fun setAppVisible(profile: ContextProfile, key: ComponentKey, visible: Boolean) {
+        viewModelScope.launch { prefs.setAppVisible(profile, key, visible) }
+    }
+
+    fun showAllApps(profile: ContextProfile) {
+        viewModelScope.launch { prefs.setDrawerHidden(profile, emptySet()) }
+    }
+
+    /** One-tap sensible starting point; the user stays in control app by app. */
+    fun applyVisibilitySuggestions(profile: ContextProfile) {
+        viewModelScope.launch {
+            val apps = _installedApps.value
+            if (apps.isEmpty()) return@launch
+            val visible = ContextAppSuggestions.suggestedVisible(profile, apps)
+            prefs.setDrawerHidden(profile, apps.mapTo(HashSet()) { it.key } - visible)
+        }
+    }
+
+    fun setFocusEnabled(profile: ContextProfile, enabled: Boolean) {
+        viewModelScope.launch { prefs.setFocusEnabled(profile, enabled) }
+    }
+
+    fun setAppRestricted(profile: ContextProfile, key: ComponentKey, restricted: Boolean) {
+        viewModelScope.launch { prefs.setAppRestricted(profile, key, restricted) }
+    }
+
+    fun clearFocusRestrictions(profile: ContextProfile) {
+        viewModelScope.launch { prefs.setFocusRestricted(profile, emptySet()) }
+    }
+
+    fun applyFocusSuggestions(profile: ContextProfile) {
+        viewModelScope.launch {
+            val apps = _installedApps.value
+            if (apps.isEmpty()) return@launch
+            prefs.setFocusRestricted(profile, ContextAppSuggestions.suggestedRestricted(profile, apps))
+        }
     }
 
     fun applyStudio(configuration: StudioConfiguration) {

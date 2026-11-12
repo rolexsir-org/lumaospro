@@ -18,13 +18,37 @@ object ContextScheduleManager {
     suspend fun refresh(context: Context, prefs: LumaPrefs) {
         val now = LocalDateTime.now()
         val schedules = prefs.profileSchedules.first()
+        val nowMillis = System.currentTimeMillis()
+        val override = prefs.manualOverride.first()
+        if (override != null && override.isActive(nowMillis)) {
+            // A manual choice stands until the next scheduled transition. Its
+            // deadline stays live: enabling a schedule while overridden must
+            // not strand the launcher on the manual choice forever.
+            val previous = prefs.activeContextProfile.first()
+            if (previous != override.profile) {
+                prefs.setActiveContextProfile(override.profile)
+            }
+            val next = nextBoundary(now, schedules)
+            val until = next?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+                ?: Long.MAX_VALUE
+            if (until != override.untilMillis) {
+                prefs.setManualOverride(override.profile, until)
+            }
+            scheduleNext(context, next)
+            return
+        }
+        if (override != null) {
+            prefs.clearManualOverride()
+        }
         val active = ContextProfileResolver.resolve(schedules, now.toLocalTime(), now.dayOfWeek)
         val previous = prefs.activeContextProfile.first()
         if (previous != active) {
             prefs.setActiveContextProfile(active)
         }
+        scheduleNext(context, nextBoundary(now, schedules))
+    }
 
-        val next = nextBoundary(now, schedules)
+    private fun scheduleNext(context: Context, next: LocalDateTime?) {
         val intent = Intent(context, ContextScheduleReceiver::class.java).setAction(ACTION_REEVALUATE)
         val pending = PendingIntent.getBroadcast(
             context, REQUEST_CODE, intent,
@@ -41,7 +65,12 @@ object ContextScheduleManager {
         alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
     }
 
-    private fun nextBoundary(
+    /**
+     * The next wall-clock boundary at which the resolved profile changes, or
+     * null when no schedule is enabled. Shared with [ContextEngine] so manual
+     * overrides expire at exactly the transition the alarm is armed for.
+     */
+    internal fun nextBoundary(
         now: LocalDateTime,
         schedules: Map<ContextProfile, ProfileSchedule>
     ): LocalDateTime? {
