@@ -1,6 +1,7 @@
 package com.lumaos.pro.launcher.core.prefs
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.lumaos.pro.launcher.backup.BackupCodec
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.core.model.ComponentKey
@@ -153,6 +154,22 @@ class ContextPrefsTest {
             assertEquals(60, prefs.focusUnlockMinutes().first())
             prefs.setFocusUnlockMinutes(-3)
             assertEquals(1, prefs.focusUnlockMinutes().first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `restore keeps per-context photo wallpapers like the shared one`() = runBlocking {
+        val (prefs, scope) = tempPrefs()
+        try {
+            prefs.recordAppliedWallpaperFor(ContextProfile.WORK, "photo:local-id", null, Backdrop.LUMA)
+            prefs.recordAppliedWallpaperFor(ContextProfile.STUDY, "art:aurora", null, Backdrop.LUMA)
+            // Photo ids are never exported, so a restored backup carries
+            // neither scoped id. The photo (device-local, irreplaceable) must
+            // survive; the stale art id yields to the backup's absence.
+            prefs.restoreFromBackup(emptyMap()) { BackupCodec.expectedType(it) != null }
+            assertEquals("photo:local-id", prefs.wallpaperFor(ContextProfile.WORK).first())
+            assertNull(prefs.wallpaperFor(ContextProfile.STUDY).first())
         } finally {
             scope.cancel()
         }

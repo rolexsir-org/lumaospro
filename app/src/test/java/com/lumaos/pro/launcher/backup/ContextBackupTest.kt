@@ -45,6 +45,8 @@ class ContextBackupTest {
             "context_wallpaper_study" to "photo:01234567-89ab-cdef-0123-456789abcdef",
             "context_wallpaper_sysid_work" to 42,
             "last_page_sleep" to 2,
+            "focus_unlock_minutes" to 15,
+            "focus_unlock_until" to 999L,
             "context_manual_profile" to "SLEEP",
             "context_manual_until" to 12345L
         )
@@ -53,6 +55,8 @@ class ContextBackupTest {
         assertEquals(true, decoded.values["focus_enabled_work"])
         assertEquals("art:aurora", decoded.values["context_wallpaper_work"])
         assertEquals(2, decoded.values["last_page_sleep"])
+        assertEquals(15, decoded.values["focus_unlock_minutes"])
+        assertTrue("live unlock must not round trip", "focus_unlock_until" !in decoded.values)
         assertTrue("manual override must not round trip", "context_manual_profile" !in decoded.values)
         assertTrue("manual override must not round trip", "context_manual_until" !in decoded.values)
         assertTrue("device-local photo ids stay excluded", "context_wallpaper_study" !in decoded.values)

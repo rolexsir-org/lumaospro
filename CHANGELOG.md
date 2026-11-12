@@ -81,6 +81,27 @@ through one switching path, and every context owns independent persisted state.
   enforce. See `docs/FOCUS_ENFORCEMENT.md` for the support matrix and the
   explicit list of what Android does not permit a normal launcher to block.
 
+### Final limitation audit
+
+- Restore no longer wipes a context's own private-photo wallpaper: scoped
+  `photo:` selections get the same keep-across-restore treatment the shared
+  selection always had (with a DataStore-backed regression test).
+- Settings now says so when Stronger blocking is on but LumaOS Pro is not
+  the default launcher — the one configuration where layer 2 can only bounce
+  to Home without presenting the restriction screen.
+- The wallpaper fallback ladder (shared → override → explicit-system) is
+  extracted as pure tested functions; behavior is unchanged.
+- Copy sweep: README permission table + privacy summary now describe the
+  optional accessibility binding accurately, and the per-context wallpaper
+  subtitle matches the Studio wording (Luma art per context, device image
+  shared). No system-wide-blocking, Reels/Shorts-filtering, per-context
+  device-image, or exact-Doze-execution claims exist anywhere in code, copy,
+  tests, or docs.
+- New executable coverage: grant lifecycle (off-by-default, listed+enabled,
+  revocation) through the real `Settings.Secure` path under Robolectric;
+  default-launcher status tracking in both directions; unlock-length backup
+  round trip with live-unlock exclusion.
+
 ### Audit fixes
 
 - Last-page restore used to race layout restore: when the page landed first,

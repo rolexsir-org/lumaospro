@@ -161,6 +161,20 @@ private data class ExternalWallpaperState(
 )
 
 /**
+ * Which Studio entry the active context resolves: a null override follows
+ * the shared selection, an empty override explicitly uses the system
+ * wallpaper (no Studio entry at all), otherwise the override wins. Pure so
+ * the fallback ladder is unit tested; [ThemeRepository] applies it to live
+ * flows unchanged.
+ */
+internal fun effectiveWallpaperId(shared: String?, override: String?): String? =
+    if (override != null) override.ifEmpty { null } else shared
+
+/** The recorded system id tracks whichever scope [effectiveWallpaperId] chose. */
+internal fun effectiveWallpaperSystemId(shared: Int?, contextId: Int?, override: String?): Int? =
+    if (override != null) contextId else shared
+
+/**
  * Single source of truth for the theme every surface draws with.
  *
  * Combines the stored [ThemeSettings], the system dark setting, the time of day
@@ -199,17 +213,15 @@ class ThemeRepository(
 
     /** Effective Studio wallpaper id for the active context. */
     val activeWallpaperId: StateFlow<String?> =
-        combine(sharedWallpaperId, contextWallpaperOverride) { shared, override ->
-            if (override != null) override.ifEmpty { null } else shared
-        }.stateIn(scope, SharingStarted.Eagerly, null)
+        combine(sharedWallpaperId, contextWallpaperOverride, ::effectiveWallpaperId)
+            .stateIn(scope, SharingStarted.Eagerly, null)
 
     private val activeWallpaperSystemId: StateFlow<Int?> = combine(
         prefs.activeWallpaperSystemId,
         prefs.activeContextProfile.flatMapLatest(prefs::wallpaperSysIdFor),
-        contextWallpaperOverride
-    ) { shared, contextId, override ->
-        if (override != null) contextId else shared
-    }.stateIn(scope, SharingStarted.Eagerly, null)
+        contextWallpaperOverride,
+        ::effectiveWallpaperSystemId
+    ).stateIn(scope, SharingStarted.Eagerly, null)
 
     /** Per-context home backdrop override; null follows the shared backdrop. */
     private val contextBackdrop =

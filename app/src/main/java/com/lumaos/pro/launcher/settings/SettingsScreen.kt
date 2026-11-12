@@ -904,6 +904,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     val focusOn by viewModel.prefs.focusEnabled(target).collectAsState(false)
     val restrictedApps by viewModel.prefs.focusRestricted(target).collectAsState(emptySet())
     val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val isDefaultLauncher by viewModel.roleState.collectAsState()
     val unlockMinutes by viewModel.prefs.focusUnlockMinutes().collectAsState(5)
     var appsDialog by remember { mutableStateOf(false) }
     var focusDialog by remember { mutableStateOf(false) }
@@ -1014,7 +1015,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         CleanDivider()
         CleanRow(
             title = "Wallpaper for ${target.title}",
-            subtitle = "Each context keeps its own home wallpaper",
+            subtitle = "Luma art per context; the device image is shared",
             onClick = { openWallpaper() }
         )
         CleanDivider()
@@ -1045,6 +1046,18 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
                 value = if (focusServiceOn) "On" else "Off",
                 onClick = { if (focusServiceOn) openAccessSettings() else accessDialog = true }
             )
+            // Losing default-launcher status degrades layer 2 silently at the
+            // OS level (Home lands elsewhere, the presentation is refused), so
+            // say so here instead. The role check runs on resume; until its
+            // first result lands, nothing is claimed either way.
+            if (focusServiceOn && isDefaultLauncher.checkedAtMillis > 0L && !isDefaultLauncher.isDefault) {
+                Text(
+                    stringResource(R.string.focus_access_not_default),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             Text(
                 stringResource(R.string.focus_layer_note),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),

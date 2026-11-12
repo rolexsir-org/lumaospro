@@ -551,7 +551,15 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 if (!isRestorable(key.name) || key.name in values) continue
                 // A private photo selection is device-local and intentionally excluded
                 // from backups; keep it unless the backup explicitly restores a bundled art ID.
+                // The shared selection and every per-context override get the same
+                // treatment: without the second clause a context's own photo
+                // wallpaper would be silently wiped by any restore.
                 if (key == Keys.ACTIVE_WALLPAPER_ID && (p[Keys.ACTIVE_WALLPAPER_ID]?.startsWith("photo:") == true)) {
+                    continue
+                }
+                if (key.name.startsWith("context_wallpaper_") &&
+                    p[stringPreferencesKey(key.name)]?.startsWith("photo:") == true
+                ) {
                     continue
                 }
                 p.remove(key)

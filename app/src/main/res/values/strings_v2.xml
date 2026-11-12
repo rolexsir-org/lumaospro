@@ -321,4 +321,5 @@
     <string name="focus_unlock_button">Unlock for %1$d min</string>
     <string name="focus_unlock_granted">Focus unlocked for %1$d min</string>
     <string name="focus_layer_note">Layer 1 always on: launches from LumaOS Pro are intercepted. Layer 2 (optional above): with the Accessibility permission, restricted apps opened from anywhere are sent back. Sessions, unlocks, and restrictions end when you switch to Personal or Sleep.</string>
+    <string name="focus_access_not_default">LumaOS Pro isn’t your default launcher, so Stronger blocking can only send restricted apps back to Home without showing the restriction screen. Set LumaOS Pro as default for the full experience.</string>
 </resources>

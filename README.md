@@ -377,6 +377,14 @@ Study, then Personal. Context selection and all schedule/layout/visibility data
 remain on-device. Optional voice commands use Android's installed recognition
 activity to switch profiles or open apps; LumaOS Pro does not retain transcripts.
 
+Work and Study can also enable Focus Protection: chosen apps are intercepted when
+launched from LumaOS Pro, and an optional, off-by-default accessibility grant
+extends that to restricted apps opened from notifications, Recents, or other
+apps. Enforcement is package-level only — never content inside apps — and
+Personal and Sleep never inherit restrictions. Details, permission notes, and
+the explicit list of what Android does not permit are in
+[docs/FOCUS_ENFORCEMENT.md](docs/FOCUS_ENFORCEMENT.md).
+
 Optional context-change notifications are controlled by a master switch and a
 per-profile preference, and request Android's notification permission only when
 enabled. Per-profile Do Not Disturb is also opt-in: Android Notification Policy
@@ -548,7 +556,7 @@ verified.
   opened, and it needs no network permission of its own.
 ### Every permission the merged manifest declares
 
-Nine, each tied to a specific user-initiated behaviour. Nothing here grants
+Ten, each tied to a specific user-initiated behaviour. Nothing here grants
 silent control over other apps.
 
 | Permission | Why |
@@ -562,6 +570,7 @@ silent control over other apps.
 | `CAMERA` | Vault private camera and scanner; requested at the moment of use |
 | `RECORD_AUDIO` | Vault recorder; requested at the moment of use |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | The optional notification-access grant shared by the Music widget and the launcher shade |
+| `BIND_ACCESSIBILITY_SERVICE` | Optional Focus Protection layer 2: observes only the foreground package name during Work/Study sessions, off by default, enabled by the user in system settings after an in-app disclosure (see `docs/FOCUS_ENFORCEMENT.md`) |
 
 `CAMERA` and `RECORD_AUDIO` are both optional parts of the product: refusing the
 microphone leaves the recorder explaining itself while every other Vault surface
@@ -572,9 +581,11 @@ so with existing content still accessible. Both `<uses-feature>` entries
 
 Deliberately **not** requested: `QUERY_ALL_PACKAGES` (app discovery uses
 Android's `LauncherApps` API plus a declared `<queries>` block), `KILL_BACKGROUND_PROCESSES`
-and `FORCE_STOP` (LumaOS Pro does not terminate other applications), and any
-accessibility or device-admin binding for core features. No network permission is
-declared at all.
+and `FORCE_STOP` (LumaOS Pro does not terminate other applications),
+`PACKAGE_USAGE_STATS` (foreground detection uses the optional accessibility
+binding instead of polled usage stats), and any device-admin binding. The
+accessibility binding above is optional and off by default; every core feature
+works without it. No network permission is declared at all.
 
 ---
 
