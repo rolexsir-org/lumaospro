@@ -23,6 +23,12 @@ class ContextBackupTest {
         assertNull(BackupCodec.expectedType("context_wallpaper_sysid_sleep"))
     }
 
+    @Test fun `unlock length is backed up but the live unlock is transient`() {
+        assertEquals(ValueType.INT, BackupCodec.expectedType("focus_unlock_minutes"))
+        assertNull(BackupCodec.expectedType("focus_unlock_until"))
+        assertNull(BackupCodec.expectedType("focus_unlock_profile"))
+    }
+
     @Test fun `per-context wallpaper keys never collide with the shared favorites set`() {
         // wallpaper_favorites must stay unrestorable: restoreFromBackup clears
         // every restorable-but-absent key, so a collision would wipe favorites

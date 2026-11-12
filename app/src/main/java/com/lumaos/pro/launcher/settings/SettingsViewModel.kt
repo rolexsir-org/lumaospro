@@ -15,6 +15,7 @@ import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.context.ContextAppSuggestions
 import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusAccess
 import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.util.RoleHelper
@@ -577,6 +578,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * Cannot be a Flow: the system does not emit anything when the default
      * launcher changes, so the only correct approach is to re-resolve on resume.
      */
+    /**
+     * Whether Android currently reports the Focus accessibility grant.
+     * Refreshed every time Settings appears (the system emits nothing when
+     * the user toggles the switch), following the role-status pattern.
+     */
+    private val _focusServiceOn = MutableStateFlow(false)
+    val focusServiceOn: StateFlow<Boolean> = _focusServiceOn.asStateFlow()
+
+    fun refreshFocusService() {
+        _focusServiceOn.value = FocusAccess.isGranted(getApplication())
+    }
+
+    fun setFocusUnlockMinutes(minutes: Int) {
+        viewModelScope.launch { prefs.setFocusUnlockMinutes(minutes) }
+    }
+
     fun refreshRoleStatus() {
         val context = getApplication<Application>()
         val current = RoleHelper.defaultHomePackage(context)

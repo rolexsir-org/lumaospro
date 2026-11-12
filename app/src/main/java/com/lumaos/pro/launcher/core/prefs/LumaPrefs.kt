@@ -17,6 +17,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.context.ComponentKeySetCodec
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusEnforcement
 import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.model.ComponentKey
@@ -98,6 +99,9 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val CONTEXT_DND_PROFILES = stringPreferencesKey("context_dnd_profiles")
         val CONTEXT_MANUAL_PROFILE = stringPreferencesKey("context_manual_profile")
         val CONTEXT_MANUAL_UNTIL = longPreferencesKey("context_manual_until")
+        val FOCUS_UNLOCK_UNTIL = longPreferencesKey("focus_unlock_until")
+        val FOCUS_UNLOCK_PROFILE = stringPreferencesKey("focus_unlock_profile")
+        val FOCUS_UNLOCK_MINUTES = intPreferencesKey("focus_unlock_minutes")
         val DND_MANAGED = booleanPreferencesKey("context_dnd_managed")
         val DND_RESTORE_FILTER = intPreferencesKey("context_dnd_restore_filter")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -807,6 +811,36 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
             putOrRemove(p, prefKey, ComponentKeySetCodec.encode(current).takeIf { current.isNotEmpty() })
         }
     }
+
+    /**
+     * Emergency unlock: epoch millis until which the session may run
+     * unrestricted, and the profile it was granted in. Zero/absent means no
+     * unlock. Transient device-local state (never backed up): it cannot
+     * survive longer than its own deadline, and [FocusEnforcement] only
+     * honors it while the granting profile is still active.
+     */
+    fun focusUnlockUntil(): Flow<Long> = read(Keys.FOCUS_UNLOCK_UNTIL) { 0L }
+    fun focusUnlockProfile(): Flow<ContextProfile?> =
+        readNullable(Keys.FOCUS_UNLOCK_PROFILE).map { ContextProfile.parse(it) }
+
+    suspend fun setFocusUnlock(profile: ContextProfile, untilMillis: Long) {
+        dataStore.edit { p ->
+            p[Keys.FOCUS_UNLOCK_PROFILE] = profile.name
+            p[Keys.FOCUS_UNLOCK_UNTIL] = untilMillis
+        }
+    }
+
+    suspend fun clearFocusUnlock() {
+        dataStore.edit { p ->
+            p.remove(Keys.FOCUS_UNLOCK_PROFILE)
+            p.remove(Keys.FOCUS_UNLOCK_UNTIL)
+        }
+    }
+
+    /** Emergency unlock length in minutes, user-configurable, default 5. */
+    fun focusUnlockMinutes(): Flow<Int> = read(Keys.FOCUS_UNLOCK_MINUTES) { 5 }
+    suspend fun setFocusUnlockMinutes(minutes: Int) =
+        write(Keys.FOCUS_UNLOCK_MINUTES, minutes.coerceIn(1, 60))
 
     /**
      * Drops uninstalled apps from [profile]'s visibility, restriction and pin

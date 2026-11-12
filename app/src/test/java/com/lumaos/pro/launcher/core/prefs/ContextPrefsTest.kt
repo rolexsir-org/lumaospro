@@ -127,6 +127,37 @@ class ContextPrefsTest {
         }
     }
 
+    @Test fun `emergency unlock round trips and clears`() = runBlocking {
+        val (prefs, scope) = tempPrefs()
+        try {
+            assertEquals(0L, prefs.focusUnlockUntil().first())
+            assertNull(prefs.focusUnlockProfile().first())
+            prefs.setFocusUnlock(ContextProfile.STUDY, 999L)
+            assertEquals(999L, prefs.focusUnlockUntil().first())
+            assertEquals(ContextProfile.STUDY, prefs.focusUnlockProfile().first())
+            prefs.clearFocusUnlock()
+            assertEquals(0L, prefs.focusUnlockUntil().first())
+            assertNull(prefs.focusUnlockProfile().first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test fun `unlock length defaults to five minutes and stays in range`() = runBlocking {
+        val (prefs, scope) = tempPrefs()
+        try {
+            assertEquals(5, prefs.focusUnlockMinutes().first())
+            prefs.setFocusUnlockMinutes(15)
+            assertEquals(15, prefs.focusUnlockMinutes().first())
+            prefs.setFocusUnlockMinutes(10_000)
+            assertEquals(60, prefs.focusUnlockMinutes().first())
+            prefs.setFocusUnlockMinutes(-3)
+            assertEquals(1, prefs.focusUnlockMinutes().first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
     @Test fun `manual override round trips and clears`() = runBlocking {
         val (prefs, scope) = tempPrefs()
         try {

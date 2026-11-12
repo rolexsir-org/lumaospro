@@ -62,10 +62,12 @@ import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusAccess
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
@@ -901,8 +903,11 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     val hiddenApps by viewModel.prefs.drawerHidden(target).collectAsState(emptySet())
     val focusOn by viewModel.prefs.focusEnabled(target).collectAsState(false)
     val restrictedApps by viewModel.prefs.focusRestricted(target).collectAsState(emptySet())
+    val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val unlockMinutes by viewModel.prefs.focusUnlockMinutes().collectAsState(5)
     var appsDialog by remember { mutableStateOf(false) }
     var focusDialog by remember { mutableStateOf(false) }
+    var accessDialog by remember { mutableStateOf(false) }
     val alertsEnabled by viewModel.prefs.contextNotificationsEnabled.collectAsState(false)
     val alertProfiles by viewModel.prefs.contextNotificationProfiles.collectAsState(emptySet())
     val dndProfiles by viewModel.prefs.contextDndProfiles.collectAsState(emptySet())
@@ -918,6 +923,17 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
                     .putExtra(WallpaperActivity.EXTRA_TARGET_CONTEXT, target.name)
             )
         }.onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
+    }
+    // The accessibility grant lives in system settings: LumaOS Pro can only
+    // explain first (disclosure dialog) and then route there.
+    fun openAccessSettings() {
+        val intent = FocusAccess.settingsIntent(context)
+        if (intent == null) {
+            Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+        } else {
+            runCatching { context.startActivity(intent) }
+                .onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
+        }
     }
     Column {
         Text("Contexts", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
@@ -1015,8 +1031,22 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
                 subtitle = if (restrictedApps.isEmpty()) "None selected" else "${restrictedApps.size} selected",
                 onClick = { viewModel.refreshInstalledApps(); focusDialog = true }
             )
+            CleanDivider()
+            ChoiceRowCompact(
+                label = stringResource(R.string.focus_unlock_length),
+                selected = "$unlockMinutes min",
+                options = listOf(1 to "1 min", 5 to "5 min", 15 to "15 min", 30 to "30 min").map { it as Pair<Any, String> },
+                onSelected = { viewModel.setFocusUnlockMinutes(it as Int) }
+            )
+            CleanDivider()
+            CleanRow(
+                title = stringResource(R.string.focus_access_title),
+                subtitle = stringResource(if (focusServiceOn) R.string.focus_access_on else R.string.focus_access_off),
+                value = if (focusServiceOn) "On" else "Off",
+                onClick = { if (focusServiceOn) openAccessSettings() else accessDialog = true }
+            )
             Text(
-                "Restrictions apply to launches from LumaOS Pro and end when the session ends or you switch contexts.",
+                stringResource(R.string.focus_layer_note),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1072,6 +1102,21 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             onPrimary = { viewModel.clearFocusRestrictions(target) },
             onSuggest = { viewModel.applyFocusSuggestions(target) },
             onDismiss = { focusDialog = false }
+        )
+    }
+    if (accessDialog) {
+        AlertDialog(
+            onDismissRequest = { accessDialog = false },
+            title = { Text(stringResource(R.string.focus_access_disclosure_title)) },
+            text = { Text(stringResource(R.string.focus_access_disclosure)) },
+            confirmButton = {
+                TextButton(onClick = { accessDialog = false; openAccessSettings() }) {
+                    Text(stringResource(R.string.focus_access_enable))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { accessDialog = false }) { Text("Not now") }
+            }
         )
     }
 }

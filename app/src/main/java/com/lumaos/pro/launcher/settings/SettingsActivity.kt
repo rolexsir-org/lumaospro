@@ -232,6 +232,7 @@ class SettingsActivity : ComponentActivity() {
         viewModel.refreshHistory()
         viewModel.refreshContextDnd()
         viewModel.refreshIconPacks()
+        viewModel.refreshFocusService()
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             lifecycleScope.launch { viewModel.prefs.setContextNotificationsEnabled(false) }

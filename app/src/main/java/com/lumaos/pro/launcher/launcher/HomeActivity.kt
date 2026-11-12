@@ -2732,7 +2732,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     private fun launchApp(key: ComponentKey, source: View?) {
         if (viewModel.isRestricted(key)) {
-            showFocusRestriction(viewModel.labelFor(key))
+            showFocusRestriction(viewModel.labelFor(key)) { launchApp(key, null) }
             return
         }
         val iconSource = source?.findViewById<View>(R.id.app_icon) ?: source
@@ -2788,12 +2788,14 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             }
             is DrawerRow.Shortcut -> {
                 val sc = viewModel.shortcutFor(row.ref)
+                val bounds = view?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
                 if (sc != null && viewModel.isPackageRestricted(sc.packageName)) {
-                    showFocusRestriction(sc.label)
+                    showFocusRestriction(sc.label) {
+                        if (!core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
+                    }
                     drawer.close()
                     return
                 }
-                val bounds = view?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
                 if (sc == null || !core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
                 drawer.close()
             }
@@ -2973,7 +2975,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             when {
                 e.id >= M_SHORTCUT_BASE -> shortcuts.getOrNull(e.id - M_SHORTCUT_BASE)?.let { sc ->
                     if (viewModel.isPackageRestricted(sc.packageName)) {
-                        showFocusRestriction(sc.label)
+                        showFocusRestriction(sc.label) {
+                            if (!core.shortcuts.launch(sc, Rect().also { anchor.getGlobalVisibleRect(it) }, null)) {
+                                toast(getString(R.string.toast_shortcut_unavailable))
+                            }
+                        }
                         if (drawer.isOpen) drawer.close()
                         return@let
                     }
@@ -3120,7 +3126,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     // --------------------------------------------------- focus restriction
 
-    private fun showFocusRestriction(appLabel: String) {
+    private fun showFocusRestriction(appLabel: String, onUnlocked: (() -> Unit)? = null) {
         val overlay = focusRestriction ?: FocusRestrictionView(this).also {
             focusRestriction = it
             homeRoot.addView(
@@ -3131,13 +3137,32 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 )
             )
         }
-        overlay.show(
-            theme = theme,
-            appLabel = appLabel,
-            contextTitle = viewModel.activeContextProfile.value.title,
-            onDismiss = { hideFocusRestriction() },
-            onManage = { hideFocusRestriction(); openSettings() }
-        )
+        lifecycleScope.launch {
+            val minutes = viewModel.prefs.focusUnlockMinutes().first()
+            overlay.show(
+                theme = theme,
+                appLabel = appLabel,
+                contextTitle = viewModel.activeContextProfile.value.title,
+                onDismiss = { hideFocusRestriction() },
+                onManage = { hideFocusRestriction(); openSettings() },
+                onUnlock = { grantFocusUnlock { onUnlocked?.invoke() } },
+                unlockLabel = getString(R.string.focus_unlock_button, minutes)
+            )
+        }
+    }
+
+    /** Emergency temporary unlock: lifts both launcher gates until its deadline. */
+    private fun grantFocusUnlock(after: () -> Unit) {
+        lifecycleScope.launch {
+            val prefs = viewModel.prefs
+            val minutes = prefs.focusUnlockMinutes().first()
+            val until = System.currentTimeMillis() + minutes * 60_000L
+            prefs.setFocusUnlock(viewModel.activeContextProfile.value, until)
+            viewModel.awaitUnlockVisible(until)
+            hideFocusRestriction()
+            toast(getString(R.string.focus_unlock_granted, minutes))
+            after()
+        }
     }
 
     private fun hideFocusRestriction() {

@@ -60,6 +60,27 @@ through one switching path, and every context owns independent persisted state.
   per-context independence, home projection with hidden apps, schedule
   boundary computation, backup coverage.
 
+### Focus system-level enforcement (layer 2)
+
+- Optional accessibility-assisted foreground enforcement: with an explicit,
+  revocable user grant (and an in-app disclosure first), restricted apps
+  opened from notifications, Recents, or external apps during a Work/Study
+  session are sent back to the native restriction screen. Off by default;
+  launcher interception keeps working without it.
+- One centralized decision engine (`FocusEnforcement`) shared by the service
+  and the new single-task `FocusRestrictionActivity`; snapshots are taken
+  fresh per event, so revocation, process death, reboot, and rapid context
+  switching cannot strand stale verdicts.
+- Emergency temporary unlock with a configurable 1–60 minute length on both
+  restriction surfaces; the unlock is tied to its profile and a strict
+  deadline, and honors the tap that led to the block.
+- Safety by construction: event subscription is window-state-only with
+  content retrieval disabled, only the foreground package name is read,
+  nothing is collected or transmitted, and Settings/dialer/System UI/the
+  installer/LumaOS itself can never be blocked. Personal and Sleep never
+  enforce. See `docs/FOCUS_ENFORCEMENT.md` for the support matrix and the
+  explicit list of what Android does not permit a normal launcher to block.
+
 ### Audit fixes
 
 - Last-page restore used to race layout restore: when the page landed first,

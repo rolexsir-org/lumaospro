@@ -55,7 +55,9 @@ class FocusRestrictionView @JvmOverloads constructor(
         appLabel: String,
         contextTitle: String,
         onDismiss: () -> Unit,
-        onManage: () -> Unit
+        onManage: () -> Unit,
+        onUnlock: (() -> Unit)? = null,
+        unlockLabel: String? = null
     ) {
         if (!built) {
             build()
@@ -66,6 +68,16 @@ class FocusRestrictionView @JvmOverloads constructor(
         contentDescription = context.getString(R.string.focus_restriction_title) + ". " + message.text
         dismissButton.setOnClickListener { onDismiss() }
         findViewWithTag<View>(TAG_MANAGE)?.setOnClickListener { onManage() }
+        findViewWithTag<TextView>(TAG_UNLOCK)?.apply {
+            if (onUnlock != null && !unlockLabel.isNullOrBlank()) {
+                text = unlockLabel
+                setOnClickListener { onUnlock() }
+                visibility = VISIBLE
+            } else {
+                setOnClickListener(null)
+                visibility = GONE
+            }
+        }
         visibility = VISIBLE
         // Announce to accessibility services and take focus so Back/dismiss is reachable.
         sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
@@ -141,7 +153,24 @@ class FocusRestrictionView @JvmOverloads constructor(
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8f) }
+        }
+        // Emergency temporary unlock. Hidden unless the host passes a handler:
+        // layer 1 (HomeActivity) and layer 2 (FocusRestrictionActivity) both
+        // offer it with the user's configured duration.
+        val unlockButton = TextView(context).apply {
+            tag = TAG_UNLOCK
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            gravity = Gravity.CENTER
+            isFocusable = true
+            isClickable = true
+            minimumHeight = dp(48f)
+            setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
+            visibility = GONE
         }
         card.addView(icon)
         card.addView(title)
@@ -149,6 +178,7 @@ class FocusRestrictionView @JvmOverloads constructor(
         card.addView(note)
         card.addView(dismissButton)
         card.addView(manageButton)
+        card.addView(unlockButton)
         addView(
             card,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply {
@@ -185,9 +215,18 @@ class FocusRestrictionView @JvmOverloads constructor(
                 setColor(ColorMath.withAlpha(c.accent, 0.12f))
             }
         }
+        findViewWithTag<TextView>(TAG_UNLOCK)?.apply {
+            setTextColor(c.onSurfaceMuted)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(14f).toFloat()
+                setColor(ColorMath.withAlpha(c.onSurface, 0.08f))
+            }
+        }
     }
 
     private companion object {
         const val TAG_MANAGE = "focus_manage"
+        const val TAG_UNLOCK = "focus_unlock"
     }
 }

@@ -85,6 +85,9 @@ object BackupCodec {
         "context_notifications_enabled" to ValueType.BOOLEAN,
         "context_notification_profiles" to ValueType.STRING,
         "context_dnd_profiles" to ValueType.STRING,
+        // Emergency unlock length is a durable user setting; the live unlock
+        // itself (focus_unlock_until/_profile) is transient and stays excluded.
+        "focus_unlock_minutes" to ValueType.INT,
         "onboarding_done" to ValueType.BOOLEAN
     )
 

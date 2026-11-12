@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusEnforcement
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.apps.AppCategories
 import com.lumaos.pro.launcher.core.apps.AppEntry
@@ -123,15 +124,41 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             ContextEngine.focusActive(profile, enabled)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    private val focusUnlockUntil: StateFlow<Long> = prefs.focusUnlockUntil()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+    private val focusUnlockProfile: StateFlow<ContextProfile?> = prefs.focusUnlockProfile()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** An unexpired unlock for the active session lifts both launcher gates. */
+    private fun unlockLiftsGate(): Boolean = FocusEnforcement.unlockActive(
+        activeContextProfile.value, focusUnlockProfile.value, focusUnlockUntil.value,
+        System.currentTimeMillis()
+    )
+
     /** True when launching [key] must show the restriction screen instead. */
-    fun isRestricted(key: ComponentKey): Boolean = ContextEngine.isRestricted(
+    fun isRestricted(key: ComponentKey): Boolean = !unlockLiftsGate() && ContextEngine.isRestricted(
         activeContextProfile.value, focusEnabled.value, focusRestrictedKeys.value, key
     )
 
     /** Shortcut variant: restricted when any restricted component owns the package. */
-    fun isPackageRestricted(packageName: String): Boolean = ContextEngine.isPackageRestricted(
+    fun isPackageRestricted(packageName: String): Boolean = !unlockLiftsGate() && ContextEngine.isPackageRestricted(
         activeContextProfile.value, focusEnabled.value, focusRestrictedKeys.value, packageName
     )
+
+    /**
+     * Suspends until an unlock write is visible to the gates above. Unlock
+     * flows honor the tap that led to the block by re-driving the launch
+     * immediately after persisting; without this settle point the relaunch
+     * could read the pre-unlock value and show the restriction screen again.
+     */
+    suspend fun awaitUnlockVisible(untilMillis: Long) {
+        // Bounded: if the write never surfaces (it was overwritten before
+        // propagation), the relaunch simply meets the gate again — a safe
+        // failure that shows the restriction screen, never a launch.
+        kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+            focusUnlockUntil.first { it >= untilMillis }
+        }
+    }
 
     /**
      * The current hidden set, from whichever source is authoritative right now.

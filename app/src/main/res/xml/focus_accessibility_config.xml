@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Focus Protection enforcement layer 2. Minimal capabilities by design:
+    window-state changes only (which package entered the foreground), with
+    window-content retrieval explicitly disabled — the service cannot observe
+    screen content, text, or input even in principle. See docs/FOCUS_ENFORCEMENT.md.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/focus_service_description"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="default"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="0" />
