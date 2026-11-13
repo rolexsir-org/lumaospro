@@ -181,9 +181,10 @@ private fun WallpaperStudio(
     val themeSettings by core.themes.settings.collectAsState()
     val activeWallpaperId by core.themes.activeWallpaperId.collectAsState()
     val activeProfile by core.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
-    // Each context keeps its own Luma home wallpaper; the target comes from
-    // Settings or defaults to the active context. Named contextTarget because
-    // the apply sheet below destructures its own `target` (WallpaperTarget).
+    // Each context keeps its Luma Home artwork/backdrop choice; Android's
+    // Home/Lock device wallpaper is shared. The target comes from Settings or
+    // defaults to the active context. Named contextTarget because the apply
+    // sheet below destructures its own `target` (WallpaperTarget).
     val contextTarget = targetProfile ?: activeProfile
     var applyAll by rememberSaveable { mutableStateOf(false) }
     val favorites by core.prefs.wallpaperFavorites.collectAsState(emptySet())

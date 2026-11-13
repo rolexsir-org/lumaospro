@@ -4,6 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Accessibility grant behind Focus Protection's second enforcement layer.
@@ -29,6 +32,27 @@ import android.provider.Settings
  *    restart dance to perform.
  */
 object FocusAccess {
+
+    private val _serviceConnected = MutableStateFlow(false)
+
+    /**
+     * In-process signal from the AccessibilityService lifecycle. This reports
+     * a connection callback, not a guarantee that Android will deliver every
+     * foreground event or permit every intervention.
+     */
+    internal val serviceConnected: StateFlow<Boolean> = _serviceConnected.asStateFlow()
+
+    internal fun updateServiceConnection(connected: Boolean) {
+        _serviceConnected.value = connected
+    }
+
+    /** Current prerequisites visible to Settings; foreground enforcement remains best-effort. */
+    internal fun serviceStatus(accessibilityEnabled: Boolean, serviceConnected: Boolean): FocusServiceStatus =
+        when {
+            !accessibilityEnabled -> FocusServiceStatus.ACCESSIBILITY_OFF
+            !serviceConnected -> FocusServiceStatus.SERVICE_NOT_CONNECTED
+            else -> FocusServiceStatus.CONNECTED
+        }
 
     /** The one component the user grants. */
     fun component(context: Context): ComponentName =
@@ -74,4 +98,10 @@ object FocusAccess {
     private fun resolves(context: Context, intent: Intent): Boolean = runCatching {
         intent.resolveActivity(context.packageManager) != null
     }.getOrDefault(false)
+}
+
+internal enum class FocusServiceStatus {
+    ACCESSIBILITY_OFF,
+    SERVICE_NOT_CONNECTED,
+    CONNECTED
 }

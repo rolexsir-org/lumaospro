@@ -10,9 +10,10 @@ through one switching path, and every context owns independent persisted state.
 ### Independent launcher environments
 
 - Each context keeps its own home pages, icon positions, folders, dock,
-  widget placements, pins, last visible page, app visibility, wallpaper and
-  backdrop. Layouts and pins were already per-context; visibility, wallpapers,
-  backdrops and last pages are new DataStore keys in the existing store.
+  widget placements, pins, last visible page, app visibility, Luma Home artwork
+  and backdrop choice. Layouts and pins were already per-context; visibility,
+  in-app artwork, backdrops and last pages are new DataStore keys in the store.
+  Android Home/Lock device wallpaper remains shared across contexts.
 - Switching restores the exact saved environment without restarting anything;
   transient UI (drawer, folders, edit mode, restriction screen, search) is
   closed on switch so one context never leaks into another.
@@ -46,38 +47,39 @@ through one switching path, and every context owns independent persisted state.
   manual switch now records an override that stands until the next scheduled
   transition (persisted, so it survives reboot), with a "Resume automatic
   schedule" row in Settings while one is held.
-- Schedules, visibility, focus, wallpapers, alerts and DND for all four
-  contexts are configurable from the existing Settings section without
-  switching to each context first.
+- Schedules, visibility, focus, Luma Home artwork/backdrops, alerts and DND
+  for all four contexts are configurable from the existing Settings section
+  without switching to each context first.
 
 ### Backup and tests
 
-- Per-context pages, visibility, focus sets, wallpapers and backdrops are
-  included in backups; the manual override, system wallpaper ids and private
-  photo ids stay device-local (with a regression test proving the shared
-  wallpaper favorites survive restores).
+- Per-context pages, visibility, focus sets, Luma Home wallpaper selections
+  and backdrops are included in backups; the manual override, Android system
+  wallpaper ids and private photo ids stay device-local (with a regression test
+  proving the shared wallpaper favorites survive restores).
 - New tests: engine decisions, key-set codec, suggestions, DataStore-backed
   per-context independence, home projection with hidden apps, schedule
   boundary computation, backup coverage.
 
-### Focus system-level enforcement (layer 2)
+### Focus best-effort foreground enforcement (layer 2)
 
-- Optional accessibility-assisted foreground enforcement: with an explicit,
-  revocable user grant (and an in-app disclosure first), restricted apps
-  opened from notifications, Recents, or external apps during a Work/Study
-  session are sent back to the native restriction screen. Off by default;
-  launcher interception keeps working without it.
-- One centralized decision engine (`FocusEnforcement`) shared by the service
-  and the new single-task `FocusRestrictionActivity`; snapshots are taken
-  fresh per event, so revocation, process death, reboot, and rapid context
-  switching cannot strand stale verdicts.
+- Optional accessibility-assisted foreground enforcement: after an explicit,
+  revocable user grant, a connected service may react to supported foreground
+  package changes during an enabled Work/Study session. Some notification taps,
+  Recents switches, or app handoffs may trigger an attempt to return Home and
+  show the restriction screen; Android can omit events or refuse that screen.
+  This is not system-wide coverage. Layer 1 interception remains available
+  without Accessibility when Focus Protection is enabled.
+- One centralized decision engine (`FocusEnforcement`) is shared by the service
+  and the single-task `FocusRestrictionActivity`; each delivered event/presentation
+  gets a fresh snapshot, so no verdict is cached across events.
 - Emergency temporary unlock with a configurable 1–60 minute length on both
   restriction surfaces; the unlock is tied to its profile and a strict
   deadline, and honors the tap that led to the block.
 - Safety by construction: event subscription is window-state-only with
-  content retrieval disabled, only the foreground package name is read,
-  nothing is collected or transmitted, and Settings/dialer/System UI/the
-  installer/LumaOS itself can never be blocked. Personal and Sleep never
+  content retrieval disabled; only the foreground package name is read, and
+  package names are not persisted or transmitted. Settings/dialer/System UI/
+  the installer/LumaOS itself can never be blocked. Personal and Sleep never
   enforce. See `docs/FOCUS_ENFORCEMENT.md` for the support matrix and the
   explicit list of what Android does not permit a normal launcher to block.
 
@@ -86,15 +88,15 @@ through one switching path, and every context owns independent persisted state.
 - Restore no longer wipes a context's own private-photo wallpaper: scoped
   `photo:` selections get the same keep-across-restore treatment the shared
   selection always had (with a DataStore-backed regression test).
-- Settings now says so when Stronger blocking is on but LumaOS Pro is not
-  the default launcher — the one configuration where layer 2 can only bounce
-  to Home without presenting the restriction screen.
+- Settings distinguishes an enabled Accessibility grant from a connected
+  service and warns when LumaOS Pro is not the default Home app. Android may
+  open another launcher or refuse the restriction screen; no bounce is promised.
 - The wallpaper fallback ladder (shared → override → explicit-system) is
   extracted as pure tested functions; behavior is unchanged.
 - Copy sweep: README permission table + privacy summary now describe the
   optional accessibility binding accurately, and the per-context wallpaper
-  subtitle matches the Studio wording (Luma art per context, device image
-  shared). No system-wide-blocking, Reels/Shorts-filtering, per-context
+  subtitle distinguishes Luma Home art/backdrops from the shared Android device
+  image. No system-wide-blocking, Reels/Shorts-filtering, per-context
   device-image, or exact-Doze-execution claims exist anywhere in code, copy,
   tests, or docs.
 - New executable coverage: grant lifecycle (off-by-default, listed+enabled,

@@ -18,11 +18,11 @@ import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 /**
  * Native LumaOS Focus Protection screen.
  *
- * Shown instead of launching an app that is restricted during the active
- * Work/Study focus session. Dismissing returns to the launcher; the app is
- * never started. Restrictions are launcher-level (launches made through
- * LumaOS Pro) and release the moment the session ends or the user switches
- * to an unrestricted context.
+ * Used when LumaOS Pro intercepts one of its own restricted launches and by
+ * the optional Accessibility layer when it attempts a foreground intervention.
+ * That second layer is best-effort; neither layer covers other launchers,
+ * lock-screen shortcuts, widgets, in-app content, or an already-visible app in
+ * an unfocused split-screen pane. Personal and Sleep remain unrestricted.
  */
 class FocusRestrictionView @JvmOverloads constructor(
     context: Context,

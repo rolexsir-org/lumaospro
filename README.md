@@ -377,12 +377,16 @@ Study, then Personal. Context selection and all schedule/layout/visibility data
 remain on-device. Optional voice commands use Android's installed recognition
 activity to switch profiles or open apps; LumaOS Pro does not retain transcripts.
 
-Work and Study can also enable Focus Protection: chosen apps are intercepted when
-launched from LumaOS Pro, and an optional, off-by-default accessibility grant
-extends that to restricted apps opened from notifications, Recents, or other
-apps. Enforcement is package-level only — never content inside apps — and
-Personal and Sleep never inherit restrictions. Details, permission notes, and
-the explicit list of what Android does not permit are in
+Work and Study can enable Focus Protection: launches made through LumaOS Pro
+are intercepted while the matching focus session is enabled. An optional,
+off-by-default Accessibility service may react to supported foreground-package
+changes; this is best-effort, not complete coverage of notification taps,
+Recents, or app handoffs. It does not cover other launchers, lock-screen
+shortcuts, widgets, in-app content, or an already-visible app in an unfocused
+split-screen pane. If LumaOS Pro is not the default Home app, Android may open
+another launcher or refuse the restriction screen. Enforcement is package-level
+only, and Personal and Sleep remain unrestricted. Details, permission notes,
+and the explicit support matrix are in
 [docs/FOCUS_ENFORCEMENT.md](docs/FOCUS_ENFORCEMENT.md).
 
 Optional context-change notifications are controlled by a master switch and a
@@ -570,7 +574,7 @@ silent control over other apps.
 | `CAMERA` | Vault private camera and scanner; requested at the moment of use |
 | `RECORD_AUDIO` | Vault recorder; requested at the moment of use |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | The optional notification-access grant shared by the Music widget and the launcher shade |
-| `BIND_ACCESSIBILITY_SERVICE` | Optional Focus Protection layer 2: observes only the foreground package name during Work/Study sessions, off by default, enabled by the user in system settings after an in-app disclosure (see `docs/FOCUS_ENFORCEMENT.md`) |
+| `BIND_ACCESSIBILITY_SERVICE` | Optional Focus Protection layer 2: while connected, reads only the foreground package name from window-state events; may react to supported changes only when Focus is enabled in Work/Study (best-effort, not complete coverage); user-enabled in system settings after an in-app disclosure (see `docs/FOCUS_ENFORCEMENT.md`) |
 
 `CAMERA` and `RECORD_AUDIO` are both optional parts of the product: refusing the
 microphone leaves the recorder explaining itself while every other Vault surface

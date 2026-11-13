@@ -1,28 +1,33 @@
 # Focus Protection enforcement
 
-How LumaOS Pro keeps restricted apps closed during Work/Study sessions, what
-each layer can and cannot do, and which permissions are involved. Written for
-reviewers, QA, and Play Store policy review.
+How LumaOS Pro intercepts selected launches and attempts optional foreground
+interventions during Work/Study sessions, what each layer can and cannot do,
+and which permissions are involved. Written for reviewers, QA, and Play Store
+policy review.
 
 ## The three levels (never conflated)
 
 | Level | Name | Mechanism | Blocks |
 |---|---|---|---|
-| A | Launcher interception | Every launch path inside LumaOS Pro checks `LauncherViewModel.isRestricted` / `isPackageRestricted` before starting anything | Home icons, drawer rows, search results, folders, smart folders, drawer shortcuts, long-press menu shortcuts, gesture and voice launches |
-| B | Accessibility-assisted foreground enforcement (this document) | Optional `AccessibilityService` observes the foreground package and sends restricted apps back to a native restriction screen | Notification taps, Recents switches, and external-app intents that bring a restricted package to the foreground — while the grant holds |
+| A | Launcher interception | LumaOS Pro launch surfaces check `LauncherViewModel.isRestricted` / `isPackageRestricted` before starting a restricted app, while Focus Protection is enabled in Work or Study | Home icons, drawer rows, search results, folders, smart folders, drawer shortcuts, long-press menu shortcuts, gesture and voice launches |
+| B | Best-effort Accessibility-assisted foreground enforcement (this document) | Optional `AccessibilityService` may observe supported foreground package changes and attempt Home plus the native restriction screen; Android can stop delivery or refuse the screen | Some notification taps, Recents switches, and app handoffs may trigger an intervention; this is not guaranteed coverage of every launch path |
 | C | Device-owner / managed-device enforcement | `DevicePolicyManager` lock-task / app suspension | Not implemented: requires device-owner provisioning, which a normal Play Store launcher cannot assume |
 
-Level A always runs. Level B is off by default and needs a deliberate user
-grant. Level C is documented here only so the gap is explicit: LumaOS Pro
-does not claim it.
+Level A is available only while Focus Protection is enabled in an active Work
+or Study context; it does not depend on Accessibility. Level B is optional,
+off by default, and requires both the user-enabled Accessibility grant and a
+connected service. Even then it is best-effort: Android may omit foreground
+events or refuse the restriction activity. Level C is documented only so the
+gap is explicit: LumaOS Pro does not claim system-wide blocking.
 
 ## Level B design
 
 - **One decision engine.** `FocusEnforcement.shouldBlock` is the only
   decider; the service and the restriction activity both call it with a
-  snapshot taken fresh from DataStore at event time. No cached verdicts, so
-  process death, reboot, revocation, and rapid context switching cannot
-  strand stale decisions.
+  snapshot taken fresh from DataStore for each delivered event/presentation.
+  No verdict is cached across events. This avoids stale decisions when the
+  service is running; it does not guarantee that Android delivers an event or
+  re-connects the service after process death, reboot, or OEM intervention.
 - **Event-driven, no polling.** The service subscribes to
   `typeWindowStateChanged` only and sleeps otherwise. Idle battery cost is
   effectively zero; there are no wakeups, timers, or usage-stats polls.
@@ -30,16 +35,15 @@ does not claim it.
   (`res/xml/focus_accessibility_config.xml`) sets
   `canRetrieveWindowContent="false"`. The only field ever read is
   `event.packageName`. Node trees are never traversed, so screen content,
-  text, passwords, and input are unobservable even in principle. Nothing is
-  logged (one line records *that* an intervention happened, never what was
-  on screen), persisted, or transmitted.
-- **Intervention order.** On a restricted foreground package: press Home via
-  `GLOBAL_ACTION_HOME`, then after 350 ms present `FocusRestrictionActivity`
-  (`singleTask`, excluded from Recents). Pressing Home first is what keeps
-  the presentation inside Android's background-activity-start rules when
-  LumaOS Pro is the default launcher. If the presentation is refused, the
-  user is still safely at Home; the failure is logged once, never retried in
-  a loop.
+  text, passwords, and input are unobservable even in principle. Package names,
+  screen content, and user activity are not logged, persisted, or transmitted;
+  a generic diagnostic line may record that an intervention was attempted.
+- **Intervention attempt.** For a restricted foreground package, request Home
+  with `GLOBAL_ACTION_HOME`, then attempt `FocusRestrictionActivity` after
+  350 ms (`singleTask`, excluded from Recents). This sequence is not a
+  guarantee: if another app owns the Home role, Home may open that launcher,
+  and Android may refuse to start the restriction screen. A failed start is
+  logged and not retried in a loop.
 - **Loop guard.** `FocusInterventionGate` allows one intervention per package
   per 2 s cooldown; a different restricted package still intervenes
   immediately, and returning to the same app later re-blocks it. The activity
@@ -68,19 +72,20 @@ device-local state (never backed up); only the configured length is backed up.
   be enabled by the user in system settings.
 - Before routing there, Settings shows an in-app disclosure
   (`focus_access_disclosure`); the system toggle screen additionally shows
-  the service `android:description`. Both state exactly what is observed
-  (foreground package name, during focus sessions, for the user's own
-  restriction list) and what is not collected (everything else).
-- Revocation is a supported steady state, re-checked every time Settings
-  resumes: layer B silently stops receiving events and layer A carries on.
-  There is no re-prompting, no silent re-enabling, and no functionality held
-  hostage behind the grant.
-- Accessibility-policy alignment: the API is used for its declared purpose
-  (helping the user stay in their focus session by acting on their behalf
-  when a self-restricted app opens), with the minimum event subscription, no
-  content retrieval, no data collection, and prominent user control. No
-  personal or sensitive data is accessed, collected, used, or shared by this
-  feature, so there is nothing new to declare under the User Data policy.
+  the service `android:description`. Both state that the connected service
+  reads only foreground package names from window-state events, that it acts on
+  the configured restriction list only during enabled Work/Study sessions, and
+  that it does not read screen content.
+- Revocation and a grant-enabled-but-disconnected service are supported
+  degraded states. Settings re-checks the grant on resume and shows the service
+  connection separately; layer B is unavailable while either prerequisite is
+  missing, and layer A continues. There is no re-prompting, silent re-enabling,
+  or functionality held hostage behind the grant.
+- Accessibility-policy alignment: the API supports the user's configured
+  focus restrictions with the minimum event subscription and no content
+  retrieval. Foreground package names are processed on-device for the decision;
+  package names are not persisted or transmitted. The feature is optional,
+  disclosed before the system redirect, and revocable at any time.
 
 ## Why not UsageStats / DevicePolicy
 
@@ -93,40 +98,41 @@ device-local state (never backed up); only the configured length is backed up.
   QR, or NFC — unacceptable for ordinary users and out of scope for a
   consumer launcher. Not implemented, never claimed.
 
-## Support matrix (level B, grant held)
+## Support matrix (layer B is best-effort, even when enabled)
 
-| Entry point | Verdict | Notes |
+| Entry point / condition | Verdict | Notes |
 |---|---|---|
-| Launcher icons / drawer / search / folders / shortcuts / gestures / voice | Supported (layer A, no grant needed) | Interception before launch; unlock honors the tap |
-| Notification tap opening a restricted app | Supported | Window change observed → Home + restriction screen |
-| Recents switch to a restricted app | Supported | Same foreground observation |
-| External app's intent (share target, link handler) | Supported | Same foreground observation |
-| Split-screen / freeform second surface | Partial | The focused window's package is observed; an already-visible restricted app in the unfocused pane is not pushed away |
-| Default launcher is not LumaOS Pro | Partial | Home lands elsewhere and the restriction presentation may be refused by background-start rules; the user is still bounced out of the app |
-| Service killed / suspended by OEM task manager | Degraded | Events stop until Android rebinds; layer A unaffected. No rebind API exists for accessibility services (unlike notification listeners) |
-| Grant revoked mid-session | Degraded (by design) | Layer B stops instantly; layer A carries on |
-| In-app content (Reels, Shorts, feeds, individual screens) | Impossible at this level | Package-level enforcement cannot see inside apps; no claim is made |
-| Other launchers, lock-screen shortcuts, widgets | Impossible | Outside both layers' reach; documented, not promised |
-| Device-owner suspension, app hiding from Settings | Impossible / not implemented | Requires managed-device provisioning |
+| LumaOS Pro icons / drawer / search / folders / shortcuts / gestures / voice | Layer A intercepts when Focus Protection is enabled in Work or Study | Pre-launch gate; Accessibility grant is not needed |
+| Notification taps, Recents switches, external-app handoffs | Best-effort attempt (layer B) | A supported foreground event may trigger Home plus the restriction screen; event delivery and activity start are not guaranteed |
+| Split-screen / freeform | Partial | The service may observe the focused window; an already-visible restricted app in an unfocused pane is not pushed away |
+| LumaOS Pro is not the default Home app | Limited | Home may open another launcher; Android may refuse the restriction screen. A bounce or screen presentation is not guaranteed |
+| Accessibility grant enabled but service not connected, stopped, or suspended | Unavailable (layer B) | Settings reports the grant and service connection separately; layer A is unaffected |
+| Accessibility grant revoked mid-session | Unavailable (layer B, by design) | Foreground events stop; layer A continues when Focus Protection is enabled |
+| Other launchers, lock-screen shortcuts, widgets | Not covered | Outside both layers' supported entry points |
+| In-app content (Reels, Shorts, feeds, individual screens) | Not covered | Package-level enforcement cannot see inside apps |
+| Device-owner suspension, app hiding from Settings | Not implemented | Requires managed-device provisioning |
 
 ## Manual QA checklist
 
-With Work + Focus Protection on, a restricted app configured, and layer B granted:
+With Focus Protection enabled in Work or Study and a restricted app configured:
 
-1. Tap the app on home, in the drawer, in search, in a folder, via both
-   shortcut surfaces, via gesture and via voice → restriction screen every
-   time; Back/dismiss never launches.
-2. Open it from a notification, from Recents, and from another app's share
-   sheet → bounced to Home + restriction screen.
-3. On the restriction screen: unlock → app opens; wait past the deadline →
-   next entry blocks again.
-4. Switch to Personal mid-session → no enforcement anywhere; switch back →
-   enforcement resumes without re-prompting.
-5. Revoke the grant mid-session → layer B stops, layer A still blocks
-   launcher taps; Settings status row reads Off on return.
-6. Rapid Work → Study → Personal switches → no stacked restriction screens,
-   no unlock leaking across profiles.
-7. Reboot with the grant held → Android rebinds the service; enforcement
-   resumes with persisted settings.
-8. Battery: no measurable drain attributable to the service at idle (no
-   polling exists to drain with).
+1. Tap the app on Home, in the drawer, in search, in a folder, via both
+   shortcut surfaces, via gesture and via voice → layer A should intercept;
+   Back/dismiss should not launch it.
+2. If Accessibility is enabled and Settings reports the service connected,
+   try a notification tap, a Recents switch, and an app handoff. Record what
+   happens on that Android/OEM build; misses or refused screens are within the
+   documented best-effort boundary. Confirm layer A still works.
+3. On a restriction screen: unlock → the requested app opens; after the unlock
+   deadline, a later supported interception should block it again.
+4. Switch to Personal or Sleep mid-session → Focus is inactive; switch back to
+   Work/Study → launcher interception resumes without a new permission prompt.
+5. Revoke Accessibility mid-session → layer B becomes unavailable while layer
+   A remains. On returning to Settings, check that the grant is shown as off.
+6. Rapid Work → Study → Personal switches → no stale restriction decisions or
+   unlock leaking across profiles.
+7. After reboot, check grant and service-connection status separately. Do not
+   assume layer B is available until the service reports connected; layer A is
+   independent of Accessibility.
+8. The service is event-driven and has no polling loop; idle behavior can be
+   checked without promising a particular battery result.

@@ -22,10 +22,11 @@ import kotlinx.coroutines.launch
 /**
  * Native LumaOS restriction screen for enforcement layer 2.
  *
- * Started by [com.lumaos.pro.launcher.context.FocusAccessibilityService] after
- * it sends a restricted foreground app to Home. Reuses [FocusRestrictionView],
- * so both layers render the identical experience, and adds the emergency
- * temporary unlock plus a guaranteed return-to-Home.
+ * Attempted by [com.lumaos.pro.launcher.context.FocusAccessibilityService]
+ * after it requests Home for a restricted foreground app. Android may open a
+ * different default launcher or refuse this activity, so layer 2 does not
+ * guarantee that this screen is shown. Reuses [FocusRestrictionView] and adds
+ * the emergency temporary unlock action.
  *
  * Anti-trap and anti-loop rules, all enforced here rather than trusted to
  * callers:
@@ -37,9 +38,9 @@ import kotlinx.coroutines.launch
  *    session ended, toggle off, unlock granted elsewhere);
  *  - `onResume` re-checks for the same reason: disabling Focus Protection in
  *    Settings and returning here must not strand a dead restriction screen;
- *  - Back and Dismiss always send Home first, so this screen can never drop
- *    the user back into the blocked app — and finishing is unconditional, so
- *    it can never trap them either.
+ *  - Back and Dismiss request the Home activity and finish unconditionally;
+ *    they do not directly relaunch the blocked app, though Android may not
+ *    honor the Home request on every device or state.
  */
 class FocusRestrictionActivity : ComponentActivity() {
 

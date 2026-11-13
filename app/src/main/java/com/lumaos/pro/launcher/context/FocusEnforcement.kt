@@ -56,10 +56,11 @@ object FocusEnforcement {
     ): Boolean = unlockProfile == active && nowMillis < unlockUntilMillis
 
     /**
-     * True when [packageName] entering the foreground must be sent back to
-     * the restriction experience. Personal and Sleep never enforce, an
+     * True when [packageName] entering the observed foreground should trigger
+     * a layer-2 intervention attempt. Personal and Sleep never enforce, an
      * unexpired unlock for the active profile allows everything, and
-     * [FocusSafety] always wins over the restriction set.
+     * [FocusSafety] always wins over the restriction set. Returning true does
+     * not guarantee Android will deliver the event or show the restriction UI.
      */
     fun shouldBlock(
         snapshot: Snapshot,

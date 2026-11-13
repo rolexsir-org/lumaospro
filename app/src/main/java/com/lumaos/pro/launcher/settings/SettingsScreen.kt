@@ -29,8 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,6 +70,7 @@ import androidx.compose.material3.OutlinedTextField
 import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.FocusAccess
+import com.lumaos.pro.launcher.context.FocusServiceStatus
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
@@ -898,12 +901,23 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     var target by remember(active) { mutableStateOf(active) }
     val schedule by viewModel.prefs.profileSchedule(target).collectAsState(ProfileSchedule.defaults(target))
     val storedOverride by viewModel.manualOverride.collectAsState()
-    val liveOverride = storedOverride?.takeIf { it.isActive(System.currentTimeMillis()) }
+    var overrideClockMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(storedOverride) {
+        val override = storedOverride ?: return@LaunchedEffect
+        if (override.untilMillis == Long.MAX_VALUE) return@LaunchedEffect
+        // Invalidate deadline-based copy even if the inexact alarm has not
+        // emitted a DataStore change yet.
+        awaitManualOverrideExpiry(override)
+        overrideClockMillis = System.currentTimeMillis()
+    }
+    val liveOverride = storedOverride?.takeIf { it.isActive(overrideClockMillis) }
     val installedApps by viewModel.installedApps.collectAsState()
     val hiddenApps by viewModel.prefs.drawerHidden(target).collectAsState(emptySet())
     val focusOn by viewModel.prefs.focusEnabled(target).collectAsState(false)
     val restrictedApps by viewModel.prefs.focusRestricted(target).collectAsState(emptySet())
     val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val focusServiceConnected by FocusAccess.serviceConnected.collectAsState()
+    val focusServiceStatus = FocusAccess.serviceStatus(focusServiceOn, focusServiceConnected)
     val isDefaultLauncher by viewModel.roleState.collectAsState()
     val unlockMinutes by viewModel.prefs.focusUnlockMinutes().collectAsState(5)
     var appsDialog by remember { mutableStateOf(false) }
@@ -1015,7 +1029,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         CleanDivider()
         CleanRow(
             title = "Wallpaper for ${target.title}",
-            subtitle = "Luma art per context; the device image is shared",
+            subtitle = "Luma Home art and backdrop per context; Android device wallpaper is shared",
             onClick = { openWallpaper() }
         )
         CleanDivider()
@@ -1042,14 +1056,25 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             CleanDivider()
             CleanRow(
                 title = stringResource(R.string.focus_access_title),
-                subtitle = stringResource(if (focusServiceOn) R.string.focus_access_on else R.string.focus_access_off),
-                value = if (focusServiceOn) "On" else "Off",
+                subtitle = stringResource(
+                    when (focusServiceStatus) {
+                        FocusServiceStatus.ACCESSIBILITY_OFF -> R.string.focus_access_off
+                        FocusServiceStatus.SERVICE_NOT_CONNECTED -> R.string.focus_service_not_connected
+                        FocusServiceStatus.CONNECTED -> R.string.focus_access_on
+                    }
+                ),
+                value = stringResource(
+                    when (focusServiceStatus) {
+                        FocusServiceStatus.ACCESSIBILITY_OFF -> R.string.focus_access_status_off
+                        FocusServiceStatus.SERVICE_NOT_CONNECTED -> R.string.focus_access_status_not_connected
+                        FocusServiceStatus.CONNECTED -> R.string.focus_access_status_connected
+                    }
+                ),
                 onClick = { if (focusServiceOn) openAccessSettings() else accessDialog = true }
             )
-            // Losing default-launcher status degrades layer 2 silently at the
-            // OS level (Home lands elsewhere, the presentation is refused), so
-            // say so here instead. The role check runs on resume; until its
-            // first result lands, nothing is claimed either way.
+            // The service requests Home and then tries the restriction screen;
+            // another default launcher may receive Home and Android may refuse
+            // that screen. The role check runs on resume, so wait for its result.
             if (focusServiceOn && isDefaultLauncher.checkedAtMillis > 0L && !isDefaultLauncher.isDefault) {
                 Text(
                     stringResource(R.string.focus_access_not_default),
@@ -1107,7 +1132,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     if (focusDialog) {
         ContextAppPickerDialog(
             title = "Restricted during ${target.title}",
-            subtitle = "Launching a restricted app shows the LumaOS restriction screen instead.",
+            subtitle = "LumaOS Pro intercepts its own launches. Optional Accessibility may react to supported foreground changes; it is not system-wide.",
             apps = installedApps,
             checked = { it in restrictedApps },
             onToggle = { key, restrict -> viewModel.setAppRestricted(target, key, restrict) },

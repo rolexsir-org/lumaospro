@@ -18,6 +18,13 @@ import java.time.ZoneId
  */
 data class ManualOverride(val profile: ContextProfile, val untilMillis: Long) {
     fun isActive(nowMillis: Long): Boolean = nowMillis < untilMillis
+
+    /** Milliseconds until expiry, or null when the override is intentionally indefinite. */
+    internal fun millisUntilExpiry(nowMillis: Long): Long? = when {
+        untilMillis == Long.MAX_VALUE -> null
+        nowMillis >= untilMillis -> 0L
+        else -> untilMillis - nowMillis
+    }
 }
 
 /**
@@ -36,10 +43,11 @@ data class ManualOverride(val profile: ContextProfile, val untilMillis: Long) {
  * drawer visibility, wallpaper/theme and focus restrictions all follow from
  * the active-profile flows without restarting anything.
  *
- * Focus enforcement is launcher-level only: LumaOS Pro intercepts launches
- * made through its own surfaces and shows the native restriction screen. It
- * does not claim to block content inside third-party apps, and it needs no
- * Accessibility Service, device admin, or usage-access permission.
+ * Focus Protection's layer 1 intercepts launches made through LumaOS Pro.
+ * Optional Accessibility-assisted layer 2 may react to supported foreground
+ * package changes, but neither layer covers other launchers, lock-screen
+ * shortcuts, widgets, in-app content, or an already-visible app in an unfocused
+ * split-screen pane. Accessibility is not required for layer 1.
  */
 object ContextEngine {
 
@@ -70,8 +78,14 @@ object ContextEngine {
     ): Boolean = focusActive(active, focusEnabled) && restricted.any { it.packageName == packageName }
 
     /**
-     * The profile in force right now. Returns the effective profile plus
-     * whether a stored override has expired (and should be cleared).
+     * The documented resolution contract for a manual override, covered by
+     * `ContextEngineTest` but unused in production. The production
+     * `ContextScheduleManager.refreshLocked` path also recomputes the next
+     * schedule deadline and re-arms its boundary alarm; this pure helper does
+     * neither.
+     *
+     * Returns the effective profile plus whether a stored override has expired
+     * (and should be cleared).
      */
     fun resolveEffective(
         scheduled: ContextProfile,
