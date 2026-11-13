@@ -60,8 +60,18 @@ import com.lumaos.pro.launcher.settings.studio.rememberShippedTheme
 import com.lumaos.pro.launcher.settings.studio.PremiumThemeCard
 import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
+import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusAccess
 import com.lumaos.pro.launcher.context.ProfileSchedule
+import com.lumaos.pro.launcher.core.apps.AppEntry
+import com.lumaos.pro.launcher.core.model.ComponentKey
+import com.lumaos.pro.launcher.wallpaper.WallpaperActivity
 import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.core.prefs.GestureKind
@@ -881,7 +891,24 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val choices = ContextProfile.entries.map { it to it.title }
-    val schedule by viewModel.prefs.profileSchedule(active).collectAsState(ProfileSchedule.defaults(active))
+    // Which profile the editors below configure. Defaults to the active one, but
+    // configuring a context must not require switching to it first. Plain
+    // remember (enums are not saveable); following the active context on
+    // switch is the desired behaviour anyway.
+    var target by remember(active) { mutableStateOf(active) }
+    val schedule by viewModel.prefs.profileSchedule(target).collectAsState(ProfileSchedule.defaults(target))
+    val storedOverride by viewModel.manualOverride.collectAsState()
+    val liveOverride = storedOverride?.takeIf { it.isActive(System.currentTimeMillis()) }
+    val installedApps by viewModel.installedApps.collectAsState()
+    val hiddenApps by viewModel.prefs.drawerHidden(target).collectAsState(emptySet())
+    val focusOn by viewModel.prefs.focusEnabled(target).collectAsState(false)
+    val restrictedApps by viewModel.prefs.focusRestricted(target).collectAsState(emptySet())
+    val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val isDefaultLauncher by viewModel.roleState.collectAsState()
+    val unlockMinutes by viewModel.prefs.focusUnlockMinutes().collectAsState(5)
+    var appsDialog by remember { mutableStateOf(false) }
+    var focusDialog by remember { mutableStateOf(false) }
+    var accessDialog by remember { mutableStateOf(false) }
     val alertsEnabled by viewModel.prefs.contextNotificationsEnabled.collectAsState(false)
     val alertProfiles by viewModel.prefs.contextNotificationProfiles.collectAsState(emptySet())
     val dndProfiles by viewModel.prefs.contextDndProfiles.collectAsState(emptySet())
@@ -890,19 +917,73 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }
             .onFailure { Toast.makeText(context, R.string.dnd_access_unavailable, Toast.LENGTH_LONG).show() }
     }
+    fun openWallpaper() {
+        runCatching {
+            context.startActivity(
+                Intent(context, WallpaperActivity::class.java)
+                    .putExtra(WallpaperActivity.EXTRA_TARGET_CONTEXT, target.name)
+            )
+        }.onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
+    }
+    // The accessibility grant lives in system settings: LumaOS Pro can only
+    // explain first (disclosure dialog) and then route there.
+    fun openAccessSettings() {
+        val intent = FocusAccess.settingsIntent(context)
+        if (intent == null) {
+            Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+        } else {
+            runCatching { context.startActivity(intent) }
+                .onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
+        }
+    }
     Column {
         Text("Contexts", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
         ChoiceRowCompact(label = "Current context", selected = active.title, options = choices.map { it as Pair<Any,String> }, onSelected = { viewModel.selectContextProfile(it as ContextProfile) })
+        if (liveOverride != null) {
+            CleanDivider()
+            val held = liveOverride.profile.title
+            val until = if (liveOverride.untilMillis == Long.MAX_VALUE) {
+                stringResource(R.string.context_override_indefinite, held)
+            } else {
+                val time = LocalTime.ofInstant(
+                    java.time.Instant.ofEpochMilli(liveOverride.untilMillis),
+                    java.time.ZoneId.systemDefault()
+                )
+                stringResource(R.string.context_override_active, held, time.toString())
+            }
+            CleanRow(
+                title = stringResource(R.string.context_resume_schedule),
+                subtitle = until,
+                onClick = {
+                    viewModel.resumeSchedule()
+                    Toast.makeText(context, R.string.context_schedule_resumed, Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
         CleanDivider()
-        CompactSwitchRow(title = "Automatic schedule", subtitle = "Switch at local-time boundaries", checked = schedule.enabled, onCheckedChange = { viewModel.setSchedule(active, schedule.copy(enabled = it)) })
+        Text("Edit settings for", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ContextProfile.entries.forEach { profile ->
+                val selected = profile == target
+                Box(
+                    Modifier.weight(1f).height(40.dp).clip(CircleShape).background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { target = profile },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(profile.title, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+        }
+        CleanDivider()
+        CompactSwitchRow(title = "Automatic schedule", subtitle = "Switch to ${target.title} at local-time boundaries", checked = schedule.enabled, onCheckedChange = { viewModel.setSchedule(target, schedule.copy(enabled = it)) })
         if (schedule.enabled) {
             CleanDivider()
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CompactPill(label = "From ${schedule.start}", onClick = {
-                    android.app.TimePickerDialog(context, { _, h, m -> viewModel.setSchedule(active, schedule.copy(start = LocalTime.of(h, m))) }, schedule.start.hour, schedule.start.minute, true).show()
+                    android.app.TimePickerDialog(context, { _, h, m -> viewModel.setSchedule(target, schedule.copy(start = LocalTime.of(h, m))) }, schedule.start.hour, schedule.start.minute, true).show()
                 }, modifier = Modifier.weight(1f))
                 CompactPill(label = "Until ${schedule.end}", onClick = {
-                    android.app.TimePickerDialog(context, { _, h, m -> viewModel.setSchedule(active, schedule.copy(end = LocalTime.of(h, m))) }, schedule.end.hour, schedule.end.minute, true).show()
+                    android.app.TimePickerDialog(context, { _, h, m -> viewModel.setSchedule(target, schedule.copy(end = LocalTime.of(h, m))) }, schedule.end.hour, schedule.end.minute, true).show()
                 }, modifier = Modifier.weight(1f))
             }
             CleanDivider()
@@ -915,7 +996,7 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
                         Modifier.weight(1f).height(36.dp).clip(CircleShape).background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 val days = if (selected) schedule.days - day else schedule.days + day
-                                viewModel.setSchedule(active, schedule.copy(days = days))
+                                viewModel.setSchedule(target, schedule.copy(days = days))
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -925,9 +1006,76 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             }
         }
         CleanDivider()
-        CompactSwitchRow(title = "Context alerts", subtitle = "Notify when entering ${active.title}", checked = active in alertProfiles, onCheckedChange = { scope.launch { viewModel.prefs.setContextNotificationEnabled(active, it) } })
-        CompactSwitchRow(title = "Do Not Disturb in ${active.title}", checked = active in dndProfiles, onCheckedChange = {
-            scope.launch { viewModel.prefs.setContextDndEnabled(active, it) }
+        val visibleCount = (installedApps.size - hiddenApps.size).coerceAtLeast(0)
+        CleanRow(
+            title = "Apps in ${target.title}",
+            subtitle = if (installedApps.isEmpty()) "Loading apps…" else "$visibleCount of ${installedApps.size} visible",
+            onClick = { viewModel.refreshInstalledApps(); appsDialog = true }
+        )
+        CleanDivider()
+        CleanRow(
+            title = "Wallpaper for ${target.title}",
+            subtitle = "Luma art per context; the device image is shared",
+            onClick = { openWallpaper() }
+        )
+        CleanDivider()
+        if (target in ContextEngine.FOCUS_PROFILES) {
+            CompactSwitchRow(
+                title = "Focus Protection",
+                subtitle = "Restrict chosen apps while ${target.title} is active",
+                checked = focusOn,
+                onCheckedChange = { viewModel.setFocusEnabled(target, it) }
+            )
+            CleanDivider()
+            CleanRow(
+                title = "Restricted apps",
+                subtitle = if (restrictedApps.isEmpty()) "None selected" else "${restrictedApps.size} selected",
+                onClick = { viewModel.refreshInstalledApps(); focusDialog = true }
+            )
+            CleanDivider()
+            ChoiceRowCompact(
+                label = stringResource(R.string.focus_unlock_length),
+                selected = "$unlockMinutes min",
+                options = listOf(1 to "1 min", 5 to "5 min", 15 to "15 min", 30 to "30 min").map { it as Pair<Any, String> },
+                onSelected = { viewModel.setFocusUnlockMinutes(it as Int) }
+            )
+            CleanDivider()
+            CleanRow(
+                title = stringResource(R.string.focus_access_title),
+                subtitle = stringResource(if (focusServiceOn) R.string.focus_access_on else R.string.focus_access_off),
+                value = if (focusServiceOn) "On" else "Off",
+                onClick = { if (focusServiceOn) openAccessSettings() else accessDialog = true }
+            )
+            // Losing default-launcher status degrades layer 2 silently at the
+            // OS level (Home lands elsewhere, the presentation is refused), so
+            // say so here instead. The role check runs on resume; until its
+            // first result lands, nothing is claimed either way.
+            if (focusServiceOn && isDefaultLauncher.checkedAtMillis > 0L && !isDefaultLauncher.isDefault) {
+                Text(
+                    stringResource(R.string.focus_access_not_default),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            Text(
+                stringResource(R.string.focus_layer_note),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        } else {
+            Text(
+                "Focus Protection is available for Work and Study. ${target.title} stays unrestricted.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+        CleanDivider()
+        CompactSwitchRow(title = "Context alerts", subtitle = "Notify when entering ${target.title}", checked = target in alertProfiles, onCheckedChange = { scope.launch { viewModel.prefs.setContextNotificationEnabled(target, it) } })
+        CompactSwitchRow(title = "Do Not Disturb in ${target.title}", checked = target in dndProfiles, onCheckedChange = {
+            scope.launch { viewModel.prefs.setContextDndEnabled(target, it) }
             if (it && !hasDndAccess) openDnd()
         })
         if (!hasDndAccess) {
@@ -943,12 +1091,168 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         }
         CompactSwitchRow(title = "System notifications", checked = alertsEnabled, onCheckedChange = { if (it) onRequestNotifications() else scope.launch { viewModel.prefs.setContextNotificationsEnabled(false) } })
     }
+    if (appsDialog) {
+        ContextAppPickerDialog(
+            title = "Apps in ${target.title}",
+            subtitle = "Hidden apps stay installed with their data; they reappear when unhidden or in other contexts.",
+            apps = installedApps,
+            checked = { it !in hiddenApps },
+            onToggle = { key, show -> viewModel.setAppVisible(target, key, show) },
+            primaryLabel = "Show all",
+            onPrimary = { viewModel.showAllApps(target) },
+            onSuggest = { viewModel.applyVisibilitySuggestions(target) },
+            onDismiss = { appsDialog = false }
+        )
+    }
+    if (focusDialog) {
+        ContextAppPickerDialog(
+            title = "Restricted during ${target.title}",
+            subtitle = "Launching a restricted app shows the LumaOS restriction screen instead.",
+            apps = installedApps,
+            checked = { it in restrictedApps },
+            onToggle = { key, restrict -> viewModel.setAppRestricted(target, key, restrict) },
+            primaryLabel = "Clear all",
+            onPrimary = { viewModel.clearFocusRestrictions(target) },
+            onSuggest = { viewModel.applyFocusSuggestions(target) },
+            onDismiss = { focusDialog = false }
+        )
+    }
+    if (accessDialog) {
+        AlertDialog(
+            onDismissRequest = { accessDialog = false },
+            title = { Text(stringResource(R.string.focus_access_disclosure_title)) },
+            text = { Text(stringResource(R.string.focus_access_disclosure)) },
+            confirmButton = {
+                TextButton(onClick = { accessDialog = false; openAccessSettings() }) {
+                    Text(stringResource(R.string.focus_access_enable))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { accessDialog = false }) { Text("Not now") }
+            }
+        )
+    }
 }
 
 @Composable
 private fun CompactPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier.clickable { onClick() }) {
         Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+    }
+}
+
+/**
+ * Multi-select app list for per-context visibility and focus restrictions.
+ * Toggles persist immediately; there is no draft to lose.
+ */
+@Composable
+private fun ContextAppPickerDialog(
+    title: String,
+    subtitle: String,
+    apps: List<AppEntry>,
+    checked: (ComponentKey) -> Boolean,
+    onToggle: (ComponentKey, Boolean) -> Unit,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    onSuggest: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(apps, query) {
+        if (query.isBlank()) apps
+        else apps.filter {
+            it.label.contains(query, ignoreCase = true) ||
+                it.key.packageName.contains(query, ignoreCase = true)
+        }
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Search apps") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactPill(label = primaryLabel, onClick = onPrimary, modifier = Modifier.weight(1f))
+                    CompactPill(label = "Use suggestions", onClick = onSuggest, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                if (apps.isEmpty()) {
+                    Text(
+                        text = "Loading apps…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp).align(Alignment.CenterHorizontally)
+                    )
+                } else if (filtered.isEmpty()) {
+                    Text(
+                        text = "No apps match \"$query\"",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp).align(Alignment.CenterHorizontally)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(filtered, key = { it.key.serialize() }) { app ->
+                            val isChecked = checked(app.key)
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { onToggle(app.key, !isChecked) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = isChecked, onCheckedChange = { onToggle(app.key, it) })
+                                Spacer(Modifier.width(8.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = app.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = app.key.packageName,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Done") }
+                }
+            }
+        }
     }
 }
 

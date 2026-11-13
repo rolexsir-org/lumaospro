@@ -5,7 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusEnforcement
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.apps.AppCategories
 import com.lumaos.pro.launcher.core.apps.AppEntry
@@ -94,6 +96,70 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val pinnedKeys: StateFlow<List<ComponentKey>> = activeContextProfile.flatMapLatest(prefs::pinnedApps)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Apps hidden from the active context's launcher interface (home + drawer). */
+    private val contextHiddenKeys: StateFlow<Set<ComponentKey>> =
+        activeContextProfile.flatMapLatest(prefs::drawerHidden)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /**
+     * Vault hiding plus the active context's own visibility. Both filter the
+     * home projection, the drawer, categories and smart folders; the saved
+     * layout keeps every entry, so unhiding or switching contexts restores it.
+     */
+    private val effectiveHiddenKeys: StateFlow<Set<ComponentKey>> =
+        combine(hiddenKeys, contextHiddenKeys) { vault, context -> vault + context }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, readHiddenKeys())
+
+    /** Focus Protection state for the active context (meaningful for Work/Study). */
+    val focusEnabled: StateFlow<Boolean> = activeContextProfile.flatMapLatest(prefs::focusEnabled)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val focusRestrictedKeys: StateFlow<Set<ComponentKey>> =
+        activeContextProfile.flatMapLatest(prefs::focusRestricted)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** True while the active context runs an enabled focus session. */
+    val focusActive: StateFlow<Boolean> =
+        combine(activeContextProfile, focusEnabled) { profile, enabled ->
+            ContextEngine.focusActive(profile, enabled)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val focusUnlockUntil: StateFlow<Long> = prefs.focusUnlockUntil()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+    private val focusUnlockProfile: StateFlow<ContextProfile?> = prefs.focusUnlockProfile()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** An unexpired unlock for the active session lifts both launcher gates. */
+    private fun unlockLiftsGate(): Boolean = FocusEnforcement.unlockActive(
+        activeContextProfile.value, focusUnlockProfile.value, focusUnlockUntil.value,
+        System.currentTimeMillis()
+    )
+
+    /** True when launching [key] must show the restriction screen instead. */
+    fun isRestricted(key: ComponentKey): Boolean = !unlockLiftsGate() && ContextEngine.isRestricted(
+        activeContextProfile.value, focusEnabled.value, focusRestrictedKeys.value, key
+    )
+
+    /** Shortcut variant: restricted when any restricted component owns the package. */
+    fun isPackageRestricted(packageName: String): Boolean = !unlockLiftsGate() && ContextEngine.isPackageRestricted(
+        activeContextProfile.value, focusEnabled.value, focusRestrictedKeys.value, packageName
+    )
+
+    /**
+     * Suspends until an unlock write is visible to the gates above. Unlock
+     * flows honor the tap that led to the block by re-driving the launch
+     * immediately after persisting; without this settle point the relaunch
+     * could read the pre-unlock value and show the restriction screen again.
+     */
+    suspend fun awaitUnlockVisible(untilMillis: Long) {
+        // Bounded: if the write never surfaces (it was overwritten before
+        // propagation), the relaunch simply meets the gate again — a safe
+        // failure that shows the restriction screen, never a launch.
+        kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+            focusUnlockUntil.first { it >= untilMillis }
+        }
+    }
+
     /**
      * The current hidden set, from whichever source is authoritative right now.
      *
@@ -140,7 +206,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _shortcuts = MutableStateFlow<List<AppShortcut>>(emptyList())
 
     /** Categories that occur among visible apps (chips are only offered when non-empty). */
-    val categories: StateFlow<List<DrawerCategory>> = combine(_apps, hiddenKeys) { list, hidden ->
+    val categories: StateFlow<List<DrawerCategory>> = combine(_apps, effectiveHiddenKeys) { list, hidden ->
         AppCategories.present(list.filterNot { it.key in hidden })
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -152,7 +218,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
      * drawer is closed and the home screen is idle, filtering work stops.
      */
     val drawer: StateFlow<DrawerModel.Output> = combine(
-        combine(_apps, _query, _filter, drawerSort, hiddenKeys) { a, q, f, s, h -> DrawerInputs(a, q, f, s, h) },
+        combine(_apps, _query, _filter, drawerSort, effectiveHiddenKeys) { a, q, f, s, h -> DrawerInputs(a, q, f, s, h) },
         combine(hiddenInSearch, history.records, suggestionsEnabled, drawerColumns, _shortcuts) { his, rec, sug, cols, sc ->
             Extra(his, rec.values, sug, cols, sc)
         },
@@ -217,7 +283,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     init {
         history.load()
         viewModelScope.launch {
-            activeContextProfile.flatMapLatest(prefs::homeLayoutRaw).collect { raw ->
+            activeContextProfile.flatMapLatest { profile ->
+                prefs.homeLayoutRaw(profile).map { raw -> profile to raw }
+            }.collect { (profile, raw) ->
                 val decoded = HomeLayoutCodec.decode(raw)
                 // A layout that arrives with the same app, folder or widget id twice
                 // would render two cells for one thing, so it is repaired here, where
@@ -226,11 +294,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 // to stay about the file as written, not about repairs we would make.
                 val repaired = HomeLayoutOps.dedupe(decoded)
                 _layout.value = repaired
+                // Each context reopens on its own last page, restored only after
+                // the layout it belongs to: the projection clamps the index into
+                // the restored page count, so restoring it first would destroy it
+                // whenever the previous context had fewer pages. flatMapLatest
+                // also cancels a stale restore when contexts switch in rapid
+                // succession, so the page always matches the layout on screen.
+                _activePageIndex.value = prefs.lastPage(profile).first().coerceAtLeast(0)
                 if (repaired != decoded) healDuplicatedLayout(raw, repaired)
             }
         }
         viewModelScope.launch {
-            combine(_layout, hiddenKeys, _activePageIndex) { current, hidden, page ->
+            combine(_layout, effectiveHiddenKeys, _activePageIndex) { current, hidden, page ->
                 project(current, hidden, page)
             }.collect { display ->
                 _activePageIndex.value = display.activePageIndex
@@ -359,6 +434,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val snapshot = prefs.allHomeLayoutsRaw()
         val baseRaw = snapshot.first()
         for ((index, profile) in ContextProfile.entries.withIndex()) {
+            prefs.retainContextKeys(profile, installed)
             val raw = snapshot[index + 1] ?: baseRaw
             if (!HomeLayoutCodec.canSafelyRewrite(raw)) {
                 LumaLog.w("App reconciliation skipped: a saved layout needs recovery")
@@ -415,7 +491,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Live members of a smart folder, from real data only. */
     fun smartMembers(kind: SmartKind, limit: Int = 12): List<ComponentKey> {
-        val hidden = hiddenKeys.value
+        val hidden = effectiveHiddenKeys.value
         val apps = _apps.value
         val installed = apps.mapTo(HashSet()) { it.key }
         val eligible: (ComponentKey) -> Boolean = { it in installed && it !in hidden }
@@ -431,7 +507,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // --- Layout mutations. Display positions map onto the stored active page. ---
 
     fun setActivePage(index: Int) {
-        _activePageIndex.value = index.coerceIn(0, (_layout.value.pageCount - 1).coerceAtLeast(0))
+        val clamped = index.coerceIn(0, (_layout.value.pageCount - 1).coerceAtLeast(0))
+        _activePageIndex.value = clamped
+        // Persisted per context so every switch restores its own last page.
+        viewModelScope.launch { prefs.setLastPage(activeContextProfile.value, clamped) }
     }
 
     fun addPage(onResult: (Boolean) -> Unit = {}) {

@@ -15,7 +15,10 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.lumaos.pro.launcher.core.util.LumaLog
+import com.lumaos.pro.launcher.context.ComponentKeySetCodec
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusEnforcement
+import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.intelligence.ProfileId
@@ -94,6 +97,11 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val CONTEXT_NOTIFICATIONS_ENABLED = booleanPreferencesKey("context_notifications_enabled")
         val CONTEXT_NOTIFICATION_PROFILES = stringPreferencesKey("context_notification_profiles")
         val CONTEXT_DND_PROFILES = stringPreferencesKey("context_dnd_profiles")
+        val CONTEXT_MANUAL_PROFILE = stringPreferencesKey("context_manual_profile")
+        val CONTEXT_MANUAL_UNTIL = longPreferencesKey("context_manual_until")
+        val FOCUS_UNLOCK_UNTIL = longPreferencesKey("focus_unlock_until")
+        val FOCUS_UNLOCK_PROFILE = stringPreferencesKey("focus_unlock_profile")
+        val FOCUS_UNLOCK_MINUTES = intPreferencesKey("focus_unlock_minutes")
         val DND_MANAGED = booleanPreferencesKey("context_dnd_managed")
         val DND_RESTORE_FILTER = intPreferencesKey("context_dnd_restore_filter")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -543,7 +551,15 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
                 if (!isRestorable(key.name) || key.name in values) continue
                 // A private photo selection is device-local and intentionally excluded
                 // from backups; keep it unless the backup explicitly restores a bundled art ID.
+                // The shared selection and every per-context override get the same
+                // treatment: without the second clause a context's own photo
+                // wallpaper would be silently wiped by any restore.
                 if (key == Keys.ACTIVE_WALLPAPER_ID && (p[Keys.ACTIVE_WALLPAPER_ID]?.startsWith("photo:") == true)) {
+                    continue
+                }
+                if (key.name.startsWith("context_wallpaper_") &&
+                    p[stringPreferencesKey(key.name)]?.startsWith("photo:") == true
+                ) {
                     continue
                 }
                 p.remove(key)
@@ -707,6 +723,237 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     private fun scheduleKey(profile: ContextProfile) = stringPreferencesKey("schedule_${profile.name.lowercase()}")
     private fun hiddenAppsKey(profile: ContextProfile) = stringPreferencesKey("hidden_apps_${profile.name.lowercase()}")
     private fun pinnedAppsKey(profile: ContextProfile) = stringPreferencesKey("pinned_apps_${profile.name.lowercase()}")
+    private fun lastPageKey(profile: ContextProfile) = intPreferencesKey("last_page_${profile.name.lowercase()}")
+    private fun drawerHiddenKey(profile: ContextProfile) = stringPreferencesKey("drawer_hidden_${profile.name.lowercase()}")
+    private fun focusEnabledKey(profile: ContextProfile) = booleanPreferencesKey("focus_enabled_${profile.name.lowercase()}")
+    private fun focusRestrictedKey(profile: ContextProfile) = stringPreferencesKey("focus_restricted_${profile.name.lowercase()}")
+    // context_wallpaper_*, not wallpaper_*: the shared favorites set lives at
+    // wallpaper_favorites, and a wallpaper_ backup prefix would wrongly mark
+    // that device-local set as restorable and wipe it on every restore.
+    private fun wallpaperKey(profile: ContextProfile) = stringPreferencesKey("context_wallpaper_${profile.name.lowercase()}")
+    private fun wallpaperSysIdKey(profile: ContextProfile) = intPreferencesKey("context_wallpaper_sysid_${profile.name.lowercase()}")
+    private fun backdropKey(profile: ContextProfile) = stringPreferencesKey("backdrop_${profile.name.lowercase()}")
+
+    // --- Context engine: independent per-context environments ----------------
+
+    /**
+     * A manual choice stands until the next scheduled transition. Null while
+     * the schedule (or the lack of one) is in charge. Device-local transient
+     * state: intentionally excluded from backups.
+     */
+    val manualOverride: Flow<ManualOverride?> = dataStore.data
+        .catch { e ->
+            if (e is IOException) {
+                LumaLog.e("Preferences read failed, falling back to defaults", e)
+                emit(emptyPreferences())
+            } else throw e
+        }
+        .map { p ->
+            val profile = p[Keys.CONTEXT_MANUAL_PROFILE]?.let { ContextProfile.parse(it) } ?: return@map null
+            val until = p[Keys.CONTEXT_MANUAL_UNTIL] ?: return@map null
+            ManualOverride(profile, until)
+        }
+
+    suspend fun setManualOverride(profile: ContextProfile, untilMillis: Long) {
+        dataStore.edit { p ->
+            p[Keys.CONTEXT_MANUAL_PROFILE] = profile.name
+            p[Keys.CONTEXT_MANUAL_UNTIL] = untilMillis
+        }
+    }
+
+    suspend fun clearManualOverride() {
+        dataStore.edit { p ->
+            p.remove(Keys.CONTEXT_MANUAL_PROFILE)
+            p.remove(Keys.CONTEXT_MANUAL_UNTIL)
+        }
+    }
+
+    /** Last visible home page per context, restored on every switch. */
+    fun lastPage(profile: ContextProfile): Flow<Int> = read(lastPageKey(profile)) { 0 }
+    suspend fun setLastPage(profile: ContextProfile, index: Int) =
+        write(lastPageKey(profile), index.coerceAtLeast(0))
+
+    /**
+     * Apps hidden from [profile]'s home screen and drawer. Install state and
+     * data are untouched: entries stay in the saved layout and reappear when
+     * unhidden or when switching to a context that shows them.
+     */
+    fun drawerHidden(profile: ContextProfile): Flow<Set<ComponentKey>> =
+        readNullable(drawerHiddenKey(profile)).map { ComponentKeySetCodec.decode(it) }
+
+    suspend fun setDrawerHidden(profile: ContextProfile, keys: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            putOrRemove(p, drawerHiddenKey(profile), ComponentKeySetCodec.encode(keys).takeIf { keys.isNotEmpty() })
+        }
+    }
+
+    suspend fun setAppVisible(profile: ContextProfile, key: ComponentKey, visible: Boolean) {
+        dataStore.edit { p ->
+            val prefKey = drawerHiddenKey(profile)
+            val current = ComponentKeySetCodec.decode(p[prefKey]).toMutableSet()
+            if (visible) current.remove(key) else current.add(key)
+            putOrRemove(p, prefKey, ComponentKeySetCodec.encode(current).takeIf { current.isNotEmpty() })
+        }
+    }
+
+    /** Whether [profile] runs Focus Protection while active (Work and Study only). */
+    fun focusEnabled(profile: ContextProfile): Flow<Boolean> = read(focusEnabledKey(profile)) { false }
+    suspend fun setFocusEnabled(profile: ContextProfile, enabled: Boolean) =
+        write(focusEnabledKey(profile), enabled)
+
+    /** Apps intercepted by the restriction screen while [profile]'s focus session runs. */
+    fun focusRestricted(profile: ContextProfile): Flow<Set<ComponentKey>> =
+        readNullable(focusRestrictedKey(profile)).map { ComponentKeySetCodec.decode(it) }
+
+    suspend fun setFocusRestricted(profile: ContextProfile, keys: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            putOrRemove(p, focusRestrictedKey(profile), ComponentKeySetCodec.encode(keys).takeIf { keys.isNotEmpty() })
+        }
+    }
+
+    suspend fun setAppRestricted(profile: ContextProfile, key: ComponentKey, restricted: Boolean) {
+        dataStore.edit { p ->
+            val prefKey = focusRestrictedKey(profile)
+            val current = ComponentKeySetCodec.decode(p[prefKey]).toMutableSet()
+            if (restricted) current.add(key) else current.remove(key)
+            putOrRemove(p, prefKey, ComponentKeySetCodec.encode(current).takeIf { current.isNotEmpty() })
+        }
+    }
+
+    /**
+     * Emergency unlock: epoch millis until which the session may run
+     * unrestricted, and the profile it was granted in. Zero/absent means no
+     * unlock. Transient device-local state (never backed up): it cannot
+     * survive longer than its own deadline, and [FocusEnforcement] only
+     * honors it while the granting profile is still active.
+     */
+    fun focusUnlockUntil(): Flow<Long> = read(Keys.FOCUS_UNLOCK_UNTIL) { 0L }
+    fun focusUnlockProfile(): Flow<ContextProfile?> =
+        readNullable(Keys.FOCUS_UNLOCK_PROFILE).map { ContextProfile.parse(it) }
+
+    suspend fun setFocusUnlock(profile: ContextProfile, untilMillis: Long) {
+        dataStore.edit { p ->
+            p[Keys.FOCUS_UNLOCK_PROFILE] = profile.name
+            p[Keys.FOCUS_UNLOCK_UNTIL] = untilMillis
+        }
+    }
+
+    suspend fun clearFocusUnlock() {
+        dataStore.edit { p ->
+            p.remove(Keys.FOCUS_UNLOCK_PROFILE)
+            p.remove(Keys.FOCUS_UNLOCK_UNTIL)
+        }
+    }
+
+    /** Emergency unlock length in minutes, user-configurable, default 5. */
+    fun focusUnlockMinutes(): Flow<Int> = read(Keys.FOCUS_UNLOCK_MINUTES) { 5 }
+    suspend fun setFocusUnlockMinutes(minutes: Int) =
+        write(Keys.FOCUS_UNLOCK_MINUTES, minutes.coerceIn(1, 60))
+
+    /**
+     * Drops uninstalled apps from [profile]'s visibility, restriction and pin
+     * sets after a successful scan. Called with the same install set as the
+     * layout prune, so all per-context state stays consistent.
+     */
+    suspend fun retainContextKeys(profile: ContextProfile, installed: Set<ComponentKey>) {
+        dataStore.edit { p ->
+            val hiddenKey = drawerHiddenKey(profile)
+            val keptHidden = ComponentKeySetCodec.decode(p[hiddenKey]).filterTo(LinkedHashSet()) { it in installed }
+            putOrRemove(p, hiddenKey, ComponentKeySetCodec.encode(keptHidden).takeIf { keptHidden.isNotEmpty() })
+            val restrictedKey = focusRestrictedKey(profile)
+            val keptRestricted = ComponentKeySetCodec.decode(p[restrictedKey]).filterTo(LinkedHashSet()) { it in installed }
+            putOrRemove(p, restrictedKey, ComponentKeySetCodec.encode(keptRestricted).takeIf { keptRestricted.isNotEmpty() })
+            val pinKey = pinnedAppsKey(profile)
+            val keptPinned = p[pinKey].orEmpty().split('|')
+                .mapNotNull { ComponentKey.parse(it) }.filter { it in installed }.distinct()
+            putOrRemove(p, pinKey, keptPinned.takeIf { it.isNotEmpty() }?.joinToString("|") { it.serialize() })
+        }
+    }
+
+    /**
+     * Per-context Luma home wallpaper override. Null follows the shared
+     * selection; an empty string explicitly uses the system wallpaper even when
+     * a shared Studio entry exists; otherwise a Studio entry id
+     * (`art:...`/`photo:...`) rendered in-app. Device wallpapers (HOME/BOTH)
+     * are global to Android and always tracked by the shared record instead:
+     * recording a per-context device id could never restore on switch, since
+     * nothing re-applies the system image, and the external-change detector
+     * would silently wipe it on the first mismatch.
+     */
+    fun wallpaperFor(profile: ContextProfile): Flow<String?> = readNullable(wallpaperKey(profile))
+
+    fun wallpaperSysIdFor(profile: ContextProfile): Flow<Int?> = readNullable(wallpaperSysIdKey(profile))
+
+    suspend fun recordAppliedWallpaperFor(
+        profile: ContextProfile,
+        wallpaperId: String?,
+        systemWallpaperId: Int?,
+        backdrop: Backdrop?
+    ) {
+        dataStore.edit { p ->
+            putOrRemove(p, wallpaperKey(profile), wallpaperId)
+            putOrRemove(p, wallpaperSysIdKey(profile), systemWallpaperId)
+            if (backdrop != null) {
+                p[backdropKey(profile)] = backdrop.storageKey
+            }
+        }
+    }
+
+    suspend fun clearWallpaperForIfMatches(profile: ContextProfile, wallpaperId: String) {
+        dataStore.edit { p ->
+            if (p[wallpaperKey(profile)] == wallpaperId) {
+                p.remove(wallpaperKey(profile))
+                p.remove(wallpaperSysIdKey(profile))
+            }
+        }
+    }
+
+    /** "Use for all contexts": every context follows the shared selection again. */
+    suspend fun clearWallpaperOverrides() {
+        dataStore.edit { p ->
+            for (profile in ContextProfile.entries) {
+                p.remove(wallpaperKey(profile))
+                p.remove(wallpaperSysIdKey(profile))
+                p.remove(backdropKey(profile))
+            }
+        }
+    }
+
+    /**
+     * Drops one context's wallpaper-id override while keeping its backdrop
+     * choice. Used after a device-target apply: the system image is global, so
+     * the context follows the shared record (which now describes that image)
+     * instead of holding a device id that could never restore.
+     */
+    suspend fun clearWallpaperIdFor(profile: ContextProfile) {
+        dataStore.edit { p ->
+            p.remove(wallpaperKey(profile))
+            p.remove(wallpaperSysIdKey(profile))
+        }
+    }
+
+    suspend fun clearActiveWallpaperEverywhere(wallpaperId: String) {
+        dataStore.edit { p ->
+            if (p[Keys.ACTIVE_WALLPAPER_ID] == wallpaperId) {
+                p.remove(Keys.ACTIVE_WALLPAPER_ID)
+                p.remove(Keys.ACTIVE_WALLPAPER_SYSTEM_ID)
+            }
+            for (profile in ContextProfile.entries) {
+                if (p[wallpaperKey(profile)] == wallpaperId) {
+                    p.remove(wallpaperKey(profile))
+                    p.remove(wallpaperSysIdKey(profile))
+                }
+            }
+        }
+    }
+
+    /** Per-context home backdrop override; null follows the shared backdrop. */
+    fun backdropFor(profile: ContextProfile): Flow<Backdrop?> =
+        readNullable(backdropKey(profile)).map { Backdrop.fromStorageKey(it) }
+
+    suspend fun setBackdropFor(profile: ContextProfile, backdrop: Backdrop?) {
+        dataStore.edit { p -> putOrRemove(p, backdropKey(profile), backdrop?.storageKey) }
+    }
 
     /** Controls adding widgets; existing placed widgets are never removed by this setting. */
     val widgetsEnabled: Flow<Boolean> = read(Keys.WIDGETS_ENABLED) { true }

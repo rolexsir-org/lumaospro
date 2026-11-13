@@ -7,6 +7,8 @@ import android.content.Intent
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -15,16 +17,52 @@ object ContextScheduleManager {
     const val ACTION_REEVALUATE = "com.lumaos.pro.launcher.action.REEVALUATE_CONTEXT"
     private const val REQUEST_CODE = 7614
 
-    suspend fun refresh(context: Context, prefs: LumaPrefs) {
+    /**
+     * Serializes every context decision in this process: manual switches,
+     * schedule edits observed by the core collector, and alarm/boot receiver
+     * refreshes. Each DataStore edit is atomic on its own, but a switch is a
+     * multi-step sequence (override, profile, alarm), and two triggers racing
+     * could otherwise interleave into a mismatched end state.
+     */
+    internal val switchMutex = Mutex()
+
+    suspend fun refresh(context: Context, prefs: LumaPrefs) =
+        switchMutex.withLock { refreshLocked(context, prefs) }
+
+    internal suspend fun refreshLocked(context: Context, prefs: LumaPrefs) {
         val now = LocalDateTime.now()
         val schedules = prefs.profileSchedules.first()
+        val nowMillis = System.currentTimeMillis()
+        val override = prefs.manualOverride.first()
+        if (override != null && override.isActive(nowMillis)) {
+            // A manual choice stands until the next scheduled transition. Its
+            // deadline stays live: enabling a schedule while overridden must
+            // not strand the launcher on the manual choice forever.
+            val previous = prefs.activeContextProfile.first()
+            if (previous != override.profile) {
+                prefs.setActiveContextProfile(override.profile)
+            }
+            val next = nextBoundary(now, schedules)
+            val until = next?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+                ?: Long.MAX_VALUE
+            if (until != override.untilMillis) {
+                prefs.setManualOverride(override.profile, until)
+            }
+            scheduleNext(context, next)
+            return
+        }
+        if (override != null) {
+            prefs.clearManualOverride()
+        }
         val active = ContextProfileResolver.resolve(schedules, now.toLocalTime(), now.dayOfWeek)
         val previous = prefs.activeContextProfile.first()
         if (previous != active) {
             prefs.setActiveContextProfile(active)
         }
+        scheduleNext(context, nextBoundary(now, schedules))
+    }
 
-        val next = nextBoundary(now, schedules)
+    private fun scheduleNext(context: Context, next: LocalDateTime?) {
         val intent = Intent(context, ContextScheduleReceiver::class.java).setAction(ACTION_REEVALUATE)
         val pending = PendingIntent.getBroadcast(
             context, REQUEST_CODE, intent,
@@ -41,7 +79,12 @@ object ContextScheduleManager {
         alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
     }
 
-    private fun nextBoundary(
+    /**
+     * The next wall-clock boundary at which the resolved profile changes, or
+     * null when no schedule is enabled. Shared with [ContextEngine] so manual
+     * overrides expire at exactly the transition the alarm is armed for.
+     */
+    internal fun nextBoundary(
         now: LocalDateTime,
         schedules: Map<ContextProfile, ProfileSchedule>
     ): LocalDateTime? {
@@ -58,10 +101,16 @@ object ContextScheduleManager {
                     }
             }
         }.filter { it.isAfter(now) }.sorted()
+        // Every coverage change happens at a schedule edge, and every edge is
+        // a candidate, so the first edge whose far side resolves differently
+        // is exactly the next transition. Edges that change nothing (a window
+        // shadowed by a higher-priority schedule) are skipped rather than
+        // armed: arming one would wake the device to no effect. Null means no
+        // transition exists and the alarm is cancelled.
         return candidates.firstOrNull { boundary ->
             val after = boundary.plusSeconds(1)
             ContextProfileResolver.resolve(schedules, after.toLocalTime(), after.dayOfWeek) != current
-        } ?: candidates.firstOrNull()
+        }
     }
 }
 

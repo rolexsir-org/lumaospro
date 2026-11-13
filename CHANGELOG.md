@@ -1,5 +1,128 @@
 # Changelog
 
+## Unreleased — Context Engine: Work, Study, Personal and Sleep as independent environments
+
+The home screen's four-option context selector now drives a real context engine.
+No selector redesign, no new dashboard, no launcher rebuild: every trigger
+(selector menu, swipe gesture, voice command, Settings, scheduled alarm) goes
+through one switching path, and every context owns independent persisted state.
+
+### Independent launcher environments
+
+- Each context keeps its own home pages, icon positions, folders, dock,
+  widget placements, pins, last visible page, app visibility, wallpaper and
+  backdrop. Layouts and pins were already per-context; visibility, wallpapers,
+  backdrops and last pages are new DataStore keys in the existing store.
+- Switching restores the exact saved environment without restarting anything;
+  transient UI (drawer, folders, edit mode, restriction screen, search) is
+  closed on switch so one context never leaks into another.
+- Home layouts keep every entry while the projection hides context-hidden
+  apps, so unhiding or switching back restores placements exactly.
+
+### Context-aware app management
+
+- Settings → Contexts → "Apps in …" picks which installed apps appear in each
+  context's home screen and drawer. Installed apps and their data are never
+  touched; hiding only filters launcher surfaces.
+- A "Use suggestions" starting point (Work: mail/calendar/productivity;
+  Study: notes/books/calculator; Sleep: clock/essentials; Personal: all)
+  is computed from declared app categories plus conservative name matching
+  and is never applied automatically.
+
+### Focus Protection (Work and Study)
+
+- Optional per-context toggle plus a restricted-app picker, configured
+  independently for Work and Study. While a focus session runs, launches made
+  through LumaOS Pro (home, drawer, folders, shortcuts, voice) are intercepted
+  and a native LumaOS restriction screen is shown instead of the app.
+- Sessions start on entering a configured focus context and release the moment
+  the toggle turns off or the user switches to an unrestricted context.
+- Launcher-level enforcement only: no Accessibility Service, device admin or
+  usage access, and no claim of blocking content inside third-party apps.
+
+### Scheduling with manual override
+
+- The existing per-profile schedules and single inexact alarm are kept; a
+  manual switch now records an override that stands until the next scheduled
+  transition (persisted, so it survives reboot), with a "Resume automatic
+  schedule" row in Settings while one is held.
+- Schedules, visibility, focus, wallpapers, alerts and DND for all four
+  contexts are configurable from the existing Settings section without
+  switching to each context first.
+
+### Backup and tests
+
+- Per-context pages, visibility, focus sets, wallpapers and backdrops are
+  included in backups; the manual override, system wallpaper ids and private
+  photo ids stay device-local (with a regression test proving the shared
+  wallpaper favorites survive restores).
+- New tests: engine decisions, key-set codec, suggestions, DataStore-backed
+  per-context independence, home projection with hidden apps, schedule
+  boundary computation, backup coverage.
+
+### Focus system-level enforcement (layer 2)
+
+- Optional accessibility-assisted foreground enforcement: with an explicit,
+  revocable user grant (and an in-app disclosure first), restricted apps
+  opened from notifications, Recents, or external apps during a Work/Study
+  session are sent back to the native restriction screen. Off by default;
+  launcher interception keeps working without it.
+- One centralized decision engine (`FocusEnforcement`) shared by the service
+  and the new single-task `FocusRestrictionActivity`; snapshots are taken
+  fresh per event, so revocation, process death, reboot, and rapid context
+  switching cannot strand stale verdicts.
+- Emergency temporary unlock with a configurable 1–60 minute length on both
+  restriction surfaces; the unlock is tied to its profile and a strict
+  deadline, and honors the tap that led to the block.
+- Safety by construction: event subscription is window-state-only with
+  content retrieval disabled, only the foreground package name is read,
+  nothing is collected or transmitted, and Settings/dialer/System UI/the
+  installer/LumaOS itself can never be blocked. Personal and Sleep never
+  enforce. See `docs/FOCUS_ENFORCEMENT.md` for the support matrix and the
+  explicit list of what Android does not permit a normal launcher to block.
+
+### Final limitation audit
+
+- Restore no longer wipes a context's own private-photo wallpaper: scoped
+  `photo:` selections get the same keep-across-restore treatment the shared
+  selection always had (with a DataStore-backed regression test).
+- Settings now says so when Stronger blocking is on but LumaOS Pro is not
+  the default launcher — the one configuration where layer 2 can only bounce
+  to Home without presenting the restriction screen.
+- The wallpaper fallback ladder (shared → override → explicit-system) is
+  extracted as pure tested functions; behavior is unchanged.
+- Copy sweep: README permission table + privacy summary now describe the
+  optional accessibility binding accurately, and the per-context wallpaper
+  subtitle matches the Studio wording (Luma art per context, device image
+  shared). No system-wide-blocking, Reels/Shorts-filtering, per-context
+  device-image, or exact-Doze-execution claims exist anywhere in code, copy,
+  tests, or docs.
+- New executable coverage: grant lifecycle (off-by-default, listed+enabled,
+  revocation) through the real `Settings.Secure` path under Robolectric;
+  default-launcher status tracking in both directions; unlock-length backup
+  round trip with live-unlock exclusion.
+
+### Audit fixes
+
+- Last-page restore used to race layout restore: when the page landed first,
+  the projection clamped it into the previous context's page count and the
+  restored page was lost. The page is now restored after its own layout in
+  the same collector, and rapid switches cancel stale restores.
+- Long-press app-menu shortcuts bypassed Focus Protection; they now go
+  through the same package-level gate as drawer shortcuts.
+- Manual switches and schedule refreshes are serialized on one mutex, so
+  concurrent triggers (a tap plus an alarm, rapid voice commands) resolve in
+  order instead of interleaving override, profile and alarm writes.
+- The scheduler no longer arms alarms for edges that change nothing (windows
+  shadowed by a higher-priority schedule); with no transition pending the
+  alarm is cancelled.
+- Device-target wallpaper applies (Home/Both) now record the shared image —
+  Android has a single system wallpaper and nothing re-applies it on switch —
+  while the target context keeps its own backdrop choice. Per-context ids are
+  only recorded for Luma home art, which renders in-app and restores exactly.
+  Previously a scoped device id would have been silently wiped by the
+  external-change detector on the first mismatch.
+
 ## Unreleased — three critical Vault fixes
 
 Follow-up to the Hide Apps / PIN hand-off work below. Each of these is a defect in

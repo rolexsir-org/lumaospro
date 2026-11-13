@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -151,6 +152,28 @@ class WallpaperColorSource(private val app: Application) {
         }.getOrNull()
 }
 
+private data class ExternalWallpaperState(
+    val activeId: String?,
+    val recordedSysId: Int?,
+    val liveSysId: Int?,
+    val override: String?,
+    val profile: ContextProfile?
+)
+
+/**
+ * Which Studio entry the active context resolves: a null override follows
+ * the shared selection, an empty override explicitly uses the system
+ * wallpaper (no Studio entry at all), otherwise the override wins. Pure so
+ * the fallback ladder is unit tested; [ThemeRepository] applies it to live
+ * flows unchanged.
+ */
+internal fun effectiveWallpaperId(shared: String?, override: String?): String? =
+    if (override != null) override.ifEmpty { null } else shared
+
+/** The recorded system id tracks whichever scope [effectiveWallpaperId] chose. */
+internal fun effectiveWallpaperSystemId(shared: Int?, contextId: Int?, override: String?): Int? =
+    if (override != null) contextId else shared
+
 /**
  * Single source of truth for the theme every surface draws with.
  *
@@ -177,11 +200,43 @@ class ThemeRepository(
     private val profile: StateFlow<ContextProfile?> = prefs.activeContextProfile
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    val activeWallpaperId: StateFlow<String?> = prefs.activeWallpaperId
+    private val sharedWallpaperId: StateFlow<String?> = prefs.activeWallpaperId
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    private val activeWallpaperSystemId: StateFlow<Int?> = prefs.activeWallpaperSystemId
-        .stateIn(scope, SharingStarted.Eagerly, null)
+    /**
+     * The active context's wallpaper override: null follows the shared
+     * selection, "" explicitly uses the system wallpaper, else a Studio id.
+     */
+    private val contextWallpaperOverride: StateFlow<String?> =
+        prefs.activeContextProfile.flatMapLatest(prefs::wallpaperFor)
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** Effective Studio wallpaper id for the active context. */
+    val activeWallpaperId: StateFlow<String?> =
+        combine(sharedWallpaperId, contextWallpaperOverride, ::effectiveWallpaperId)
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    private val activeWallpaperSystemId: StateFlow<Int?> = combine(
+        prefs.activeWallpaperSystemId,
+        prefs.activeContextProfile.flatMapLatest(prefs::wallpaperSysIdFor),
+        contextWallpaperOverride,
+        ::effectiveWallpaperSystemId
+    ).stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** Per-context home backdrop override; null follows the shared backdrop. */
+    private val contextBackdrop =
+        prefs.activeContextProfile.flatMapLatest(prefs::backdropFor)
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * The settings the home screen draws with: shared Studio settings plus the
+     * active context's backdrop. Studio keeps editing the shared settings, so
+     * applying a look never wipes a context's own backdrop choice.
+     */
+    private val effectiveSettings: StateFlow<ThemeSettings> =
+        combine(settings, contextBackdrop) { base, backdrop ->
+            if (backdrop != null) base.copy(backdrop = backdrop) else base
+        }.stateIn(scope, SharingStarted.Eagerly, ThemeSettings())
 
     private val cachedSeedsPair: StateFlow<Pair<String, WallpaperSeeds>?> = prefs.cachedWallpaperSeedsRaw
         .map(WallpaperSeeds::decode)
@@ -236,7 +291,7 @@ class ThemeRepository(
         )
     }.stateIn(scope, SharingStarted.Eagerly, ThemeEnvironment(systemDark.value, minuteOfDay.value))
 
-    val theme: StateFlow<ResolvedTheme> = combine(settings, environment) { s, env -> ThemeEngine.resolve(s, env) }
+    val theme: StateFlow<ResolvedTheme> = combine(effectiveSettings, environment) { s, env -> ThemeEngine.resolve(s, env) }
         .distinctUntilChanged()
         .stateIn(
             scope, SharingStarted.Eagerly,
@@ -259,7 +314,7 @@ class ThemeRepository(
                     resolvedCustomEntry.value = null
                     val bundled = WallpaperCatalog.findBundled(id)
                     if (bundled == null) {
-                        prefs.clearActiveWallpaperIfMatches(id)
+                        clearEffectiveWallpaperIfMatches(id)
                     } else {
                         bundled.precomputedSeeds?.let { prefs.setCachedWallpaperSeedsRaw(it.encode(id)) }
                     }
@@ -269,7 +324,7 @@ class ThemeRepository(
                     val entry = imageStore.findEntry(id)
                     if (entry == null) {
                         resolvedCustomEntry.value = null
-                        prefs.clearActiveWallpaperIfMatches(id)
+                        clearEffectiveWallpaperIfMatches(id)
                     } else {
                         resolvedCustomEntry.value = entry
                         val seeds = imageStore.extractSeeds(entry)
@@ -284,16 +339,24 @@ class ThemeRepository(
 
         // Detect external system wallpaper changes (e.g. changed in Android Settings or another wallpaper app)
         // when the active Studio selection had been applied to the system home wallpaper.
+        // The clear targets whichever scope holds the effective selection.
         scope.launch(Dispatchers.IO) {
             combine(
                 activeWallpaperId,
                 activeWallpaperSystemId,
-                wallpaper.systemWallpaperId
-            ) { activeId, recordedSysId, liveSysId ->
-                Triple(activeId, recordedSysId, liveSysId)
-            }.collect { (activeId, recordedSysId, liveSysId) ->
+                wallpaper.systemWallpaperId,
+                contextWallpaperOverride,
+                profile
+            ) { activeId, recordedSysId, liveSysId, override, currentProfile ->
+                ExternalWallpaperState(activeId, recordedSysId, liveSysId, override, currentProfile)
+            }.collect { state ->
+                val (activeId, recordedSysId, liveSysId, override, currentProfile) = state
                 if (activeId != null && recordedSysId != null && liveSysId != null && liveSysId != recordedSysId) {
-                    prefs.clearActiveWallpaperIfMatches(activeId)
+                    if (override != null && currentProfile != null) {
+                        prefs.clearWallpaperForIfMatches(currentProfile, activeId)
+                    } else {
+                        prefs.clearActiveWallpaperIfMatches(activeId)
+                    }
                 }
             }
         }
@@ -337,6 +400,16 @@ class ThemeRepository(
                     }
                 }
             }
+        }
+    }
+
+    /** Clears a dangling Studio selection from whichever scope holds it. */
+    private suspend fun clearEffectiveWallpaperIfMatches(id: String) {
+        val currentProfile = profile.value
+        if (contextWallpaperOverride.value != null && currentProfile != null) {
+            prefs.clearWallpaperForIfMatches(currentProfile, id)
+        } else {
+            prefs.clearActiveWallpaperIfMatches(id)
         }
     }
 

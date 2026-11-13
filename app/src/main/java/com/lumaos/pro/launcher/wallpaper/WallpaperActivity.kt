@@ -71,6 +71,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.settings.LumaOSTheme
 import com.lumaos.pro.launcher.ui.glass.LumaGlassBottomSheet
@@ -142,6 +143,7 @@ class WallpaperActivity : ComponentActivity() {
                         WallpaperStudio(
                             store = store,
                             modifier = Modifier.weight(1f),
+                            targetProfile = ContextProfile.parse(intent.getStringExtra(EXTRA_TARGET_CONTEXT)),
                             onSystemPicker = {
                                 runCatching { startActivity(core.appRepository.wallpaperPickerIntent()) }
                                     .onFailure {
@@ -159,12 +161,18 @@ class WallpaperActivity : ComponentActivity() {
         super.onResume()
         (application as LumaApp).core.themes.refresh()
     }
+
+    companion object {
+        /** Optional [ContextProfile] name the selection applies to; null means the active context. */
+        const val EXTRA_TARGET_CONTEXT = "com.lumaos.pro.launcher.extra.WALLPAPER_CONTEXT"
+    }
 }
 
 @Composable
 private fun WallpaperStudio(
     store: WallpaperImageStore,
     modifier: Modifier,
+    targetProfile: ContextProfile?,
     onSystemPicker: () -> Unit
 ) {
     val context = LocalContext.current
@@ -172,6 +180,12 @@ private fun WallpaperStudio(
     val theme by core.themes.theme.collectAsState()
     val themeSettings by core.themes.settings.collectAsState()
     val activeWallpaperId by core.themes.activeWallpaperId.collectAsState()
+    val activeProfile by core.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
+    // Each context keeps its own Luma home wallpaper; the target comes from
+    // Settings or defaults to the active context. Named contextTarget because
+    // the apply sheet below destructures its own `target` (WallpaperTarget).
+    val contextTarget = targetProfile ?: activeProfile
+    var applyAll by rememberSaveable { mutableStateOf(false) }
     val favorites by core.prefs.wallpaperFavorites.collectAsState(emptySet())
     val scope = rememberCoroutineScope()
 
@@ -298,6 +312,21 @@ private fun WallpaperStudio(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Per-context scope: the selection lands on one context unless applied to all.
+        LumaGlassCard(
+            theme = theme,
+            title = stringResource(R.string.wallpaper_for_context, contextTarget.title),
+            subtitle = stringResource(R.string.wallpaper_context_note)
+        ) {
+            LumaGlassSwitchRow(
+                label = stringResource(R.string.wallpaper_apply_all),
+                checked = applyAll,
+                onCheckedChange = { applyAll = it },
+                theme = theme,
+                enabled = !busy
+            )
+        }
+
         // Category pills
         Row(
             Modifier
@@ -709,7 +738,19 @@ private fun WallpaperStudio(
                 onClick = {
                     scope.launch {
                         try {
-                            core.prefs.showSystemWallpaperOnHome()
+                            if (applyAll) {
+                                core.prefs.showSystemWallpaperOnHome()
+                                core.prefs.clearWallpaperOverrides()
+                            } else {
+                                // Explicit system choice for this context only;
+                                // other contexts keep their own backdrops.
+                                core.prefs.recordAppliedWallpaperFor(
+                                    profile = contextTarget,
+                                    wallpaperId = "",
+                                    systemWallpaperId = null,
+                                    backdrop = Backdrop.WALLPAPER
+                                )
+                            }
                             showStatus(context.getString(R.string.wallpaper_show_home_done))
                         } catch (e: CancellationException) {
                             throw e
@@ -843,21 +884,45 @@ private fun WallpaperStudio(
                                     val seeds = store.extractSeeds(chosen, preview)
                                     when (target) {
                                         WallpaperTarget.HOME, WallpaperTarget.BOTH -> {
+                                            // The device image is shared by Android, so the shared
+                                            // record always tracks it. A scoped apply additionally
+                                            // keeps the target context's own backdrop choice and
+                                            // drops any wallpaper-id override it held: the context
+                                            // follows the shared record, which now describes the
+                                            // image actually on the device.
                                             core.prefs.recordAppliedWallpaper(
                                                 wallpaperId = chosen.id,
                                                 systemWallpaperId = sysId,
                                                 backdrop = Backdrop.WALLPAPER
                                             )
+                                            if (applyAll) {
+                                                core.prefs.clearWallpaperOverrides()
+                                            } else {
+                                                core.prefs.setBackdropFor(contextTarget, Backdrop.WALLPAPER)
+                                                core.prefs.clearWallpaperIdFor(contextTarget)
+                                            }
                                             seeds?.let { core.prefs.setCachedWallpaperSeedsRaw(it.encode(chosen.id)) }
                                             core.themes.refresh()
                                             showStatus(context.getString(R.string.wallpaper_applied))
                                         }
                                         WallpaperTarget.LUMA_HOME -> {
-                                            core.prefs.recordAppliedWallpaper(
-                                                wallpaperId = chosen.id,
-                                                systemWallpaperId = null,
-                                                backdrop = Backdrop.LUMA
-                                            )
+                                            if (applyAll) {
+                                                core.prefs.recordAppliedWallpaper(
+                                                    wallpaperId = chosen.id,
+                                                    systemWallpaperId = null,
+                                                    backdrop = Backdrop.LUMA
+                                                )
+                                                core.prefs.clearWallpaperOverrides()
+                                            } else {
+                                                // Luma home art is rendered in-app from the record,
+                                                // so unlike the device image it is truly per-context.
+                                                core.prefs.recordAppliedWallpaperFor(
+                                                    profile = contextTarget,
+                                                    wallpaperId = chosen.id,
+                                                    systemWallpaperId = null,
+                                                    backdrop = Backdrop.LUMA
+                                                )
+                                            }
                                             seeds?.let { core.prefs.setCachedWallpaperSeedsRaw(it.encode(chosen.id)) }
                                             showStatus(context.getString(R.string.wallpaper_applied_luma_home))
                                         }
@@ -906,7 +971,7 @@ private fun WallpaperStudio(
                     try {
                         if (!store.delete(chosen)) throw WallpaperException(R.string.wallpaper_delete_failed)
                         core.prefs.setWallpaperFavorite(chosen.id, false)
-                        core.prefs.clearActiveWallpaperIfMatches(chosen.id)
+                        core.prefs.clearActiveWallpaperEverywhere(chosen.id)
                         selectedId = null
                         refreshEntries()
                         showStatus(context.getString(R.string.wallpaper_delete_success))

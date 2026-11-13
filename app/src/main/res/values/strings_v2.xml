@@ -293,4 +293,33 @@
     <string name="toast_icon_overrides_cleared">Custom icon overrides reset</string>
     <string name="onboarding_enter_home">Enter LumaOS Pro</string>
     <string name="onboarding_living_icons_caption">30 optical-glass Living Icons ready out of the box</string>
+
+    <!-- Context engine -->
+    <string name="focus_restriction_title">Focus Protection</string>
+    <string name="focus_restriction_message">%1$s is paused during %2$s.</string>
+    <string name="focus_restriction_note">Restrictions apply to launches from LumaOS Pro. Turn off Focus Protection in Settings to allow this app.</string>
+    <string name="focus_restriction_dismiss">Got it</string>
+    <string name="focus_restriction_manage">Manage focus</string>
+    <string name="wallpaper_for_context">Wallpaper for %1$s</string>
+    <string name="wallpaper_context_note">Each context keeps its own Luma home wallpaper. Device wallpapers are shared by Android.</string>
+    <string name="wallpaper_apply_all">Use for all contexts</string>
+    <string name="context_override_active">Manual override: %1$s until %2$s</string>
+    <string name="context_override_indefinite">Manual override: %1$s until schedules change</string>
+    <string name="context_resume_schedule">Resume automatic schedule</string>
+    <string name="context_schedule_resumed">Automatic schedule resumed</string>
+
+    <!-- Focus enforcement layer 2 (optional accessibility) -->
+    <string name="focus_service_label">LumaOS Focus Protection</string>
+    <string name="focus_service_description">Optional, off by default. While a Work or Study focus session runs, LumaOS Pro sees which app enters the foreground so it can send you back when a restricted app opens. Only the foreground app’s package name is read — no screen content, text, passwords, or input is collected, and nothing leaves the device.</string>
+    <string name="focus_access_title">Stronger blocking</string>
+    <string name="focus_access_on">On — restricted apps opened from anywhere are sent back</string>
+    <string name="focus_access_off">Off — only launches from LumaOS Pro are blocked</string>
+    <string name="focus_access_disclosure_title">Before you enable stronger blocking</string>
+    <string name="focus_access_disclosure">With your permission in the next system screen, LumaOS Pro can notice when a restricted app opens from a notification, Recents, or another app during a Work or Study session, and send you back to the restriction screen.\n\nWhat it reads: only the name of the app entering the foreground, and only to enforce the restriction list you configured. It cannot see screens, text, or anything inside apps.\n\nYou can turn it off at any time in system settings; blocking from inside LumaOS Pro keeps working either way.</string>
+    <string name="focus_access_enable">Open system settings</string>
+    <string name="focus_unlock_length">Emergency unlock length</string>
+    <string name="focus_unlock_button">Unlock for %1$d min</string>
+    <string name="focus_unlock_granted">Focus unlocked for %1$d min</string>
+    <string name="focus_layer_note">Layer 1 always on: launches from LumaOS Pro are intercepted. Layer 2 (optional above): with the Accessibility permission, restricted apps opened from anywhere are sent back. Sessions, unlocks, and restrictions end when you switch to Personal or Sleep.</string>
+    <string name="focus_access_not_default">LumaOS Pro isn’t your default launcher, so Stronger blocking can only send restricted apps back to Home without showing the restriction screen. Set LumaOS Pro as default for the full experience.</string>
 </resources>

@@ -15,7 +15,16 @@
             PackageManager lookups.
           * KILL_BACKGROUND_PROCESSES / FORCE_STOP - LumaOS Pro does not terminate
             other applications.
-          * Any accessibility or device-admin binding for core features.
+          * PACKAGE_USAGE_STATS - foreground detection uses the optional
+            accessibility binding below instead of polled usage stats.
+          * Any device-admin binding: enforcement stays within what a normal
+            Play Store launcher may do.
+
+        The accessibility binding declared below is OPTIONAL and off by
+        default: it only observes the foreground package name during Work/Study
+        focus sessions (window content retrieval disabled), after an in-app
+        disclosure, and the user can revoke it at any time. See
+        docs/FOCUS_ENFORCEMENT.md.
     -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -167,6 +176,28 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- Optional Focus Protection foreground enforcement; off until the user enables it in system settings. -->
+        <service
+            android:name=".context.FocusAccessibilityService"
+            android:label="@string/focus_service_label"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/focus_accessibility_config" />
+        </service>
+
+        <activity
+            android:name=".focus.FocusRestrictionActivity"
+            android:label="@string/focus_restriction_title"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LumaOS.Settings" />
 
         <!-- Optional notification access supplies MediaSessionManager; Android protects this binding. -->
         <service

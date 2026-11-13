@@ -56,6 +56,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.PagerSnapHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.VoiceCommand
 import com.lumaos.pro.launcher.context.VoiceCommandParser
@@ -85,6 +86,7 @@ import com.lumaos.pro.launcher.launcher.home.DrawerController
 import com.lumaos.pro.launcher.launcher.home.DrawerRowStyle
 import com.lumaos.pro.launcher.launcher.home.EditModeController
 import com.lumaos.pro.launcher.launcher.home.EditModeDesign
+import com.lumaos.pro.launcher.launcher.home.FocusRestrictionView
 import com.lumaos.pro.launcher.launcher.home.FolderOverlay
 import com.lumaos.pro.launcher.launcher.home.FolderStyle
 import com.lumaos.pro.launcher.launcher.home.HomeGridAdapter
@@ -252,6 +254,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private var shade: LumaShade? = null
     private var livingIconPicker: LivingIconPickerSheet? = null
+    /** Native Focus Protection screen, shown instead of a restricted launch. */
+    private var focusRestriction: FocusRestrictionView? = null
     /** Synchronous lifecycle guards; the durable decision remains LumaPrefs.onboardingDone. */
     private var onboardingCheckInFlight = false
     private var onboardingLaunchInFlight = false
@@ -405,6 +409,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 // As the home screen, back must not finish the activity: doing
                 // so would leave the device with no home at all.
                 when {
+                    focusRestriction?.isShowing == true -> hideFocusRestriction()
                     // The panel is the topmost surface while it is up, so it is the
                     // first thing Back must close - including mid-drag.
                     shade?.canDragClose() == true -> shade?.dismiss()
@@ -1446,7 +1451,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 launch {
                     var previous: ContextProfile? = null
                     viewModel.activeContextProfile.collect { contextProfile ->
-                        if (previous != null && previous != contextProfile) playReturnSettle()
+                        if (previous != null && previous != contextProfile) {
+                            playReturnSettle()
+                            // Stale transient UI must not leak across contexts:
+                            // the drawer, folders, edit mode and any restriction
+                            // screen belong to the context that opened them.
+                            if (::drawer.isInitialized && drawer.isOpen) drawer.closeInstantly()
+                            if (::folders.isInitialized && folders.isOpen) folders.closeImmediately()
+                            if (::edit.isInitialized && edit.isActive) edit.exitImmediately()
+                            hideFocusRestriction()
+                            viewModel.setQuery("")
+                            viewModel.setFilter(DrawerFilter.All)
+                        }
                         previous = contextProfile
                     }
                 }
@@ -2715,6 +2731,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     // ------------------------------------------------------------- launching
 
     private fun launchApp(key: ComponentKey, source: View?) {
+        if (viewModel.isRestricted(key)) {
+            showFocusRestriction(viewModel.labelFor(key)) { launchApp(key, null) }
+            return
+        }
         val iconSource = source?.findViewById<View>(R.id.app_icon) ?: source
         val options = if (motion.enabled && !motion.reduced && iconSource != null && iconSource.width > 0) {
             ActivityOptions.makeScaleUpAnimation(iconSource, 0, 0, iconSource.width, iconSource.height).toBundle()
@@ -2769,6 +2789,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             is DrawerRow.Shortcut -> {
                 val sc = viewModel.shortcutFor(row.ref)
                 val bounds = view?.let { v -> Rect().also { r -> v.getGlobalVisibleRect(r) } }
+                if (sc != null && viewModel.isPackageRestricted(sc.packageName)) {
+                    showFocusRestriction(sc.label) {
+                        if (!core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
+                    }
+                    drawer.close()
+                    return
+                }
                 if (sc == null || !core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
                 drawer.close()
             }
@@ -2947,6 +2974,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         menu().show(anchor, label, entries) { e ->
             when {
                 e.id >= M_SHORTCUT_BASE -> shortcuts.getOrNull(e.id - M_SHORTCUT_BASE)?.let { sc ->
+                    if (viewModel.isPackageRestricted(sc.packageName)) {
+                        showFocusRestriction(sc.label) {
+                            if (!core.shortcuts.launch(sc, Rect().also { anchor.getGlobalVisibleRect(it) }, null)) {
+                                toast(getString(R.string.toast_shortcut_unavailable))
+                            }
+                        }
+                        if (drawer.isOpen) drawer.close()
+                        return@let
+                    }
                     val bounds = Rect().also { anchor.getGlobalVisibleRect(it) }
                     if (!core.shortcuts.launch(sc, bounds, null)) toast(getString(R.string.toast_shortcut_unavailable))
                     else if (drawer.isOpen) drawer.close()
@@ -3075,15 +3111,62 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             MenuEntry(p.ordinal, p.title, if (p == active) R.drawable.ic_rx_done else null)
         }
         menu().show(anchor, getString(R.string.context_menu_title), entries) { e ->
-            lifecycleScope.launch { viewModel.prefs.setActiveContextProfile(ContextProfile.entries[e.id]) }
+            lifecycleScope.launch {
+                ContextEngine.switchManual(this@HomeActivity, viewModel.prefs, ContextProfile.entries[e.id])
+            }
         }
     }
 
     private fun cycleContextProfile() {
         val all = ContextProfile.entries
         val next = all[(viewModel.activeContextProfile.value.ordinal + 1) % all.size]
-        lifecycleScope.launch { viewModel.prefs.setActiveContextProfile(next) }
+        lifecycleScope.launch { ContextEngine.switchManual(this@HomeActivity, viewModel.prefs, next) }
         toast(getString(R.string.toast_context_switched, next.title))
+    }
+
+    // --------------------------------------------------- focus restriction
+
+    private fun showFocusRestriction(appLabel: String, onUnlocked: (() -> Unit)? = null) {
+        val overlay = focusRestriction ?: FocusRestrictionView(this).also {
+            focusRestriction = it
+            homeRoot.addView(
+                it,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+        lifecycleScope.launch {
+            val minutes = viewModel.prefs.focusUnlockMinutes().first()
+            overlay.show(
+                theme = theme,
+                appLabel = appLabel,
+                contextTitle = viewModel.activeContextProfile.value.title,
+                onDismiss = { hideFocusRestriction() },
+                onManage = { hideFocusRestriction(); openSettings() },
+                onUnlock = { grantFocusUnlock { onUnlocked?.invoke() } },
+                unlockLabel = getString(R.string.focus_unlock_button, minutes)
+            )
+        }
+    }
+
+    /** Emergency temporary unlock: lifts both launcher gates until its deadline. */
+    private fun grantFocusUnlock(after: () -> Unit) {
+        lifecycleScope.launch {
+            val prefs = viewModel.prefs
+            val minutes = prefs.focusUnlockMinutes().first()
+            val until = System.currentTimeMillis() + minutes * 60_000L
+            prefs.setFocusUnlock(viewModel.activeContextProfile.value, until)
+            viewModel.awaitUnlockVisible(until)
+            hideFocusRestriction()
+            toast(getString(R.string.focus_unlock_granted, minutes))
+            after()
+        }
+    }
+
+    private fun hideFocusRestriction() {
+        focusRestriction?.hide()
     }
 
     // --------------------------------------------------------------- widgets
@@ -3449,7 +3532,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun handleVoiceCommand(transcript: String) {
         when (val command = VoiceCommandParser.parse(transcript)) {
             is VoiceCommand.SwitchProfile -> lifecycleScope.launch {
-                viewModel.prefs.setActiveContextProfile(command.profile)
+                ContextEngine.switchManual(this@HomeActivity, viewModel.prefs, command.profile)
                 drawer.close()
             }
             is VoiceCommand.OpenApp -> {
