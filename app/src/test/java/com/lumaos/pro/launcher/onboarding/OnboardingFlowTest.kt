@@ -83,8 +83,13 @@ class OnboardingFlowTest {
             ),
             OnboardingFlow.steps.filter { it.optionalTutorial }
         )
-        OnboardingFlow.steps.forEach { step ->
-            assertEquals(step.optionalTutorial, OnboardingFlow.canSkipTour(step))
+        // Skippable is slightly wider than optional: the welcome screen may also
+        // jump ahead, but it is not an "optional tutorial step".
+        OnboardingFlow.steps.forEachIndexed { index, step ->
+            assertEquals(
+                index < OnboardingFlow.steps.indexOf(OnboardingStep.HOME_ROLE),
+                OnboardingFlow.canSkipTour(step)
+            )
         }
     }
 
@@ -104,10 +109,20 @@ class OnboardingFlowTest {
     }
 
     @Test
-    fun `skipping outside the tutorial changes nothing`() {
-        listOf(OnboardingStep.WELCOME, OnboardingStep.HOME_ROLE, OnboardingStep.COMPLETE).forEach { step ->
+    fun `the welcome screen can also leave the tour for the home role question`() {
+        // The welcome screen says "Skip the rest of the tour"; it must not be a
+        // dead button, and it must still not bypass the Home-role decision.
+        val skipped = OnboardingFlow.skipTour(OnboardingState(OnboardingStep.WELCOME, OnboardingMode.FIRST_RUN))
+        assertEquals(OnboardingStep.HOME_ROLE, skipped.step)
+        assertTrue(OnboardingFlow.canSkipTour(OnboardingStep.WELCOME))
+    }
+
+    @Test
+    fun `skipping at or after the home role changes nothing`() {
+        listOf(OnboardingStep.HOME_ROLE, OnboardingStep.COMPLETE).forEach { step ->
             val state = OnboardingState(step, OnboardingMode.FIRST_RUN)
             assertEquals(state, OnboardingFlow.skipTour(state))
+            assertFalse(OnboardingFlow.canSkipTour(step))
         }
     }
 

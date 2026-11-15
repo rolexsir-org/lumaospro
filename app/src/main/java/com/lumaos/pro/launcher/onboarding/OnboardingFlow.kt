@@ -87,12 +87,21 @@ object OnboardingFlow {
     }
 
     /**
-     * "Skip the rest of the tour". Only the optional tutorial can be skipped, and
-     * skipping goes to the Home-role step rather than out of onboarding, so the
-     * user still chooses whether LumaOS Pro becomes their home app.
+     * "Skip the rest of the tour". Everything before the Home-role question can
+     * be left — the tutorial steps, and the welcome screen itself. Skipping goes
+     * to the Home-role step rather than out of onboarding, so the user still
+     * chooses whether LumaOS Pro becomes their home app.
+     *
+     * At or after the Home role there is no tour left to skip, so the state is
+     * returned unchanged and the caller's navigation is a no-op.
      */
     fun skipTour(state: OnboardingState): OnboardingState =
-        if (state.step.optionalTutorial) state.copy(step = OnboardingStep.HOME_ROLE) else state
+        if (steps.indexOf(state.step) < steps.indexOf(OnboardingStep.HOME_ROLE)) {
+            state.copy(step = OnboardingStep.HOME_ROLE)
+        } else {
+            state
+        }
 
-    fun canSkipTour(step: OnboardingStep): Boolean = step.optionalTutorial
+    fun canSkipTour(step: OnboardingStep): Boolean =
+        steps.indexOf(step) < steps.indexOf(OnboardingStep.HOME_ROLE)
 }

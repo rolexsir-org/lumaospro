@@ -35,9 +35,10 @@ same screens again over the user's current settings.
 | 6 | `HOME_ROLE` | The Home-role explanation and the real `RoleHelper` request; status is re-read from Android. | No |
 | 7 | `COMPLETE` | Setup summary and "Enter LumaOS Pro". | No |
 
-Steps 2–5 can be skipped. Skipping never skips the Home-role question: "skip
-the rest of the tour" always lands on step 6. Back from step 1 leaves onboarding
-and records completion, which is the pre-existing behaviour.
+Steps 2–5 can be skipped, and the welcome screen offers the same escape. Skipping
+never skips the Home-role question: "skip the rest of the tour" always lands on
+step 6. Back from step 1 leaves onboarding and records completion, which is the
+pre-existing behaviour.
 
 ## Persistence and launch rules
 
@@ -108,8 +109,8 @@ The complete data flow, and the facts the disclosure is derived from, are in
 | Default launcher setup | `OnboardingScreenTest` (pending vs. default Home-role states), `OnboardingEligibilityTest` |
 | Existing launcher regression suite | Unchanged test sources; no existing test needed a rename or a behaviour change |
 
-Executed in this workspace: `OnboardingFlowTest` (12), `OnboardingEligibilityTest`
-(8) — 20/20 pass with the standalone Kotlin compiler. The DataStore, Robolectric
+Executed in this workspace: `OnboardingFlowTest` (13), `OnboardingEligibilityTest`
+(8) — 21/21 pass with the standalone Kotlin compiler. The DataStore, Robolectric
 and Compose tests are written to the repository's conventions but require Gradle
 and the Android toolchain, which are unavailable here; see
 [`QA_CHECKLIST.md`](QA_CHECKLIST.md) for the exact verification status.

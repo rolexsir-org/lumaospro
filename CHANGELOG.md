@@ -13,8 +13,9 @@ there is no new completion flag.
   (real Living Icons, the three experience profiles, a route into Theme Studio),
   Focus Protection, the accessibility disclosure, the Home-role request, and a
   completion screen.
-- Steps 2–5 are optional. "Skip the rest of the tour" always lands on the
-  Home-role question, so the one decision a launcher needs is never skipped.
+- Steps 2–5 are optional, and the welcome screen can leave the tour too.
+  "Skip the rest of the tour" always lands on the Home-role question, so the
+  one decision a launcher needs is never skipped.
 - Back walks one step at a time; back on the first step leaves onboarding and
   records completion, as before.
 
@@ -45,7 +46,7 @@ there is no new completion flag.
 
 ### Tests and documentation
 
-- `OnboardingFlowTest` (12) and `OnboardingEligibilityTest` (8) pass on the JVM.
+- `OnboardingFlowTest` (13) and `OnboardingEligibilityTest` (8) pass on the JVM (21 tests).
 - `OnboardingCompletionPrefsTest`, `OnboardingScreenTest` and
   `OnboardingReplayIntentTest` are added to the existing Robolectric/Compose
   suites (they need Gradle; not executed here).
