@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LumaOS Pro — first-run walkthrough (static design renderings)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:40px 24px 80px; background:#07080c; color:#eceef4;
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  h1 { font-size:26px; margin:0 0 6px; letter-spacing:-.01em; }
+  p.lead { color:#a6acbc; max-width:820px; margin:0 0 18px; }
+  .banner { max-width:980px; margin:0 0 32px; padding:14px 16px; border:1px solid #4a3f7a;
+            background:#181430; border-radius:14px; color:#cfc7ff; font-size:13.5px; }
+  .banner strong { color:#fff; }
+  .grid { display:grid; gap:28px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+          max-width:1400px; align-items:start; }
+  figure { margin:0; background:#0d0f16; border:1px solid #1f2330; border-radius:18px; padding:14px; }
+  figure img { display:block; width:100%; height:auto; border-radius:12px; }
+  figcaption { margin-top:12px; font-size:13px; color:#a6acbc; }
+  figcaption strong { display:block; color:#eceef4; font-size:14px; margin-bottom:2px; }
+  .meta { max-width:980px; margin-top:44px; color:#7f8598; font-size:12.5px; }
+  code { background:#12151f; border:1px solid #222736; border-radius:6px; padding:1px 5px; }
+</style>
+</head>
+<body>
+  <h1>First-run walkthrough — seven steps</h1>
+  <p class="lead">Reference renderings of the onboarding screens implemented in
+    <code>onboarding/OnboardingScreens.kt</code>, at a 390&nbsp;dp reference width with the app's
+    strings read directly from <code>res/values/*.xml</code>.</p>
+
+  <div class="banner"><strong>These are static design renderings, not device screenshots.</strong>
+    They were generated in a workspace with no emulator, Android SDK or Gradle, from the real
+    strings and layout values. Verify appearance, TalkBack and gesture behaviour on a device
+    (see <code>docs/QA_CHECKLIST.md</code>, section D10c).</div>
+
+  <div class="grid">
+    <figure>
+      <img src="01-welcome.png" alt="Step 1: Welcome to LumaOS Pro">
+      <figcaption><strong>1 · Welcome</strong>App icon, one-line promise, three real capability points, Get started and Skip the rest of the tour.</figcaption>
+    </figure>
+    <figure>
+      <img src="02-gestures.png" alt="Step 2: gestures">
+      <figcaption><strong>2 · Gestures (optional)</strong>The user's live bindings from Settings → Gestures, not a hard-coded legend.</figcaption>
+    </figure>
+    <figure>
+      <img src="03-personalize.png" alt="Step 3: personalize">
+      <figcaption><strong>3 · Personalize (optional)</strong>Real Living Icons, the three experience profiles, and a route into Theme Studio.</figcaption>
+    </figure>
+    <figure>
+      <img src="04-focus-protection.png" alt="Step 4: Focus Protection">
+      <figcaption><strong>4 · Focus Protection (optional)</strong>Both layers explained; nothing is enabled or requested on this screen.</figcaption>
+    </figure>
+    <figure>
+      <img src="05-accessibility.png" alt="Step 5: accessibility disclosure">
+      <figcaption><strong>5 · Accessibility (optional)</strong>The same disclosure and the same Agree/Decline actions as Settings → Private.</figcaption>
+    </figure>
+    <figure>
+      <img src="06-home-role.png" alt="Step 6: default launcher">
+      <figcaption><strong>6 · Home app</strong>Real Home-role request, with "Not now" still completing the flow.</figcaption>
+    </figure>
+    <figure>
+      <img src="07-complete.png" alt="Step 7: complete">
+      <figcaption><strong>7 · Complete</strong>Setup summary, replay hint, and the entry into the launcher.</figcaption>
+    </figure>
+  </div>
+
+  <p class="meta">Rendered from <code>OnboardingScreens.kt</code> + <code>res/values/strings.xml</code> and
+    <code>res/values/strings_v2.xml</code>. Dark appearance shown; the real screens follow the user's
+    resolved theme and text scale. Where a screen is taller than a phone viewport, the render shows
+    the full scroll content so every action is visible.</p>
+</body>
+</html>

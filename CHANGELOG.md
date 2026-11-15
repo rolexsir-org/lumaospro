@@ -1,5 +1,106 @@
 # Changelog
 
+## Unreleased — First-run walkthrough and "Getting started"
+
+The single-screen welcome has become a seven-step walkthrough, built on the
+existing onboarding activity and the existing `onboarding_done` preference. No
+launcher surface, database schema or Focus Protection rule was rebuilt, and
+there is no new completion flag.
+
+### Seven steps, optional where it makes sense
+
+- Welcome, gestures (printed from the user's **live** bindings), personalisation
+  (real Living Icons, the three experience profiles, a route into Theme Studio),
+  Focus Protection, the accessibility disclosure, the Home-role request, and a
+  completion screen.
+- Steps 2–5 are optional. "Skip the rest of the tour" always lands on the
+  Home-role question, so the one decision a launcher needs is never skipped.
+- Back walks one step at a time; back on the first step leaves onboarding and
+  records completion, as before.
+
+### First installation only, never on upgrade, never repeated
+
+- `HomeActivity` now gates the walkthrough through `OnboardingEligibility`:
+  offered only when the app is not the default Home app, onboarding is not done,
+  and the package has not been updated since it was installed.
+- An updated existing install is not walked through setup again; completion is
+  recorded implicitly so a later Home-role change cannot bring the tour back.
+- Reaching the final step, leaving from the first step, or requesting the Home
+  role writes the same `onboarding_done` value. No reset, no second flag.
+
+### Replay from Settings
+
+- New **Settings → Getting started → Replay the tour** row launches the same
+  activity in replay mode (`OnboardingActivity.replayIntent`). Replay reads the
+  current settings and changes nothing unless the user chooses it.
+
+### Accessibility consent, reused rather than duplicated
+
+- The disclosure body is now `FocusAccessDisclosureContent`, rendered by both the
+  standalone `FocusAccessDisclosureActivity` and onboarding step 5. The wording
+  and the explicit Agree/Decline actions have one source.
+- No accessibility screen is opened without an explicit Agree; decline and
+  "skip for now" advance without touching the system permission; the grant is
+  re-read on return.
+
+### Tests and documentation
+
+- `OnboardingFlowTest` (12) and `OnboardingEligibilityTest` (8) pass on the JVM.
+- `OnboardingCompletionPrefsTest`, `OnboardingScreenTest` and
+  `OnboardingReplayIntentTest` are added to the existing Robolectric/Compose
+  suites (they need Gradle; not executed here).
+- [`docs/ONBOARDING.md`](docs/ONBOARDING.md) documents the flow, the launch
+  rules and the verification limits.
+
+## Unreleased — Accessibility disclosure and consent
+
+Focus Protection's optional second enforcement layer now has a prominent,
+reviewable disclosure and a persisted consent record that is separate from
+Android's accessibility permission. No enforcement rule, context engine,
+database schema or launcher surface was rebuilt.
+
+### Prominent disclosure and explicit choice
+
+- New full-screen `FocusAccessDisclosureActivity` explains, in five sections,
+  why the access is needed, how it helps Focus Protection, exactly what is
+  read (the foreground package name from `typeWindowStateChanged`), what is
+  collected/stored/shared (nothing), and how to turn it off.
+- Explicit **Agree** and **Decline** actions, equally reachable; nothing is
+  pre-selected. Android's accessibility screen opens only from Agree, and only
+  after the consent record is written to DataStore.
+- The Settings row ("Stronger blocking") and an always-reachable Privacy row
+  ("Accessibility access") open the disclosure; the old one-paragraph
+  `AlertDialog` that jumped straight to system settings is gone.
+
+### Consent is not permission
+
+- Consent is stored under `focus_access_consent_state/_version/_at`
+  (additive DataStore keys, excluded from LumaOS Pro's own backup export) with the disclosure version
+  it answers. `FocusAccessConsent` derives the UI state and the enforcement
+  gate from consent plus the real `Settings.Secure` grant.
+- The accessibility service now returns unless a current agreement is on
+  record, so enabling the service directly in system settings — or declining
+  after enabling it — does not make LumaOS Pro act. Withdrawing consent stops
+  enforcement immediately; `FocusRestrictionActivity` applies the same check.
+- Decline, revocation and "service disabled" are supported steady states:
+  layer 1 (launcher interception) and every other feature keep working.
+- Upgrade note: a user who had already enabled the service in system settings
+  finds it inactive until they accept the in-app disclosure once (the Settings
+  row explains this). This is intentional — there is no pre-existing consent
+  record to rely on — and layer 1 is unaffected.
+
+### Tests and documentation
+
+- New tests: consent lifecycle (first run, accept, decline, relaunch,
+  revocation, service disabled, grant-without-consent, withdrawal, version
+  bump), DataStore persistence and backup exclusion, Robolectric consent +
+  `Settings.Secure` integration, and a Compose test of the disclosure screen.
+- New [docs/ACCESSIBILITY_DISCLOSURE.md](docs/ACCESSIBILITY_DISCLOSURE.md)
+  records the exact event subscription, fields read, data lifecycle, consent
+  matrix, Play policy mapping, and what still needs device verification.
+- Not claimed: Google Play compliance. Lint, the Robolectric suite and device
+  behaviour must be run on the release build first.
+
 ## Unreleased — Context Engine: Work, Study, Personal and Sleep as independent environments
 
 The home screen's four-option context selector now drives a real context engine.

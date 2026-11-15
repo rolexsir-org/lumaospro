@@ -13,7 +13,6 @@
     <string name="onboarding_set_default">Set as default launcher</string>
     <string name="onboarding_skip">Not now</string>
     <string name="onboarding_save_failed">Couldn’t save this choice. Please try again.</string>
-    <string name="onboarding_privacy_note">You can change this at any time in LumaOS Pro Settings. LumaOS Pro has no account or app server. Android backup may transfer launcher settings if enabled.</string>
 
     <!-- Home -->
     <string name="home_clock_description">Current time</string>

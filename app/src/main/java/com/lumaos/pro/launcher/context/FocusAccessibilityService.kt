@@ -31,8 +31,14 @@ import kotlinx.coroutines.launch
  *    traversed, so no text, content or input is observable even in principle;
  *  - no accessibility data is logged, persisted, or transmitted; the single
  *    log line records that an intervention happened, not what was on screen;
- *  - the service is off until the user enables it in system settings after an
- *    in-app disclosure, and layer 1 keeps working without it.
+ *  - enforcement requires both facts: the system grant (the service is only
+ *    bound while it holds) *and* a stored agreement to the in-app disclosure
+ *    ([FocusAccessConsent]). A grant that exists without that agreement — the
+ *    user enabled the service directly in system settings, or declined after
+ *    enabling it — never enforces, so the app cannot act on a permission the
+ *    user never agreed to for this purpose;
+ *  - the service is off until the user enables it in system settings, and
+ *    layer 1 keeps working without it.
  *
  * Reliability notes:
  *
@@ -56,7 +62,20 @@ class FocusAccessibilityService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
-        LumaLog.i("Focus accessibility enforcement connected")
+        // Worth knowing at a glance whether the binding will actually be used:
+        // a grant without the in-app disclosure is a supported state (Android
+        // lets the user enable any accessibility service), and this service
+        // stays inert until the disclosure is accepted.
+        scope.launch {
+            val granted = runCatching { (applicationContext as LumaApp).core.prefs.focusAccessConsent.first() }
+                .getOrNull()
+                ?.let { FocusAccessConsent.grantsAccess(it) } == true
+            if (granted) {
+                LumaLog.i("Focus accessibility enforcement connected")
+            } else {
+                LumaLog.i("Focus accessibility service bound but inactive: in-app disclosure not accepted")
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -88,6 +107,11 @@ class FocusAccessibilityService : AccessibilityService() {
         // protected packages can never be interventions.
         if (FocusSafety.isProtected(foregroundPackage, app.packageName)) return
         val prefs = (app as LumaApp).core.prefs
+        // Consent gate, checked before anything else is read: the system grant
+        // alone is not permission to act on the user's behalf. Withdrawing
+        // consent in-app therefore stops enforcement immediately, without
+        // waiting for the user to also toggle the service off.
+        if (!FocusAccessConsent.grantsAccess(prefs.focusAccessConsent.first())) return
         val active = prefs.activeContextProfile.first()
         if (active !in ContextEngine.FOCUS_PROFILES) return
         val snapshot = FocusEnforcement.Snapshot(

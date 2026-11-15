@@ -9,11 +9,12 @@ reviewers, QA, and Play Store policy review.
 | Level | Name | Mechanism | Blocks |
 |---|---|---|---|
 | A | Launcher interception | Every launch path inside LumaOS Pro checks `LauncherViewModel.isRestricted` / `isPackageRestricted` before starting anything | Home icons, drawer rows, search results, folders, smart folders, drawer shortcuts, long-press menu shortcuts, gesture and voice launches |
-| B | Accessibility-assisted foreground enforcement (this document) | Optional `AccessibilityService` observes the foreground package and sends restricted apps back to a native restriction screen | Notification taps, Recents switches, and external-app intents that bring a restricted package to the foreground — while the grant holds |
+| B | Accessibility-assisted foreground enforcement (this document) | Optional `AccessibilityService` observes the foreground package and sends restricted apps back to a native restriction screen | Notification taps, Recents switches, and external-app intents that bring a restricted package to the foreground — while the grant holds and consent is recorded |
 | C | Device-owner / managed-device enforcement | `DevicePolicyManager` lock-task / app suspension | Not implemented: requires device-owner provisioning, which a normal Play Store launcher cannot assume |
 
-Level A always runs. Level B is off by default and needs a deliberate user
-grant. Level C is documented here only so the gap is explicit: LumaOS Pro
+Level A always runs. Level B is off by default and needs two deliberate user
+actions: accepting the in-app disclosure and enabling the service in Android
+settings. Level C is documented here only so the gap is explicit: LumaOS Pro
 does not claim it.
 
 ## Level B design
@@ -33,6 +34,11 @@ does not claim it.
   text, passwords, and input are unobservable even in principle. Nothing is
   logged (one line records *that* an intervention happened, never what was
   on screen), persisted, or transmitted.
+- **Consent gate.** The service reads the stored disclosure consent before
+  anything else and returns unless it is a current `GRANTED`
+  (`FocusAccessConsent.grantsAccess`). Android's permission alone is never
+  treated as agreement. `FocusRestrictionActivity` applies the same check on
+  start and on resume, so withdrawing consent retires a screen already shown.
 - **Intervention order.** On a restricted foreground package: press Home via
   `GLOBAL_ACTION_HOME`, then after 350 ms present `FocusRestrictionActivity`
   (`singleTask`, excluded from Recents). Pressing Home first is what keeps
@@ -63,24 +69,36 @@ device-local state (never backed up); only the configured length is backed up.
 
 ## Permissions and Play policy
 
-- No new manifest permission is needed for the binding itself: the service is
+- No manifest permission is needed for the binding itself: the service is
   protected by `android.permission.BIND_ACCESSIBILITY_SERVICE` and can only
   be enabled by the user in system settings.
-- Before routing there, Settings shows an in-app disclosure
-  (`focus_access_disclosure`); the system toggle screen additionally shows
-  the service `android:description`. Both state exactly what is observed
-  (foreground package name, during focus sessions, for the user's own
-  restriction list) and what is not collected (everything else).
+- Before routing there, LumaOS Pro shows a prominent full-screen in-app
+  disclosure with explicit AGREE and DECLINE actions
+  (`context/FocusAccessDisclosureActivity`). Android's screen is opened only
+  from the AGREE path, and only after the agreement is persisted. The system
+  toggle screen additionally shows the service `android:description`. Both
+  state exactly what is observed (foreground package name, during focus
+  sessions, for the user's own restriction list) and what is not collected
+  (everything else).
+- Consent is stored separately from the permission
+  (`focus_access_consent_state/_version/_at` in DataStore) and is required for
+  enforcement: `FocusAccessConsent.mayEnforce` and the service's first check
+  mean a grant that the user enabled directly in system settings, without the
+  in-app disclosure, does **not** make layer B act. Declining is remembered and
+  respected; declining changes nothing about layer A.
 - Revocation is a supported steady state, re-checked every time Settings
   resumes: layer B silently stops receiving events and layer A carries on.
   There is no re-prompting, no silent re-enabling, and no functionality held
-  hostage behind the grant.
+  hostage behind the grant. Withdrawing consent in-app stops enforcement
+  immediately even while the system grant is still on.
 - Accessibility-policy alignment: the API is used for its declared purpose
   (helping the user stay in their focus session by acting on their behalf
   when a self-restricted app opens), with the minimum event subscription, no
   content retrieval, no data collection, and prominent user control. No
-  personal or sensitive data is accessed, collected, used, or shared by this
+  personal or sensitive data is accessed, collected, used, or stored by this
   feature, so there is nothing new to declare under the User Data policy.
+- The exact data inventory, consent lifecycle, and Play disclosure mapping are
+  documented in [ACCESSIBILITY_DISCLOSURE.md](ACCESSIBILITY_DISCLOSURE.md).
 
 ## Why not UsageStats / DevicePolicy
 
@@ -123,10 +141,20 @@ With Work + Focus Protection on, a restricted app configured, and layer B grante
 4. Switch to Personal mid-session → no enforcement anywhere; switch back →
    enforcement resumes without re-prompting.
 5. Revoke the grant mid-session → layer B stops, layer A still blocks
-   launcher taps; Settings status row reads Off on return.
+   launcher taps; Settings status row reads Off / "Consent given — enable
+   access in Android settings" on return.
 6. Rapid Work → Study → Personal switches → no stacked restriction screens,
    no unlock leaking across profiles.
 7. Reboot with the grant held → Android rebinds the service; enforcement
    resumes with persisted settings.
 8. Battery: no measurable drain attributable to the service at idle (no
    polling exists to drain with).
+9. Disclosure: first visit shows the full-screen disclosure with AGREE and
+   DECLINE; Decline opens no system screen and leaves layer A working; Agree
+   records consent before Android's screen appears.
+10. Grant without consent: enable the service directly in Android settings
+    (never opening the disclosure) → no intervention occurs and the Settings
+    row reads Off. Then Agree in-app → layer B activates without re-enabling
+    anything.
+11. Withdraw consent while the grant is on → no intervention occurs, and any
+    restriction screen already shown finishes.

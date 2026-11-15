@@ -23,6 +23,8 @@ opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYST
 | [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) | Publisher-review draft for the Play Data safety form. Has placeholders — **not** a publishable policy |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Design System v3.2 / Luma Glass reference: tokens, colour, type, iconography, shapes, motion, token map |
 | [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) | What has actually been verified versus what still needs a build or a device, plus the release acceptance gate |
+| [docs/FOCUS_ENFORCEMENT.md](docs/FOCUS_ENFORCEMENT.md) | Focus Protection's three enforcement levels, what each can and cannot block, and the permission notes |
+| [docs/ACCESSIBILITY_DISCLOSURE.md](docs/ACCESSIBILITY_DISCLOSURE.md) | What the optional accessibility service observes, what it never stores or transmits, and the prominent disclosure / consent / revocation flow |
 | [docs/VAULT.md](docs/VAULT.md) | LumaOS Vault: construction, storage layout, backup, known limitations |
 | [docs/VAULT_THREAT_MODEL.md](docs/VAULT_THREAT_MODEL.md) | What the Vault defends, what it does **not**, and where that line sits |
 | [docs/MANAGED_DEVICE_DEPLOYMENT.md](docs/MANAGED_DEVICE_DEPLOYMENT.md) | Optional kiosk / MDM deployment through Android's own `DevicePolicyManager` |
@@ -258,7 +260,8 @@ com.lumaos.pro.launcher
 ├── settings/        SettingsActivity, SettingsScreen, Studio, DashboardScreen (Compose)
 ├── vault/           LumaOS Vault — core/ (pure crypto + storage), platform/ (Android
 │                    façade), ui/ (Activities). See docs/VAULT.md.
-├── onboarding/      OnboardingActivity (Compose)
+├── onboarding/      OnboardingActivity, OnboardingFlow, OnboardingScreens (Compose;
+│                    seven-step walkthrough, replayable from Settings)
 └── ui/              IconCatalog (LumaIcon), ThemeMode compatibility, glass/ components
     └── theme/       ThemeRepository, ThemeEngine, LumaDesignTokens (v3.2),
                      contrast, atmosphere, presets
@@ -380,10 +383,14 @@ activity to switch profiles or open apps; LumaOS Pro does not retain transcripts
 Work and Study can also enable Focus Protection: chosen apps are intercepted when
 launched from LumaOS Pro, and an optional, off-by-default accessibility grant
 extends that to restricted apps opened from notifications, Recents, or other
-apps. Enforcement is package-level only — never content inside apps — and
-Personal and Sleep never inherit restrictions. Details, permission notes, and
-the explicit list of what Android does not permit are in
-[docs/FOCUS_ENFORCEMENT.md](docs/FOCUS_ENFORCEMENT.md).
+apps. The grant is requested only after a prominent in-app disclosure with
+explicit Agree and Decline actions; the answer is stored separately from the
+Android permission, and enforcement requires both. Enforcement is package-level
+only — never content inside apps — and Personal and Sleep never inherit
+restrictions. Details, the exact data inventory, and the explicit list of what
+Android does not permit are in
+[docs/FOCUS_ENFORCEMENT.md](docs/FOCUS_ENFORCEMENT.md) and
+[docs/ACCESSIBILITY_DISCLOSURE.md](docs/ACCESSIBILITY_DISCLOSURE.md).
 
 Optional context-change notifications are controlled by a master switch and a
 per-profile preference, and request Android's notification permission only when
@@ -570,7 +577,7 @@ silent control over other apps.
 | `CAMERA` | Vault private camera and scanner; requested at the moment of use |
 | `RECORD_AUDIO` | Vault recorder; requested at the moment of use |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | The optional notification-access grant shared by the Music widget and the launcher shade |
-| `BIND_ACCESSIBILITY_SERVICE` | Optional Focus Protection layer 2: observes only the foreground package name during Work/Study sessions, off by default, enabled by the user in system settings after an in-app disclosure (see `docs/FOCUS_ENFORCEMENT.md`) |
+| `BIND_ACCESSIBILITY_SERVICE` | Optional Focus Protection layer 2: observes only the foreground package name during Work/Study sessions, off by default, enabled by the user in system settings after a prominent in-app disclosure with explicit consent (see `docs/ACCESSIBILITY_DISCLOSURE.md`) |
 
 `CAMERA` and `RECORD_AUDIO` are both optional parts of the product: refusing the
 microphone leaves the recorder explaining itself while every other Vault surface
@@ -585,7 +592,9 @@ and `FORCE_STOP` (LumaOS Pro does not terminate other applications),
 `PACKAGE_USAGE_STATS` (foreground detection uses the optional accessibility
 binding instead of polled usage stats), and any device-admin binding. The
 accessibility binding above is optional and off by default; every core feature
-works without it. No network permission is declared at all.
+works without it, and the service stays inert until the in-app disclosure is
+accepted, even if the user enabled it in system settings. No network permission
+is declared at all.
 
 ---
 

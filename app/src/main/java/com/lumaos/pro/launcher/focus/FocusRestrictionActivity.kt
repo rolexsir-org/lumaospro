@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.context.ContextEngine
+import com.lumaos.pro.launcher.context.FocusAccessConsent
 import com.lumaos.pro.launcher.context.FocusEnforcement
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
@@ -36,7 +37,8 @@ import kotlinx.coroutines.launch
  *    and finishes immediately when there is nothing to enforce (stale start,
  *    session ended, toggle off, unlock granted elsewhere);
  *  - `onResume` re-checks for the same reason: disabling Focus Protection in
- *    Settings and returning here must not strand a dead restriction screen;
+ *    Settings, withdrawing accessibility consent, or returning here must not
+ *    strand a dead restriction screen;
  *  - Back and Dismiss always send Home first, so this screen can never drop
  *    the user back into the blocked app — and finishing is unconditional, so
  *    it can never trap them either.
@@ -85,7 +87,9 @@ class FocusRestrictionActivity : ComponentActivity() {
         lifecycleScope.launch {
             val core = (application as LumaApp).core
             val snapshot = readSnapshot(core.prefs)
-            if (snapshot == null || !FocusEnforcement.shouldBlock(
+            if (snapshot == null ||
+                !FocusAccessConsent.grantsAccess(core.prefs.focusAccessConsent.first()) ||
+                !FocusEnforcement.shouldBlock(
                     snapshot, blockedPackage, packageName, System.currentTimeMillis()
                 )
             ) {
@@ -111,6 +115,9 @@ class FocusRestrictionActivity : ComponentActivity() {
         if (blockedPackage.isBlank()) return false
         val prefs = (application as LumaApp).core.prefs
         val snapshot = readSnapshot(prefs) ?: return false
+        // Withdrawing consent in-app must retire a screen that is already showing,
+        // exactly like ending the session or turning the toggle off.
+        if (!FocusAccessConsent.grantsAccess(prefs.focusAccessConsent.first())) return false
         return FocusEnforcement.shouldBlock(snapshot, blockedPackage, packageName, System.currentTimeMillis())
     }
 

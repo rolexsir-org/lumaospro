@@ -42,10 +42,21 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A20 | **v3.2** bracket balance in the 19 Kotlin files touched by this pass | String/comment-stripping counter (backticked test names handled) | PASS |
 | A21 | **v3.2** new string resources declared and referenced (`type_ambient`, `type_monograph`) | Resource cross-check | PASS (only `android.R.string.cancel` is a framework resource) |
 | A22 | **v3.2** no unbundled typeface is referenced by the token layer | Manual review | PASS — `FontFamilyId` still covers exactly Inter, Space Grotesk, system sans/serif/mono |
-| A23 | **v3.2** Compose spacing draws every value from the token scale (no off-scale 6/10/14 dp) | Scripted scan of every Compose source for `.dp` literals against `LumaDesignTokens.SPACING_DP` | **FAIL — open gap.** There is no `LumaSpacing` object; spacing is `LumaDesignTokens.SP_1`…`SP_11` (2/4/8/12/16/20/24/32/40/56/72), used at 58 call sites. But 62 off-scale literals remain across 7 Compose files: `10.dp` ×31, `6.dp` ×23, `14.dp` ×8 — `wallpaper/WallpaperActivity.kt` (25), `settings/SettingsScreen.kt` (11), `settings/studio/StudioScreen.kt` (11), `settings/DashboardScreen.kt` (7), `onboarding/OnboardingActivity.kt` (5), `ui/glass/GlassComponents.kt` (2), `widgets/music/MusicAccessActivity.kt` (1). The earlier PASS described a `LumaSpacing` object that is not in the tree. Either snap these to the scale or record them as deliberate exceptions |
+| A23 | **v3.2** Compose spacing draws every value from the token scale (no off-scale 6/10/14 dp) | Scripted scan of every Compose source for `.dp` literals against `LumaDesignTokens.SPACING_DP` | **FAIL — open gap.** There is no `LumaSpacing` object; spacing is `LumaDesignTokens.SP_1`…`SP_11` (2/4/8/12/16/20/24/32/40/56/72), used at 58 call sites. 72 off-scale literals remain across 7 Compose files (`10.dp` ×35, `6.dp` ×29, `14.dp` ×8): `wallpaper/WallpaperActivity.kt` (25), `settings/SettingsScreen.kt` (15), `settings/studio/StudioScreen.kt` (14), `onboarding/OnboardingScreens.kt` (9), `settings/DashboardScreen.kt` (6), `ui/glass/GlassComponents.kt` (2), `widgets/music/MusicAccessActivity.kt` (1). The seven-step walkthrough moved the onboarding literals out of the old `OnboardingActivity` and added 9 to the new screens file, so the count grew from the previously recorded 62. Either snap these to the scale or record them as deliberate exceptions |
 | A24 | **v3.2** authored `ok`/`warn` reach the semantic layer instead of being re-derived | `ThemeColors.successSeed` / `warningSeed` → `SemanticPalette.of`, retained palettes null | PASS (by inspection; unit test `DesignSystemV32Test` asserts the seeds) |
 | A25 | **v3.2** clock size is a per-theme token, not a constant | `ResolvedTheme.clockSp` → `HomeActivity.applyPreset` | PASS (by inspection; 64 / 58 / 84 sp) |
 | A26 | Version identity is `1.2.0` / `versionCode` 120 in the build file and every document | Cross-check of `app/build.gradle.kts`, `toolchain/manual-build/build.py`, `README.md`, `CHANGELOG.md`, `DESIGN_SYSTEM.md`, `design/v3.2/README.md` | PASS — `major * 100 + minor * 10 + patch` → 120 |
+| A27 | Accessibility consent pass: `AndroidManifest.xml`, `strings_v2.xml`, `focus_accessibility_config.xml` are well-formed | Python XML parser | PASS (3/3 parsed) |
+| A28 | Every added `focus_access_*` string is referenced; no duplicate string names; no unresolved `@string/` reference | Scripted resource cross-check (705 strings) | PASS — 40 `focus_access_*` strings, 0 unused, 0 duplicates, 0 missing |
+| A29 | Changed Kotlin files parse (no syntax/parser errors) | Standalone `kotlinc` 2.2.21 per file; resolution errors expected without the Android/AndroidX classpath | PASS (parser only) — 13 files, 0 syntax errors |
+| A30 | Manifest change adds no permission and only one unexported component | Diff review of `AndroidManifest.xml` | PASS — one `<activity android:exported="false">`, no `<uses-permission>` added |
+| A31 | Consent enforcement gate is the only new decision input in the service and restriction activity | Source review: `FocusAccessibilityService.evaluate`, `FocusRestrictionActivity.stillBlocked` | PASS (by inspection; `FocusAccessConsentTest` asserts the gate) |
+| A32 | Seven-step onboarding pass: every changed/added Kotlin file parses | Standalone `kotlinc` 2.2.21 per file; resolution errors expected without the Android/AndroidX classpath | PASS (parser only) — 12 files, 0 syntax errors |
+| A33 | Every new `onboarding_*` and `settings_getting_started*` string is declared, referenced, unique, and every `R.string.*` in the new files resolves | Scripted resource cross-check over `values/*.xml` and `app/src/main/**/*.kt` | PASS — 0 missing, 0 duplicates, 0 unused `onboarding_*` strings (two superseded strings removed; `onboarding_enter_home` reused as the final action) |
+| A34 | `strings.xml` and `strings_v2.xml` remain well-formed after the additions | Python XML parser | PASS (2/2 parsed) |
+| A35 | The onboarding pass adds no permission, no exported component, no DataStore key and no database migration | Diff review of `AndroidManifest.xml`, `LumaPrefs`, `backup/BackupCodec`, schema files | PASS — manifest untouched; completion still uses `onboarding_done`; no schema change |
+| A36 | Sibling imports resolve after the disclosure refactor and the gesture-label extraction | Project package/declaration index + source review | PASS — `FocusAccessDisclosureContent`/`FocusAccessDisclosureScreen` call sites consistent; `gestureKindLabel`/`gestureActionLabel` moved to `settings/GestureLabels.kt` and used by both Settings and onboarding |
+
 
 Re-verified on the current tree (1.2.0): 109 XML files parsed (108 under
 `app/src/main/res` plus `AndroidManifest.xml`), 0 malformed; 273 Kotlin sources
@@ -87,6 +98,16 @@ Run with `./build.sh test` (or `./gradlew test`) on a machine with the toolchain
 | `notifications/NotificationPolicyTest` **(shade)** | Reply only from a real `RemoteInput`, semantic-reply preference, inline-action cap, title/body precedence, secret content, group-summary suppression, ordering, card bound, age buckets | All pass |
 | `controls/QuickControlsPolicyTest` **(shade)** | Tile columns per width, tile set vs real capability, system-route decisions, brightness floor, volume zero, clamping, battery from level/scale, DND handover, torch verdict | All pass |
 | `launcher/model/HomeLayoutDedupeTest` **(shade)** | Duplicate repair (dock wins, first wins, folder keeps members, widget/smart ids), page and order preservation, stability, codec round-trip, decoder stays byte-faithful | All pass |
+| `context/FocusAccessConsentTest` **(disclosure)** | First-time disclosure, acceptance, refusal, relaunch, revocation, service disabled, grant without consent, withdrawal, disclosure version bump, tolerant parsing, layer 1 independence | All pass — **13/13 executed** with standalone `kotlinc` 2.2.21 + JUnit shim on 2026-11-14 (real `FocusAccessConsent` + `FocusEnforcement`; `ContextEngine.focusActive` stubbed because the real file needs Android) |
+| `core/prefs/FocusAccessConsentPrefsTest` **(disclosure)** | DataStore consent round-trip across relaunch, refusal not overwritten, withdrawal, stale version, backup exclusion, separation from Focus settings | All pass — **unrun here** (needs the Gradle/Android toolchain) |
+| `robolectric/FocusAccessConsentRuntimeTest` **(disclosure)** | Consent + real `Settings.Secure`: grant without consent, consent without grant, revocation, framework disabled, declined consent with layer 1 | All pass — **unrun here** (Robolectric) |
+| `robolectric/FocusAccessDisclosureScreenTest` **(disclosure)** | Compose rendering of the five sections, AGREE/DECLINE reachable, declined state, manage/withdraw state, status derivation | All pass — **unrun here** (Robolectric + Compose) |
+| `onboarding/OnboardingFlowTest` **(onboarding)** | Seven-step order, forward/back traversal, which steps are optional, skip lands on the Home role, decline continues to the Home role, mode parsing, replay uses the same steps | All pass — **12/12 executed** with standalone `kotlinc` + JUnit shim on 2026-11-14 |
+| `core/util/OnboardingEligibilityTest` **(onboarding)** | Fresh install offered; completed install never offered; already-default install not offered; updated install not offered and recorded implicitly; install/update timestamp slack | All pass — **8/8 executed** with standalone `kotlinc` + JUnit shim on 2026-11-14 |
+| `core/prefs/OnboardingCompletionPrefsTest` **(onboarding)** | Completion survives relaunch, writing it does not reset the experience profile, consent is untouched | All pass — **unrun here** (needs DataStore + Gradle; written to the existing prefs-test conventions) |
+| `robolectric/OnboardingScreenTest` **(onboarding)** | Compose rendering of all seven steps: progress, action labels, live gesture bindings, profile selection, Theme Studio route, disclosure actions per state, Home-role states, completion, replay wording | All pass — **unrun here** (Robolectric + Compose) |
+| `robolectric/OnboardingReplayIntentTest` **(onboarding)** | Replay targets onboarding and carries only the mode; a launcher-started intent has no mode and reads as first run | All pass — **unrun here** (Robolectric) |
+
 
 The four **(shade)** rows were added after the standalone run above and have
 **never been executed**: this workspace has no JDK, Gradle or Android SDK, so
@@ -277,6 +298,53 @@ While editing:
 - [ ] Large font + display size maximum: no clipped labels, no overlapping chrome.
 - [ ] RTL language: insets and chevrons mirror; the clock stays centred.
 - [ ] Colour-blind simulation: status badges remain distinguishable by label + icon.
+
+### D10b. Accessibility disclosure and consent (device required)
+- [ ] First visit (fresh install, never enabled): the full disclosure opens, not
+      Android's settings screen. The system screen appears only after Agree.
+- [ ] Decline opens no system screen; the app returns to Settings and Focus
+      Protection still blocks apps launched from LumaOS Pro.
+- [ ] Relaunch after Agree keeps the consent (row reads "Consent given — enable
+      access in Android settings") with no second disclosure.
+- [ ] Enable the service directly in Android settings without ever opening the
+      disclosure: no intervention occurs and the row reads Off. Agree in-app
+      afterwards → layer 2 activates without re-enabling anything.
+- [ ] Revoke in Android settings: no intervention, row returns to awaiting,
+      no re-prompt.
+- [ ] Withdraw consent while the grant is still on: no intervention and any
+      visible restriction screen finishes.
+- [ ] Privacy → "Accessibility access" always opens the disclosure, in every
+      context and without editing Work/Study.
+- [ ] TalkBack announces the status, every section, and both actions; buttons
+      keep 48dp targets and text reflows at maximum font/display size.
+- [ ] `adb logcat` while an intervention happens contains no package name or
+      screen content from LumaOS.
+
+### D10c. First-run walkthrough (device required)
+- [ ] Clean install, launch from the app icon (not yet default Home): the tour
+      opens on Welcome with "Step 1 of 7". No permission dialog appears anywhere.
+- [ ] Gestures step lists the same bindings Settings → Gestures shows; change
+      one in Settings, replay the tour, and the step reflects the new binding.
+- [ ] Profile cards change the launcher look immediately; a widget layout is
+      never moved. Theme Studio opens over the tour and returns to it.
+- [ ] "Skip the rest of the tour" from steps 2–5 lands on the Home-role step.
+- [ ] Accessibility step: Decline opens no system screen and moves to the Home
+      role; Agree opens Android's accessibility screen only after the consent
+      write; returning without granting shows awaiting, not active.
+- [ ] Home-role step reflects the real role after the system dialog; cancelling
+      keeps "Not set" and "Not now" still completes onboarding.
+- [ ] Final step enters the launcher. Press Home, relaunch from Recents and
+      reboot: the tour never appears again.
+- [ ] Back from the first step leaves the tour and does not return later.
+- [ ] Settings → Getting started → Replay the tour opens on Welcome with the
+      replay note, keeps every current setting, and does not clear layouts.
+- [ ] Install an older build, use it, then update: the tour is not shown on the
+      first launch after the update; Settings can still replay it.
+- [ ] TalkBack: progress is announced once per step, profile cards read as radio
+      buttons with their selected state, gesture rows read as one item, and both
+      Agree and Decline are reachable without scrolling traps.
+- [ ] 200 % font scale, landscape, and a small 5" device: no clipped action and
+      no nested scroll; all controls keep their touch targets.
 
 ### D11. Performance
 - [ ] Cold start to first frame is not slower than the previous build on a
