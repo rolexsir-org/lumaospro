@@ -321,8 +321,10 @@ While editing:
       screen content from LumaOS.
 
 ### D10c. First-run walkthrough (device required)
-- [ ] Clean install, launch from the app icon (not yet default Home): the tour
-      opens on Welcome with "Step 1 of 7". No permission dialog appears anywhere.
+- [ ] Clean install (uninstall first — clearing app data does not reset the
+      package's install/update timestamps), launch from the app icon (not yet
+      default Home): the tour opens on Welcome with "Step 1 of 7". No permission
+      dialog appears anywhere.
 - [ ] Gestures step lists the same bindings Settings → Gestures shows; change
       one in Settings, replay the tour, and the step reflects the new binding.
 - [ ] Profile cards change the launcher look immediately; a widget layout is

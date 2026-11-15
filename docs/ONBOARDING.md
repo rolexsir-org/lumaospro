@@ -59,6 +59,11 @@ pre-existing behaviour.
   Settings. Nothing is cleared; a replay starts from whatever the user has now.
 - `onboarding_done` is part of the existing DataStore backup/restore set, so a
   restored install keeps its completion state.
+- Because upgrade detection uses the package's install/update timestamps,
+  **clearing app data is not the same as a fresh install** for this gate: the
+  package still reports itself as updated, so the tour is not offered again.
+  To exercise a first run on a test device, uninstall the app (or use a device
+  that never had it) rather than only clearing storage.
 
 ## Accessibility consent in step 5
 
