@@ -22,9 +22,9 @@
 
         The accessibility binding declared below is OPTIONAL and off by
         default: it only observes the foreground package name during Work/Study
-        focus sessions (window content retrieval disabled), after an in-app
-        disclosure, and the user can revoke it at any time. See
-        docs/FOCUS_ENFORCEMENT.md.
+        focus sessions (window content retrieval disabled), and only after a
+        prominent in-app disclosure with explicit consent. The user can revoke
+        it at any time. See docs/ACCESSIBILITY_DISCLOSURE.md.
     -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -177,7 +177,15 @@
             </intent-filter>
         </receiver>
 
-        <!-- Optional Focus Protection foreground enforcement; off until the user enables it in system settings. -->
+        <!--
+            Optional Focus Protection foreground enforcement; off until the user
+            enables it in system settings, and only active after the in-app
+            disclosure has been accepted (FocusAccessDisclosureActivity stores
+            that consent; the service refuses to act without it). exported=true
+            is required so the accessibility framework can bind it; the
+            framework-only BIND_ACCESSIBILITY_SERVICE permission is what keeps
+            other apps out.
+        -->
         <service
             android:name=".context.FocusAccessibilityService"
             android:label="@string/focus_service_label"
@@ -190,6 +198,19 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/focus_accessibility_config" />
         </service>
+
+        <!--
+            Prominent disclosure + explicit AGREE/DECLINE before Android's
+            accessibility screen is opened, and the revisit/revoke surface.
+            Unexported: only LumaOS Pro starts it, so no other app can present
+            (or dismiss) the disclosure on the user's behalf.
+        -->
+        <activity
+            android:name=".context.FocusAccessDisclosureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:label="@string/focus_access_disclosure_screen_title"
+            android:theme="@style/Theme.LumaOS.Settings" />
 
         <activity
             android:name=".focus.FocusRestrictionActivity"

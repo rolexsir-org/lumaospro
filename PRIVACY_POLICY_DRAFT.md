@@ -110,6 +110,45 @@ protects are documented in the repository at `docs/VAULT.md` and
 marketing claim before release; the Vault does not claim absolute protection
 against a party who controls the device.
 
+## Optional accessibility access (Focus Protection)
+
+Focus Protection blocks chosen apps during Work and Study sessions. Blocking
+launches made from LumaOS Pro needs no permission at all. Extending that to apps
+opened from notifications, Recents or other apps needs Android's accessibility
+access, which is **off by default** and can only be switched on by you in system
+settings.
+
+- **You are asked first, in the app.** A full-screen disclosure explains why the
+  access is needed, how it helps Focus Protection, what is read, and what is
+  stored or shared. It offers explicit **Agree** and **Decline** actions, and
+  Android's settings screen is opened only after you agree. Declining changes
+  nothing else in the app.
+- **Consent is stored separately from the Android permission.** Your answer is
+  kept on this device with the version of the disclosure you answered. If you
+  enable the service directly in Android settings without answering the in-app
+  disclosure, the app does not act on it.
+- **What is accessed:** only the package name of the app that enters the
+  foreground, from Android's window-state-change events, and only while a Work
+  or Study session with restrictions is running. Window content retrieval,
+  gesture injection and key-event filtering are disabled in the service
+  configuration, so the app cannot read screens, text, passwords, messages or
+  keystrokes, and it never traverses another app's view tree.
+- **What is not done with it:** the package name is compared in memory with the
+  restriction list you configured. It is not logged, stored, or sent anywhere.
+  LumaOS Pro has no account, analytics, advertising SDK, server or internet
+  permission, so this information cannot leave your device and is not shared
+  with third parties.
+- **How to turn it off:** Android Settings → Accessibility → LumaOS Focus
+  Protection, or withdraw consent on the disclosure screen in LumaOS Pro.
+  Either action stops this enforcement immediately; all other features continue
+  to work. Consent is kept in the app's private settings and is not part of
+  LumaOS Pro's own backup file; if you have Android system backup enabled, app
+  settings may be included in it.
+
+The exact inventory and the limits of this feature are documented in the
+repository at `docs/ACCESSIBILITY_DISCLOSURE.md` and
+`docs/FOCUS_ENFORCEMENT.md`.
+
 ## Optional voice commands
 
 Voice commands are user-triggered. The app launches Android's installed speech-

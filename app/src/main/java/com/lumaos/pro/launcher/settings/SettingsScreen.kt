@@ -62,12 +62,13 @@ import com.lumaos.pro.launcher.ui.theme.LumaDesignTokens
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import com.lumaos.pro.launcher.context.ContextEngine
 import com.lumaos.pro.launcher.context.ContextProfile
-import com.lumaos.pro.launcher.context.FocusAccess
+import com.lumaos.pro.launcher.context.FocusAccessConsent
+import com.lumaos.pro.launcher.context.FocusAccessDisclosureActivity
+import com.lumaos.pro.launcher.context.FocusAccessUiState
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
@@ -106,7 +107,8 @@ fun SettingsRoot(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onOpenStudio: () -> Unit,
-    onOpenWallpaper: () -> Unit
+    onOpenWallpaper: () -> Unit,
+    onOpenOnboarding: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -126,6 +128,16 @@ fun SettingsRoot(
                 WallpaperRow(onOpenWallpaper)
                 CleanDivider()
                 WidgetsRow(viewModel)
+            }
+            Spacer(Modifier.height(32.dp))
+
+            CleanGroupTitle(R.string.settings_group_getting_started)
+            CleanSection {
+                CleanNavigationRow(
+                    title = stringResource(R.string.settings_getting_started),
+                    subtitle = stringResource(R.string.settings_getting_started_subtitle),
+                    onClick = onOpenOnboarding
+                )
             }
             Spacer(Modifier.height(32.dp))
 
@@ -162,7 +174,7 @@ fun SettingsRoot(
                 Spacer(Modifier.height(12.dp))
                 CleanSection { GestureSection(viewModel) }
                 Spacer(Modifier.height(12.dp))
-                CleanSection { PrivacySection() }
+                CleanSection { PrivacySection(viewModel) }
                 Spacer(Modifier.height(12.dp))
                 CleanSection { BackupSection(viewModel, onExportBackup, onImportBackup) }
                 Spacer(Modifier.height(12.dp))
@@ -904,11 +916,12 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     val focusOn by viewModel.prefs.focusEnabled(target).collectAsState(false)
     val restrictedApps by viewModel.prefs.focusRestricted(target).collectAsState(emptySet())
     val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val accessConsent by viewModel.prefs.focusAccessConsent.collectAsState(FocusAccessConsent.NOT_ASKED)
+    val accessState = FocusAccessConsent.uiState(accessConsent, focusServiceOn)
     val isDefaultLauncher by viewModel.roleState.collectAsState()
     val unlockMinutes by viewModel.prefs.focusUnlockMinutes().collectAsState(5)
     var appsDialog by remember { mutableStateOf(false) }
     var focusDialog by remember { mutableStateOf(false) }
-    var accessDialog by remember { mutableStateOf(false) }
     val alertsEnabled by viewModel.prefs.contextNotificationsEnabled.collectAsState(false)
     val alertProfiles by viewModel.prefs.contextNotificationProfiles.collectAsState(emptySet())
     val dndProfiles by viewModel.prefs.contextDndProfiles.collectAsState(emptySet())
@@ -925,15 +938,15 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             )
         }.onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
     }
-    // The accessibility grant lives in system settings: LumaOS Pro can only
-    // explain first (disclosure dialog) and then route there.
-    fun openAccessSettings() {
-        val intent = FocusAccess.settingsIntent(context)
-        if (intent == null) {
+    // The accessibility grant can only be changed in system settings. This row
+    // never jumps there directly: it opens the prominent in-app disclosure,
+    // which is where AGREE and DECLINE live and where an existing choice can be
+    // reviewed, revoked or withdrawn. System settings is one explicit tap further.
+    fun openAccessDisclosure() {
+        runCatching {
+            context.startActivity(Intent(context, FocusAccessDisclosureActivity::class.java))
+        }.onFailure {
             Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
-        } else {
-            runCatching { context.startActivity(intent) }
-                .onFailure { Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show() }
         }
     }
     Column {
@@ -1042,9 +1055,19 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             CleanDivider()
             CleanRow(
                 title = stringResource(R.string.focus_access_title),
-                subtitle = stringResource(if (focusServiceOn) R.string.focus_access_on else R.string.focus_access_off),
-                value = if (focusServiceOn) "On" else "Off",
-                onClick = { if (focusServiceOn) openAccessSettings() else accessDialog = true }
+                subtitle = stringResource(
+                    when (accessState) {
+                        FocusAccessUiState.ACTIVE -> R.string.focus_access_on
+                        FocusAccessUiState.AWAITING_PERMISSION -> R.string.focus_access_row_awaiting
+                        FocusAccessUiState.DECLINED -> R.string.focus_access_row_declined
+                        FocusAccessUiState.NEEDS_DISCLOSURE -> R.string.focus_access_off
+                    }
+                ),
+                value = stringResource(
+                    if (accessState == FocusAccessUiState.ACTIVE) R.string.focus_access_value_on
+                    else R.string.focus_access_value_off
+                ),
+                onClick = { openAccessDisclosure() }
             )
             // Losing default-launcher status degrades layer 2 silently at the
             // OS level (Home lands elsewhere, the presentation is refused), so
@@ -1115,21 +1138,6 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
             onPrimary = { viewModel.clearFocusRestrictions(target) },
             onSuggest = { viewModel.applyFocusSuggestions(target) },
             onDismiss = { focusDialog = false }
-        )
-    }
-    if (accessDialog) {
-        AlertDialog(
-            onDismissRequest = { accessDialog = false },
-            title = { Text(stringResource(R.string.focus_access_disclosure_title)) },
-            text = { Text(stringResource(R.string.focus_access_disclosure)) },
-            confirmButton = {
-                TextButton(onClick = { accessDialog = false; openAccessSettings() }) {
-                    Text(stringResource(R.string.focus_access_enable))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { accessDialog = false }) { Text("Not now") }
-            }
         )
     }
 }
@@ -1267,7 +1275,7 @@ private fun GestureSection(viewModel: SettingsViewModel) {
             val current by viewModel.prefs.gesture(kind).collectAsState(kind.default)
             CleanDivider()
             ChoiceRowCompact(
-                label = kindLabel(kind),
+                label = gestureKindLabel(kind),
                 selected = options.firstOrNull { (it.first as GestureAction).storageKey == current.storageKey }?.second ?: current.storageKey,
                 options = options,
                 onSelected = { scope.launch { viewModel.prefs.setGesture(kind, it as GestureAction) } }
@@ -1276,42 +1284,48 @@ private fun GestureSection(viewModel: SettingsViewModel) {
     }
 }
 
+/**
+ * Privacy summary plus the durable entry point to the accessibility disclosure.
+ *
+ * The Contexts section also exposes the "Stronger blocking" row, but that row
+ * only exists while editing Work or Study. This row is always reachable, so a
+ * user who previously consented can find the disclosure again and revoke or
+ * withdraw it without having to remember where the feature lives.
+ */
 @Composable
-private fun kindLabel(kind: GestureKind): String = stringResource(
-    when (kind) {
-        GestureKind.SWIPE_UP -> R.string.gesture_swipe_up
-        GestureKind.SWIPE_DOWN -> R.string.gesture_swipe_down
-        GestureKind.DOUBLE_TAP -> R.string.gesture_double_tap
-        GestureKind.LONG_PRESS -> R.string.gesture_long_press
-        GestureKind.SWIPE_LEFT -> R.string.gesture_swipe_left
-        GestureKind.SWIPE_RIGHT -> R.string.gesture_swipe_right
-        GestureKind.PINCH_IN -> R.string.gesture_pinch_in
-    }
-)
-
-@Composable
-private fun gestureActionLabel(action: GestureAction): String = stringResource(
-    when (action) {
-        GestureAction.None -> R.string.gesture_none
-        GestureAction.OpenDrawer -> R.string.gesture_open_drawer
-        GestureAction.OpenSearch -> R.string.gesture_open_search
-        GestureAction.OpenQuickControls -> R.string.gesture_open_quick_controls
-        GestureAction.OpenSettings -> R.string.gesture_open_settings
-        GestureAction.OpenWallpaperPicker -> R.string.gesture_open_wallpaper
-        GestureAction.EnterEditMode -> R.string.gesture_edit_mode
-        GestureAction.OpenStudio -> R.string.gesture_open_studio
-        GestureAction.NextContextProfile -> R.string.gesture_next_context
-        GestureAction.VoiceCommand -> R.string.gesture_voice
-        is GestureAction.OpenApp -> R.string.gesture_open_app
-    }
-)
-
-@Composable
-private fun PrivacySection() {
-    Column(Modifier.padding(16.dp)) {
-        Text(stringResource(R.string.section_privacy), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp))
+private fun PrivacySection(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val focusServiceOn by viewModel.focusServiceOn.collectAsState()
+    val consent by viewModel.prefs.focusAccessConsent.collectAsState(FocusAccessConsent.NOT_ASKED)
+    val accessState = FocusAccessConsent.uiState(consent, focusServiceOn)
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Text(
+            stringResource(R.string.section_privacy),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
         Spacer(Modifier.height(4.dp))
-        Text(stringResource(R.string.privacy_summary), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            stringResource(R.string.privacy_summary),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        CleanDivider()
+        CleanRow(
+            title = stringResource(R.string.focus_access_privacy_row),
+            subtitle = stringResource(R.string.focus_access_privacy_subtitle),
+            value = stringResource(
+                if (accessState == FocusAccessUiState.ACTIVE) R.string.focus_access_value_on
+                else R.string.focus_access_value_off
+            ),
+            onClick = {
+                runCatching {
+                    context.startActivity(Intent(context, FocusAccessDisclosureActivity::class.java))
+                }
+            }
+        )
     }
 }
 

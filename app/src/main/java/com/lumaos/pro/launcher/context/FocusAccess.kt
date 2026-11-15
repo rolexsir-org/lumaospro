@@ -16,14 +16,18 @@ import android.provider.Settings
  *
  *  - keeps layer 1 (launcher interception) working with no grant at all, so
  *    "not granted" is a supported configuration, never an error;
- *  - explains what the grant means, in plain language, before opening
- *    Android's screen (the disclosure lives in
- *    `R.string.focus_access_disclosure` and in the service's own
- *    `android:description`, which the system shows on its toggle screen);
+ *  - explains what the grant means, in plain language, with explicit
+ *    Agree/Decline actions, before opening Android's screen
+ *    ([FocusAccessDisclosureActivity]), and repeats the essentials in the
+ *    service's own `android:description`, which the system shows on its toggle
+ *    screen;
  *  - reads only `event.packageName` from `TYPE_WINDOW_STATE_CHANGED` events:
  *    window content retrieval is disabled in the service config, node trees
  *    are never traversed, no text or input is collected, and nothing leaves
  *    the device;
+ *  - requires recorded consent as well as the grant ([FocusAccessConsent]):
+ *    Android lets a user enable any accessibility service directly, and that
+ *    alone is not agreement to LumaOS Pro's disclosure;
  *  - degrades to layer 1 the moment the grant is gone: enforcement decisions
  *    are snapshotted per event, so there is no stale state to clear and no
  *    restart dance to perform.

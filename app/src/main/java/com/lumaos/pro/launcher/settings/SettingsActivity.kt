@@ -194,7 +194,13 @@ class SettingsActivity : ComponentActivity() {
                                         )
                                     },
                                     onOpenStudio = { tab = 1 },
-                                    onOpenWallpaper = { startActivity(android.content.Intent(this@SettingsActivity, com.lumaos.pro.launcher.wallpaper.WallpaperActivity::class.java)) }
+                                    onOpenWallpaper = { startActivity(android.content.Intent(this@SettingsActivity, com.lumaos.pro.launcher.wallpaper.WallpaperActivity::class.java)) },
+                                    onOpenOnboarding = {
+                                        startActivity(
+                                            com.lumaos.pro.launcher.onboarding.OnboardingActivity
+                                                .replayIntent(this@SettingsActivity)
+                                        )
+                                    }
                                 )
                                 1 -> StudioRoot(viewModel = viewModel)
                                 else -> DashboardRoot(viewModel = viewModel)

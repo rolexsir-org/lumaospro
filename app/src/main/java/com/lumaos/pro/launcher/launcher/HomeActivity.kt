@@ -13,6 +13,7 @@ import android.graphics.Rect
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.net.Uri
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -67,6 +68,7 @@ import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.prefs.GestureKind
+import com.lumaos.pro.launcher.core.util.OnboardingEligibility
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.effects.EffectsDecision
@@ -607,14 +609,18 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 }
                 val isDefaultHome = RoleHelper.isDefaultLauncher(this@HomeActivity)
                 val onboardingDone = viewModel.prefs.isOnboardingDoneOnce()
-                if (!isDefaultHome && !onboardingDone) {
+                val isUpgrade = isUpgradeInstall()
+                if (OnboardingEligibility.shouldOfferTour(onboardingDone, isDefaultHome, isUpgrade)) {
                     onboardingLaunchInFlight = true
                     onboardingLauncher.launch(Intent(this@HomeActivity, OnboardingActivity::class.java))
                     return@launch
                 }
+                if (isUpgrade && !onboardingDone) {
+                    LumaLog.i("Existing install updated; first-run walkthrough is available from Settings only")
+                }
                 // The role is always checked independently. Being onboarded is
                 // not evidence that Android currently selects LumaOS Pro for Home.
-                if (isDefaultHome && !onboardingDone) {
+                if (OnboardingEligibility.shouldMarkDoneImplicitly(onboardingDone, isDefaultHome, isUpgrade)) {
                     viewModel.prefs.setOnboardingDone(true)
                 }
             } catch (e: CancellationException) {
@@ -626,6 +632,25 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 onboardingCheckInFlight = false
             }
         }
+    }
+
+    /**
+     * Whether this package was replaced after it was installed. A fresh install
+     * reports equal timestamps; an update moves [android.content.pm.PackageInfo.lastUpdateTime].
+     * Unknown values (0) count as "not an upgrade" so a device that cannot
+     * report timestamps still gets the tour once.
+     */
+    private fun isUpgradeInstall(): Boolean = try {
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0L))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+        OnboardingEligibility.isUpgrade(info.firstInstallTime, info.lastUpdateTime)
+    } catch (e: Exception) {
+        LumaLog.w("Could not read install timestamps; treating launch as first run")
+        false
     }
 
     // ------------------------------------------------------------------- setup

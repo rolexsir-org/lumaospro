@@ -1,64 +1,41 @@
 package com.lumaos.pro.launcher.onboarding
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.context.FocusAccess
+import com.lumaos.pro.launcher.context.FocusAccessConsent
+import com.lumaos.pro.launcher.context.FocusAccessConsentFlow
+import com.lumaos.pro.launcher.context.FocusAccessConsentRecord
 import com.lumaos.pro.launcher.core.LumaApp
+import com.lumaos.pro.launcher.core.prefs.GestureKind
+import com.lumaos.pro.launcher.core.prefs.PrefsFocusAccessConsentStore
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.core.util.RoleHelper
 import com.lumaos.pro.launcher.icons.LivingIconId
 import com.lumaos.pro.launcher.settings.LumaOSTheme
-import com.lumaos.pro.launcher.ui.glass.LumaGlassSurface
-import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -66,49 +43,76 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * First-run onboarding.
+ * First-run walkthrough and the replayable "Getting started" tour.
  *
- * Two decisions, and nothing else: the coordinated experience profile (Pure,
- * Liquid or Midnight) and the Home role. A launcher that is not the default
- * launcher is just an app, so the role request is the only blocking question.
+ * Seven steps, defined once in [OnboardingFlow]: welcome, gestures,
+ * personalisation, Focus Protection, the accessibility disclosure, the Home
+ * role, and a completion screen. Steps 2–5 are optional and can be skipped;
+ * the Home role is always offered, and the last screen always asks the user to
+ * enter the launcher.
  *
- * Skipping is a first-class outcome. LumaOS Pro stays fully usable as an app,
- * and the default-launcher controls remain available in Settings. Choosing a
- * profile only writes appearance preferences - layouts and widgets are untouched.
+ * What this activity deliberately does *not* do:
+ *
+ *  - It never requests a runtime permission or an accessibility grant by
+ *    itself. The accessibility step renders the same disclosure as Settings and
+ *    only reaches Android's accessibility screen after an explicit Agree that
+ *    has been written to DataStore.
+ *  - It never resets anything. Playing a profile writes appearance preferences
+ *    through the same `applyExperienceProfile` call Settings uses; layouts,
+ *    widgets, focus sessions and consent are untouched. A replay starts from
+ *    the user's current settings, not from defaults.
+ *  - It never invents data. The gesture list is read from the live bindings,
+ *    the Living Icons come from this install's icon renderer, and the Home-role
+ *    state is re-read from Android on every resume.
+ *
+ * Completion is the existing durable fact, [com.lumaos.pro.launcher.core.prefs.LumaPrefs.onboardingDone]:
+ * reaching the final step, pressing back out of the first step, choosing a Home
+ * role, or finishing all persist the same flag. There is no second onboarding
+ * flag.
  */
 class OnboardingActivity : ComponentActivity() {
 
     private val prefs by lazy { (application as LumaApp).core.prefs }
+    private val consentFlow by lazy { FocusAccessConsentFlow(PrefsFocusAccessConsentStore(prefs)) }
+
+    private val mode: OnboardingMode by lazy {
+        OnboardingMode.fromExtra(intent?.getStringExtra(EXTRA_MODE)) ?: OnboardingMode.FIRST_RUN
+    }
+
+    /** Current step; an activity field (not rememberSaveable) so callbacks that
+     *  arrive outside composition — role result, consent result — can navigate. */
+    private var step by mutableStateOf(OnboardingStep.WELCOME)
+
+    private var consent by mutableStateOf<FocusAccessConsentRecord>(FocusAccessConsent.NOT_ASKED)
+    private var permissionGranted by mutableStateOf(false)
+    private var isDefaultHome by mutableStateOf(false)
+
     private var roleRequestInFlight = false
+    private var decisionInFlight = false
 
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         roleRequestInFlight = false
-        // Do not infer success from resultCode. Re-read Android's current HOME
-        // selection; onboarding completion is a separate, already-persisted fact.
-        val isDefault = RoleHelper.isDefaultLauncher(this)
-        LumaLog.i("Home-role request returned; LumaOS Pro default=$isDefault")
-        finish()
-    }
-
-    private suspend fun safelyUpdateAppearance(update: suspend () -> Unit) {
-        try {
-            update()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            LumaLog.e("Could not apply experience", e)
-            Toast.makeText(this, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
-        }
+        // Never infer success from resultCode. Android's HOME selection is a
+        // separate fact; re-read it and let the step re-render.
+        refreshRole()
+        LumaLog.i("Home-role request returned; LumaOS Pro default=$isDefaultHome")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+        step = savedInstanceState?.getString(KEY_STEP)
+            ?.let { name -> OnboardingStep.entries.firstOrNull { it.name == name } }
+            ?: OnboardingStep.WELCOME
+        refreshRole()
+        refreshPermission()
+        refreshConsent()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                completeOnboardingAndFinish()
+                back()
             }
         })
 
@@ -118,18 +122,13 @@ class OnboardingActivity : ComponentActivity() {
             val theme by themes.theme.collectAsState()
             val textScale by prefs.textScale.collectAsState(1.0f)
             val selectedProfile by prefs.experienceProfile.collectAsState(ExperienceProfile.DEFAULT)
-            val lifecycleOwner = LocalLifecycleOwner.current
-            var isDefaultHome by remember { mutableStateOf(RoleHelper.isDefaultLauncher(this@OnboardingActivity)) }
-            DisposableEffect(lifecycleOwner) {
-                val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_RESUME) {
-                        isDefaultHome = RoleHelper.isDefaultLauncher(this@OnboardingActivity)
-                    }
-                }
-                lifecycleOwner.lifecycle.addObserver(observer)
-                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            // Live bindings, not a legend: the tour shows what this device will
+            // actually do. collectAsState in a fixed-size loop is stable.
+            val bindings = GestureKind.entries.map { kind ->
+                val action by prefs.gesture(kind).collectAsState(kind.default)
+                GestureBinding(kind, action)
             }
-            val showcaseIcons by produceState<List<Pair<String, ImageBitmap>>>(emptyList()) {
+            val livingIcons by produceState<List<Pair<String, ImageBitmap>>>(emptyList()) {
                 value = withContext(Dispatchers.IO) {
                     listOf(
                         LivingIconId.PHONE,
@@ -143,8 +142,8 @@ class OnboardingActivity : ComponentActivity() {
                 }
             }
             LumaOSTheme(theme = theme, textScale = textScale) {
-                // A restored or previously customised appearance always wins.
-                // The guard and default write are one DataStore transaction.
+                // A restored or previously customised appearance always wins;
+                // the guard and default write are one DataStore transaction.
                 LaunchedEffect(Unit) {
                     safelyUpdateAppearance { prefs.initializeDefaultExperienceIfUnconfigured() }
                 }
@@ -159,186 +158,281 @@ class OnboardingActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(WindowInsets.safeDrawing)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 24.dp, vertical = 28.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    val state = OnboardingState(step, mode)
+                    OnboardingShell(
+                        theme = theme,
+                        state = state,
+                        onBack = ::back
                     ) {
-                        Text(
-                            text = stringResource(R.string.onboarding_welcome),
-                            modifier = Modifier.widthIn(max = 440.dp),
-                            style = MaterialTheme.typography.headlineLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = stringResource(R.string.onboarding_subtitle),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        if (showcaseIcons.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            LumaGlassSurface(
+                        when (step) {
+                            OnboardingStep.WELCOME -> WelcomeStep(
                                 theme = theme,
-                                role = GlassRole.SECONDARY,
-                                modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceEvenly,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        showcaseIcons.forEach { (name, bmp) ->
-                                            Image(
-                                                bitmap = bmp,
-                                                contentDescription = name,
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        text = stringResource(R.string.onboarding_living_icons_caption),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(22.dp))
-                        Text(
-                            text = stringResource(R.string.onboarding_profiles_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = stringResource(R.string.onboarding_profiles_subtitle),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        ExperienceProfile.entries.forEach { profile ->
-                            ProfileCard(
+                                mode = mode,
+                                onStart = { goTo(OnboardingFlow.next(state)?.step) },
+                                onSkipTour = { goTo(OnboardingFlow.skipTour(state).step) },
+                                onClose = ::completeOnboardingAndFinish
+                            )
+                            OnboardingStep.GESTURES -> GesturesStep(
                                 theme = theme,
-                                profile = profile,
-                                selected = profile == selectedProfile,
-                                onSelected = {
+                                bindings = bindings,
+                                onContinue = { goTo(OnboardingFlow.next(state)?.step) },
+                                onSkipTour = { goTo(OnboardingFlow.skipTour(state).step) }
+                            )
+                            OnboardingStep.PERSONALIZE -> PersonalizeStep(
+                                theme = theme,
+                                selected = selectedProfile,
+                                livingIcons = livingIcons,
+                                onSelect = { profile ->
                                     lifecycleScope.launch {
                                         safelyUpdateAppearance { prefs.applyExperienceProfile(profile) }
                                     }
-                                }
+                                },
+                                onOpenStudio = ::openThemeStudio,
+                                onContinue = { goTo(OnboardingFlow.next(state)?.step) },
+                                onSkipTour = { goTo(OnboardingFlow.skipTour(state).step) }
                             )
-                            Spacer(Modifier.height(10.dp))
+                            OnboardingStep.FOCUS_PROTECTION -> FocusProtectionStep(
+                                theme = theme,
+                                onContinue = { goTo(OnboardingFlow.next(state)?.step) },
+                                onSkipTour = { goTo(OnboardingFlow.skipTour(state).step) }
+                            )
+                            OnboardingStep.ACCESSIBILITY -> AccessibilityStep(
+                                theme = theme,
+                                state = FocusAccessConsent.uiState(consent, permissionGranted),
+                                permissionGranted = permissionGranted,
+                                decidedAtMillis = consent.decidedAtMillis,
+                                onAgree = ::agree,
+                                onDecline = ::decline,
+                                onManage = ::openAccessibilitySettings,
+                                onWithdraw = ::withdraw,
+                                onContinue = { goTo(OnboardingFlow.next(state)?.step) },
+                                onSkipForNow = { goTo(OnboardingFlow.next(state)?.step) }
+                            )
+                            OnboardingStep.HOME_ROLE -> HomeRoleStep(
+                                theme = theme,
+                                isDefaultHome = isDefaultHome,
+                                onSetDefault = ::requestHomeRole,
+                                onContinue = { goTo(OnboardingFlow.next(state)?.step) }
+                            )
+                            OnboardingStep.COMPLETE -> CompleteStep(
+                                theme = theme,
+                                isDefaultHome = isDefaultHome,
+                                onFinish = ::completeOnboardingAndFinish
+                            )
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = stringResource(
-                                if (isDefaultHome) R.string.role_status_default else R.string.onboarding_home_role_explainer
-                            ),
-                            modifier = Modifier.widthIn(max = 440.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isDefaultHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        if (isDefaultHome) {
-                            Button(
-                                onClick = ::completeOnboardingAndFinish,
-                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.onboarding_enter_home))
-                            }
-                        } else {
-                            Button(
-                                onClick = ::requestHomeRole,
-                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.onboarding_set_default))
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = ::completeOnboardingAndFinish,
-                                modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.onboarding_skip))
-                            }
-                        }
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            text = stringResource(R.string.onboarding_privacy_note),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
                     }
                 }
             }
         }
     }
 
-    @androidx.compose.runtime.Composable
-    private fun ProfileCard(
-        theme: com.lumaos.pro.launcher.ui.theme.ResolvedTheme,
-        profile: ExperienceProfile,
-        selected: Boolean,
-        onSelected: () -> Unit
-    ) {
-        val title = when (profile) {
-            ExperienceProfile.PURE -> stringResource(R.string.experience_pure)
-            ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid)
-            ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight)
-        }
-        val description = when (profile) {
-            ExperienceProfile.PURE -> stringResource(R.string.experience_pure_desc)
-            ExperienceProfile.LIQUID -> stringResource(R.string.experience_liquid_desc)
-            ExperienceProfile.MIDNIGHT -> stringResource(R.string.experience_midnight_desc)
-        }
-        LumaGlassSurface(
-            theme = theme,
-            role = GlassRole.SETTINGS_CONTROL,
-            selected = selected,
-            onClick = onSelected,
-            modifier = Modifier
-                .widthIn(max = 440.dp)
-                .fillMaxWidth()
-                .semantics {
-                    role = Role.RadioButton
-                    this.selected = selected
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_STEP, step.name)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Coming back from Android settings (Home role or accessibility) emits
+        // nothing, so every fact this flow displays is re-read here.
+        refreshRole()
+        refreshPermission()
+        refreshConsent()
+    }
+
+    // ------------------------------------------------------------------ state
+
+    private fun refreshRole() {
+        isDefaultHome = RoleHelper.isDefaultLauncher(this)
+    }
+
+    private fun refreshPermission() {
+        permissionGranted = FocusAccess.isGranted(this)
+    }
+
+    private fun refreshConsent() {
+        lifecycleScope.launch {
+            consent = runCatching { consentFlow.read() }
+                .getOrElse {
+                    LumaLog.e("Could not read Focus access consent", it)
+                    FocusAccessConsent.NOT_ASKED
                 }
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        }
+    }
+
+    // ------------------------------------------------------------- navigation
+
+    private fun goTo(target: OnboardingStep?) {
+        if (target == null || target == step) return
+        step = target
+        if (target == OnboardingStep.COMPLETE) {
+            // Reaching the summary counts as finishing the walkthrough; the
+            // user may sit on it, leave, or press Open. Persist now so a
+            // later launch cannot re-run the flow.
+            persistCompletionSilently()
+        }
+    }
+
+    private fun back() {
+        val previous = OnboardingFlow.previous(OnboardingState(step, mode))
+        if (previous != null) {
+            step = previous.step
+        } else {
+            // Leaving from the first step is a supported outcome: onboarding is
+            // complete (the user has seen it), and the launcher stays usable.
+            completeOnboardingAndFinish()
+        }
+    }
+
+    // --------------------------------------------------------- consent actions
+
+    private fun agree() {
+        if (decisionInFlight || isFinishing) return
+        decisionInFlight = true
+        lifecycleScope.launch {
+            val record = runCatching { consentFlow.agree() }.getOrNull()
+            decisionInFlight = false
+            if (record == null) {
+                Toast.makeText(this@OnboardingActivity, R.string.focus_access_save_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            consent = record
+            refreshPermission()
+            if (permissionGranted) {
+                // The grant already exists; consent is now on record and the
+                // step re-renders as active. No detour through system settings.
+                Toast.makeText(
+                    this@OnboardingActivity,
+                    R.string.focus_access_consent_recorded,
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                openAccessibilitySettings()
             }
         }
     }
 
+    private fun decline() {
+        if (decisionInFlight || isFinishing) return
+        decisionInFlight = true
+        lifecycleScope.launch {
+            val record = runCatching { consentFlow.decline() }.getOrNull()
+            decisionInFlight = false
+            if (record == null) {
+                Toast.makeText(this@OnboardingActivity, R.string.focus_access_save_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            consent = record
+            Toast.makeText(
+                this@OnboardingActivity,
+                R.string.focus_access_declined_toast,
+                Toast.LENGTH_LONG
+            ).show()
+            // Declining is a complete answer. Move on to the Home-role step so
+            // the optional feature never blocks the required setup.
+            goTo(OnboardingFlow.next(OnboardingState(step, mode))?.step)
+        }
+    }
+
+    private fun withdraw() {
+        if (decisionInFlight || isFinishing) return
+        decisionInFlight = true
+        lifecycleScope.launch {
+            val record = runCatching { consentFlow.withdraw() }.getOrNull()
+            decisionInFlight = false
+            if (record == null) {
+                Toast.makeText(this@OnboardingActivity, R.string.focus_access_save_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            consent = record
+            Toast.makeText(
+                this@OnboardingActivity,
+                R.string.focus_access_withdrawn_toast,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /** The only route to Android's accessibility screen, and only after Agree. */
+    private fun openAccessibilitySettings() {
+        val intent = FocusAccess.settingsIntent(this)
+        if (intent == null) {
+            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // ----------------------------------------------------------- home role
+
+    private fun requestHomeRole() {
+        if (roleRequestInFlight || isFinishing || isDestroyed) return
+        roleRequestInFlight = true
+        lifecycleScope.launch {
+            // Persist completion before crossing into Android settings: a
+            // process death on that screen must not restart onboarding.
+            if (!persistOnboardingCompletion()) {
+                roleRequestInFlight = false
+                return@launch
+            }
+            refreshRole()
+            if (isDefaultHome) {
+                roleRequestInFlight = false
+                return@launch
+            }
+            val intent = RoleHelper.homeRoleRequestIntent(this@OnboardingActivity)
+            if (intent != null) {
+                runCatching { roleLauncher.launch(intent) }
+                    .onFailure {
+                        roleRequestInFlight = false
+                        LumaLog.w("Home role request unavailable; opening Home settings")
+                        fallbackToHomeSettings()
+                    }
+            } else {
+                roleRequestInFlight = false
+                fallbackToHomeSettings()
+            }
+        }
+    }
+
+    /**
+     * Older Android, or an OEM without the Home-role intent. The system page is
+     * opened and the tour stays here, so the user can come back and continue.
+     */
+    private fun fallbackToHomeSettings() {
+        RoleHelper.openHomeSettings(this)
+    }
+
+    private fun openThemeStudio() {
+        // Real navigation to the real editor; the tour is still here on return.
+        startActivity(
+            Intent(this, com.lumaos.pro.launcher.settings.SettingsActivity::class.java)
+                .putExtra(
+                    com.lumaos.pro.launcher.settings.SettingsActivity.EXTRA_TAB,
+                    com.lumaos.pro.launcher.settings.SettingsActivity.TAB_STUDIO
+                )
+        )
+    }
+
+    // ------------------------------------------------------------ completion
+
     private fun completeOnboardingAndFinish() {
         lifecycleScope.launch {
             if (persistOnboardingCompletion()) finish()
+        }
+    }
+
+    private fun persistCompletionSilently() {
+        lifecycleScope.launch {
+            try {
+                prefs.setOnboardingDone(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LumaLog.e("Could not persist onboarding completion", e)
+            }
         }
     }
 
@@ -353,37 +447,29 @@ class OnboardingActivity : ComponentActivity() {
         false
     }
 
-    private fun requestHomeRole() {
-        if (roleRequestInFlight || isFinishing || isDestroyed) return
-        roleRequestInFlight = true
-        lifecycleScope.launch {
-            // Persist the user's onboarding decision before crossing into Android
-            // Settings. Process death there must not cause onboarding to restart.
-            if (!persistOnboardingCompletion()) {
-                roleRequestInFlight = false
-                return@launch
-            }
-            if (RoleHelper.isDefaultLauncher(this@OnboardingActivity)) {
-                roleRequestInFlight = false
-                finish()
-                return@launch
-            }
-            val intent = RoleHelper.homeRoleRequestIntent(this@OnboardingActivity)
-            if (intent != null) {
-                runCatching { roleLauncher.launch(intent) }
-                    .onFailure {
-                        LumaLog.w("Home role request unavailable; opening Home settings")
-                        fallbackToHomeSettings()
-                    }
-            } else {
-                fallbackToHomeSettings()
-            }
+    private suspend fun safelyUpdateAppearance(update: suspend () -> Unit) {
+        try {
+            update()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            LumaLog.e("Could not apply experience", e)
+            Toast.makeText(this, R.string.appearance_apply_failed, Toast.LENGTH_LONG).show()
         }
     }
 
-    /** Older Android, or an OEM that has not implemented the Home role. */
-    private fun fallbackToHomeSettings() {
-        RoleHelper.openHomeSettings(this)
-        finish()
+    companion object {
+        /** Optional entry mode; absent means first run. */
+        const val EXTRA_MODE = "com.lumaos.pro.launcher.extra.ONBOARDING_MODE"
+
+        private const val KEY_STEP = "onboarding_step"
+
+        /**
+         * The Settings → Getting started entry point. Replay never resets a
+         * preference; it only lets the user walk the same screens again.
+         */
+        fun replayIntent(context: Context): Intent =
+            Intent(context, OnboardingActivity::class.java)
+                .putExtra(EXTRA_MODE, OnboardingMode.REPLAY.name)
     }
 }

@@ -17,6 +17,8 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.context.ComponentKeySetCodec
 import com.lumaos.pro.launcher.context.ContextProfile
+import com.lumaos.pro.launcher.context.FocusAccessConsent
+import com.lumaos.pro.launcher.context.FocusAccessConsentRecord
 import com.lumaos.pro.launcher.context.FocusEnforcement
 import com.lumaos.pro.launcher.context.ManualOverride
 import com.lumaos.pro.launcher.context.ProfileSchedule
@@ -102,6 +104,13 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
         val FOCUS_UNLOCK_UNTIL = longPreferencesKey("focus_unlock_until")
         val FOCUS_UNLOCK_PROFILE = stringPreferencesKey("focus_unlock_profile")
         val FOCUS_UNLOCK_MINUTES = intPreferencesKey("focus_unlock_minutes")
+
+        // In-app disclosure consent for the optional accessibility grant. Deliberately
+        // separate keys from anything Android reports: the permission lives in
+        // Settings.Secure and is never written here.
+        val FOCUS_ACCESS_CONSENT_STATE = stringPreferencesKey("focus_access_consent_state")
+        val FOCUS_ACCESS_CONSENT_VERSION = intPreferencesKey("focus_access_consent_version")
+        val FOCUS_ACCESS_CONSENT_AT = longPreferencesKey("focus_access_consent_at")
         val DND_MANAGED = booleanPreferencesKey("context_dnd_managed")
         val DND_RESTORE_FILTER = intPreferencesKey("context_dnd_restore_filter")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -849,6 +858,50 @@ class LumaPrefs(private val dataStore: DataStore<Preferences>) {
     fun focusUnlockMinutes(): Flow<Int> = read(Keys.FOCUS_UNLOCK_MINUTES) { 5 }
     suspend fun setFocusUnlockMinutes(minutes: Int) =
         write(Keys.FOCUS_UNLOCK_MINUTES, minutes.coerceIn(1, 60))
+
+    /**
+     * The user's answer to the in-app accessibility disclosure.
+     *
+     * This is consent, not permission. It is recorded when the user presses
+     * Agree or Decline on [com.lumaos.pro.launcher.context.FocusAccessDisclosureActivity]
+     * and survives relaunch. Whether Android currently holds the grant is read
+     * separately by [com.lumaos.pro.launcher.context.FocusAccess.isGranted];
+     * nothing in this flow ever writes the system permission, and the
+     * permission being on does not create consent.
+     *
+     * Kept out of LumaOS Pro's own backup export (not in the
+     * [com.lumaos.pro.launcher.backup.BackupCodec] whitelist). Android's system
+     * backup may still copy the settings DataStore as a whole; a restored
+     * GRANTED record is only ever honoured after the user enables the service
+     * there in system settings, and a restored DECLINED record keeps stronger
+     * blocking off.
+     */
+    val focusAccessConsent: Flow<FocusAccessConsentRecord> = dataStore.data
+        .catch { e ->
+            if (e is IOException) {
+                LumaLog.e("Preferences read failed, falling back to defaults", e)
+                emit(emptyPreferences())
+            } else throw e
+        }
+        .map { p ->
+            FocusAccessConsentRecord(
+                state = FocusAccessConsent.parseState(p[Keys.FOCUS_ACCESS_CONSENT_STATE]),
+                disclosureVersion = p[Keys.FOCUS_ACCESS_CONSENT_VERSION] ?: 0,
+                decidedAtMillis = p[Keys.FOCUS_ACCESS_CONSENT_AT] ?: 0L
+            )
+        }
+
+    suspend fun setFocusAccessConsent(record: FocusAccessConsentRecord) {
+        dataStore.edit { p ->
+            p[Keys.FOCUS_ACCESS_CONSENT_STATE] = record.state.name
+            p[Keys.FOCUS_ACCESS_CONSENT_VERSION] = record.disclosureVersion
+            if (record.decidedAtMillis > 0L) {
+                p[Keys.FOCUS_ACCESS_CONSENT_AT] = record.decidedAtMillis
+            } else {
+                p.remove(Keys.FOCUS_ACCESS_CONSENT_AT)
+            }
+        }
+    }
 
     /**
      * Drops uninstalled apps from [profile]'s visibility, restriction and pin
