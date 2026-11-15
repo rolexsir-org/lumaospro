@@ -1,6 +1,6 @@
 # LumaOS Pro — Design System
 
-**Release:** 1.2.0 (`versionCode` 120).
+**Release:** 1.5.0 (`versionCode` 150).
 
 > **Verification status (read first).** This document describes the design system as
 > implemented in this checkout. There is no Android SDK, Gradle distribution,
@@ -170,7 +170,7 @@ Material defaults plus a thin palette, which produced three problems:
 3. **Contrast by luck.** Text colours were chosen per widget; some pairs only
    passed AA on dark surfaces and failed on light ones.
 
-1.2.0 keeps that rule and ships the three-identity system above. The sections
+1.5.0 keeps that rule and ships the three-identity system above. The sections
 that follow (§1–§14) are the reference for the roles; they were written for the
 retained palettes before v3.2 and remain accurate for them.
 

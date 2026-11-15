@@ -430,17 +430,19 @@ second APK, and no change to existing launcher behaviour.
 
 
 Notable changes to LumaOS Pro. Entries use the app's `versionName`; the Play
-`versionCode` is derived as `major * 100 + minor * 10 + patch` (1.2.0 → 120).
+`versionCode` is derived as `major * 100 + minor * 10 + patch` (1.5.0 → 150).
 
-The current source is **1.2.0 / `versionCode` 120**. Nothing below has been
-published: the sections headed *Unreleased* are the work that ships as 1.2.0, and
+The current source is **1.5.0 / `versionCode` 150**. Nothing below has been
+published: the sections headed *Unreleased* are the work that ships as 1.5.0, and
 the 1.0.0 / 1.0.1 identities they sit on were configured but never uploaded to
-Play. Nothing in this file is a claim that a build was produced, tested or
-published. See [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) for the verification
-boundary and the acceptance gate, and the Google Play release checklist in
+Play. The tree was previously configured as 1.2.0 / 120 before any release; that
+identity was superseded by 1.5.0 and no 1.2.0 artefact exists. Nothing in this
+file is a claim that a build was produced, tested or published. See
+[docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) for the verification boundary and
+the acceptance gate, and the Google Play release checklist in
 [README.md](README.md).
 
-## 1.0.0 / 1.0.1 — never published (rolled into 1.2.0)
+## 1.0.0 / 1.0.1 — never published (rolled into 1.5.0)
 
 ### Notification shade and Quick Controls
 

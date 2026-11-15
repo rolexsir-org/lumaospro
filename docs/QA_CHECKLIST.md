@@ -45,7 +45,7 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A23 | **v3.2** Compose spacing draws every value from the token scale (no off-scale 6/10/14 dp) | Scripted scan of every Compose source for `.dp` literals against `LumaDesignTokens.SPACING_DP` | **FAIL — open gap.** There is no `LumaSpacing` object; spacing is `LumaDesignTokens.SP_1`…`SP_11` (2/4/8/12/16/20/24/32/40/56/72), used at 58 call sites. 72 off-scale literals remain across 7 Compose files (`10.dp` ×35, `6.dp` ×29, `14.dp` ×8): `wallpaper/WallpaperActivity.kt` (25), `settings/SettingsScreen.kt` (15), `settings/studio/StudioScreen.kt` (14), `onboarding/OnboardingScreens.kt` (9), `settings/DashboardScreen.kt` (6), `ui/glass/GlassComponents.kt` (2), `widgets/music/MusicAccessActivity.kt` (1). The seven-step walkthrough moved the onboarding literals out of the old `OnboardingActivity` and added 9 to the new screens file, so the count grew from the previously recorded 62. Either snap these to the scale or record them as deliberate exceptions |
 | A24 | **v3.2** authored `ok`/`warn` reach the semantic layer instead of being re-derived | `ThemeColors.successSeed` / `warningSeed` → `SemanticPalette.of`, retained palettes null | PASS (by inspection; unit test `DesignSystemV32Test` asserts the seeds) |
 | A25 | **v3.2** clock size is a per-theme token, not a constant | `ResolvedTheme.clockSp` → `HomeActivity.applyPreset` | PASS (by inspection; 64 / 58 / 84 sp) |
-| A26 | Version identity is `1.2.0` / `versionCode` 120 in the build file and every document | Cross-check of `app/build.gradle.kts`, `toolchain/manual-build/build.py`, `README.md`, `CHANGELOG.md`, `DESIGN_SYSTEM.md`, `design/v3.2/README.md` | PASS — `major * 100 + minor * 10 + patch` → 120 |
+| A26 | Version identity is `1.5.0` / `versionCode` 150 in the build file and every document | Cross-check of `app/build.gradle.kts`, `toolchain/manual-build/build.py`, `README.md`, `CHANGELOG.md`, `DESIGN_SYSTEM.md`, `design/v3.2/README.md` | PASS — `major * 100 + minor * 10 + patch` → 150 |
 | A27 | Accessibility consent pass: `AndroidManifest.xml`, `strings_v2.xml`, `focus_accessibility_config.xml` are well-formed | Python XML parser | PASS (3/3 parsed) |
 | A28 | Every added `focus_access_*` string is referenced; no duplicate string names; no unresolved `@string/` reference | Scripted resource cross-check (705 strings) | PASS — 40 `focus_access_*` strings, 0 unused, 0 duplicates, 0 missing |
 | A29 | Changed Kotlin files parse (no syntax/parser errors) | Standalone `kotlinc` 2.2.21 per file; resolution errors expected without the Android/AndroidX classpath | PASS (parser only) — 13 files, 0 syntax errors |
@@ -58,7 +58,7 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A36 | Sibling imports resolve after the disclosure refactor and the gesture-label extraction | Project package/declaration index + source review | PASS — `FocusAccessDisclosureContent`/`FocusAccessDisclosureScreen` call sites consistent; `gestureKindLabel`/`gestureActionLabel` moved to `settings/GestureLabels.kt` and used by both Settings and onboarding |
 
 
-Re-verified on the current tree (1.2.0): 109 XML files parsed (108 under
+Re-verified on the current tree (1.5.0): 109 XML files parsed (108 under
 `app/src/main/res` plus `AndroidManifest.xml`), 0 malformed; 273 Kotlin sources
 (180 main + 93 test) indexed; 754 distinct `R.*` references resolved against the
 declared resource table with 0 unresolved (the only matches outside it are
