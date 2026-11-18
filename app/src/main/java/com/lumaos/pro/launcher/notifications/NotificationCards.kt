@@ -20,6 +20,7 @@ import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.motion.LumaHaptics
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassPalette
@@ -307,7 +308,7 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
 
         val dismissible = card.clearable && !card.ongoing
         dismiss.visibility = if (dismissible) View.VISIBLE else View.GONE
-        dismiss.setImageResource(R.drawable.ic_rx_close)
+        ThemedUiIcons.bind(dismiss, R.drawable.ic_rx_close)
         dismiss.imageTintList = android.content.res.ColorStateList.valueOf(colors.muted)
         dismiss.contentDescription = context.getString(R.string.notification_dismiss_description, label)
         dismiss.setOnClickListener {
@@ -469,7 +470,7 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         watcher = nextWatcher
         replyField.addTextChangedListener(nextWatcher)
 
-        replySend.setImageResource(R.drawable.ic_rx_reply)
+        ThemedUiIcons.bind(replySend, R.drawable.ic_rx_reply)
         replySend.imageTintList = android.content.res.ColorStateList.valueOf(theme.colors.onAccent)
         replySend.background = ThemedDrawables.ripple(
             theme.colors.onAccent and 0x33FFFFFF,

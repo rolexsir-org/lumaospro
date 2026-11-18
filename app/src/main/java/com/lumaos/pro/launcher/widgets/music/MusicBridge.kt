@@ -29,6 +29,8 @@ import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.wallpaper.WallpaperLimits
 import com.lumaos.pro.launcher.widgets.WidgetGlassPalette
 import com.lumaos.pro.launcher.widgets.WidgetGlassRenderer
+import com.lumaos.pro.launcher.widgets.WidgetLabArt
+import com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgetSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -239,7 +241,7 @@ object MusicBridge {
         val widgetManager = AppWidgetManager.getInstance(app)
         ids.forEach { id ->
             val views = RemoteViews(app.packageName, R.layout.widget_luma_music)
-            applyTheme(app, views, theme)
+            applyTheme(app, views, theme, id)
             if (message != null || controller == null) {
                 views.setViewVisibility(R.id.music_empty, View.VISIBLE)
                 views.setViewVisibility(R.id.music_active, View.GONE)
@@ -275,9 +277,9 @@ object MusicBridge {
             views.setInt(R.id.music_art, "setColorFilter", 0)
             views.setImageViewBitmap(R.id.music_art, artwork)
         } else {
-            views.setImageViewResource(R.id.music_art, R.drawable.ic_music_note)
+            views.setImageViewBitmap(R.id.music_art, WidgetLabArt.album(WidgetGlassPalette.fromTheme(theme)))
             views.setContentDescription(R.id.music_art, app.getString(R.string.music_artwork_unavailable))
-            views.setInt(R.id.music_art, "setColorFilter", WidgetGlassPalette.fromTheme(theme).accent)
+            views.setInt(R.id.music_art, "setColorFilter", 0)
         }
         runCatching { controller.sessionActivity }.getOrNull()?.let {
             views.setOnClickPendingIntent(R.id.music_art, it)
@@ -287,7 +289,7 @@ object MusicBridge {
         val playing = kind(state) == SessionKind.PLAYING
         val toggle = if (playing) MusicCommand.PAUSE else MusicCommand.PLAY
         val actions = state?.actions ?: 0L
-        views.setImageViewResource(R.id.music_toggle, if (playing) R.drawable.ic_music_pause else R.drawable.ic_music_play)
+        views.setImageViewResource(R.id.music_toggle, if (playing) R.drawable.widget_transport_pause else R.drawable.widget_transport_play)
         views.setContentDescription(R.id.music_toggle, app.getString(if (playing) R.string.music_pause else R.string.music_play))
         listOf(R.id.music_previous to MusicCommand.PREVIOUS, R.id.music_toggle to toggle, R.id.music_next to MusicCommand.NEXT)
             .forEach { (view, command) ->
@@ -328,9 +330,9 @@ object MusicBridge {
         } else views.setViewVisibility(R.id.music_progress_row, View.GONE)
     }
 
-    private fun applyTheme(app: Context, views: RemoteViews, theme: ResolvedTheme) {
+    private fun applyTheme(app: Context, views: RemoteViews, theme: ResolvedTheme, id: Int) {
         val palette = WidgetGlassPalette.fromTheme(theme)
-        runCatching { WidgetGlassRenderer.plateBitmap(app, theme) }
+        runCatching { WidgetGlassRenderer.plateBitmap(app, theme, BuiltinWidgetSettings.radius(app, id)) }
             .onSuccess { views.setImageViewBitmap(R.id.music_glass_plate, it) }
             .onFailure {
                 views.setImageViewResource(

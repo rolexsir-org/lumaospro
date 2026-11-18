@@ -4,7 +4,7 @@
     Android 12+).
 
     Once any <include> is present, everything else is excluded by default, so
-    listing an <exclude> would be redundant (and lint rejects it). The
+    an <exclude> is only needed for a child of an included directory. The
     diagnostics database is therefore left out simply by not being named.
 
     LumaOS Vault never appears here. Its content is stored in
@@ -14,5 +14,6 @@
 -->
 <full-backup-content>
     <include domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="widget_weather_cache.xml" />
     <include domain="file" path="datastore/" />
 </full-backup-content>

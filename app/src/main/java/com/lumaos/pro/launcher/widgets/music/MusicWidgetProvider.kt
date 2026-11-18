@@ -8,6 +8,7 @@ import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.lumaos.pro.launcher.notifications.NotificationHub
+import com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgetSettings
 
 /** A normal Android widget, hosted by Luma's existing AppWidgetHost or other home apps. */
 class MusicWidgetProvider : AppWidgetProvider() {
@@ -20,11 +21,12 @@ class MusicWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
-        // No per-ID data: Android remaps widget IDs and the next refresh rediscovers sessions.
+        BuiltinWidgetSettings.restore(context, oldWidgetIds, newWidgetIds)
         MusicBridge.refresh(context)
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        BuiltinWidgetSettings.delete(context, appWidgetIds)
         MusicBridge.refresh(context)
     }
 

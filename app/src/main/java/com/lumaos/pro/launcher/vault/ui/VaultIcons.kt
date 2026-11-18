@@ -1,8 +1,12 @@
 package com.lumaos.pro.launcher.vault.ui
 
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import android.content.Context
 import android.graphics.drawable.Drawable
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.icons.LivingIconId
+import com.lumaos.pro.launcher.icons.ThemeGlyphDrawable
+import com.lumaos.pro.launcher.icons.ThemeIconPack
 
 /**
  * Vault's icons.
@@ -18,12 +22,22 @@ object VaultIcons {
 
     private val cache = HashMap<String, Drawable?>()
 
-    fun of(context: Context, name: String): Drawable? = cache.getOrPut(name) {
-        runCatching {
-            context.assets.open("living_icons/$name.png").use { stream ->
-                Drawable.createFromStream(stream, null)
+    fun of(context: Context, name: String): Drawable? {
+        val pack = ThemeIconPack.forTheme(ThemedUiIcons.activeTheme(context))
+        val id = LivingIconId.fromStorageKey(name)
+        if (pack != null && id != null) {
+            val size = (24 * context.resources.displayMetrics.density).toInt()
+            return ThemeGlyphDrawable(pack, null, size, id).apply {
+                setTint(VaultDesign.colorTextPrimary)
             }
-        }.getOrNull()
+        }
+        return cache.getOrPut(name) {
+            runCatching {
+                context.assets.open("living_icons/$name.png").use { stream ->
+                    Drawable.createFromStream(stream, null)
+                }
+            }.getOrNull()
+        }
     }
 
     fun camera(context: Context) = of(context, "camera")
@@ -41,7 +55,7 @@ object VaultIcons {
      * rather than loaded as a finished PNG.
      */
     fun hiddenApps(context: Context): Drawable? = runCatching {
-        context.getDrawable(R.drawable.ic_rx_hide)
+        ThemedUiIcons.drawable(context, R.drawable.ic_rx_hide)
             ?.mutate()
             ?.apply { setTint(VaultDesign.colorTextPrimary) }
     }.getOrNull()

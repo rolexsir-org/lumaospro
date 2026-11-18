@@ -143,6 +143,13 @@ class LivingIconManager(
         drawableForId(iconId, targetSizePx)?.bitmap
 
     /** Decodes a specific [LivingIconId] directly (used by previews and the override picker). */
+    internal fun drawableForTheme(
+        id: LivingIconId,
+        targetPx: Int,
+        themeId: com.lumaos.pro.launcher.ui.theme.ThemeId
+    ): Drawable? = ThemeIconPack.forTheme(themeId)?.let { ThemeGlyphDrawable(it, null, targetPx, id) }
+        ?: drawableForId(id, targetPx)
+
     fun drawableForId(iconId: LivingIconId, targetSizePx: Int = 256): LivingIconDrawable? {
         val sampleSize = computeSampleSize(targetSizePx)
         val cacheKey = "${iconId.storageKey}@$sampleSize"

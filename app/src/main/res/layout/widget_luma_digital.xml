@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/builtin_widget_root" android:layout_width="match_parent" android:layout_height="match_parent">
+    <ImageView android:id="@+id/builtin_widget_plate" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:scaleType="fitXY" android:importantForAccessibility="no"
+        android:src="@drawable/bg_music_glass_dark" />
+    <ImageView android:id="@+id/builtin_widget_accent" android:layout_width="3dp" android:layout_height="18dp"
+        android:layout_gravity="start|center_vertical" android:layout_marginStart="6dp"
+        android:scaleType="fitXY" android:importantForAccessibility="no" android:src="@drawable/widget_accent_tick" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:gravity="center_vertical" android:paddingStart="14dp" android:paddingEnd="14dp"
+        android:paddingTop="4dp" android:paddingBottom="4dp" android:orientation="vertical">
+        <TextClock android:id="@+id/builtin_widget_clock" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="34sp"
+            android:fontFamily="sans-serif-light" android:fontFeatureSettings="tnum" android:includeFontPadding="false" android:maxLines="1"
+            android:autoSizeTextType="uniform" android:autoSizeMinTextSize="16sp" android:autoSizeMaxTextSize="56sp" />
+        <TextClock android:id="@+id/builtin_widget_date" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:format12Hour="EEE, MMM d" android:format24Hour="EEE, MMM d"
+            android:textColor="#CDD2DF" android:textSize="10sp" android:textAllCaps="true" android:letterSpacing="0.18" android:fontFamily="sans-serif-medium"
+            android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+</FrameLayout>

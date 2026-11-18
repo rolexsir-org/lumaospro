@@ -74,8 +74,13 @@ class VaultPlatformIntegrationTests {
             assertFalse("Vault must not export anything: $line", line.contains("android:exported=\"true\""))
             assertFalse("Vault must not declare an intent-filter: $line", line.contains("intent-filter"))
         }
-        // No networking permission is requested anywhere by this app.
-        assertFalse(manifest.contains("android.permission.INTERNET"))
+        // Weather needs app-wide INTERNET, but Vault must not depend on its transport
+        // or introduce a direct network client of its own.
+        val vault = moduleDir.resolve("src/main/java/com/lumaos/pro/launcher/vault")
+        val network = Regex("java\\.net\\.|javax\\.net\\.|okhttp3\\.|retrofit2\\.|WeatherRefreshJob|WeatherData")
+        for (file in vault.walkTopDown().filter { it.isFile && it.extension == "kt" }) {
+            assertFalse("Unexpected Vault network dependency: ${file.name}", network.containsMatchIn(file.readText()))
+        }
         // FLAG_SECURE is applied by the one base class every Vault screen extends.
         val base = moduleDir.resolve(
             "src/main/java/com/lumaos/pro/launcher/vault/ui/VaultScreenActivity.kt"

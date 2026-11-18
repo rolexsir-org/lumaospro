@@ -103,7 +103,7 @@ data class IconRenderSpec(
                 tintColor = tintColor,
                 tintPlateColor = tintPlateColor,
                 depth = depth && theme.usesBlur,
-                iconPack = iconPack,
+                iconPack = iconPack.takeIf { theme.id == ThemeId.SIGNATURE },
                 livingIcons = livingIcons,
                 livingOverridesHash = livingOverridesHash,
                 explicitTint = explicitTint,
@@ -135,6 +135,37 @@ class IconRenderer {
         // Leave a margin for the shadow so it is not clipped by the bitmap.
         val margin = if (spec.depth) size * 0.06f else size * 0.02f
         val rect = RectF(margin, margin * 0.7f, size - margin, size - margin * 1.3f)
+
+        val pack = ThemeIconPack.forTheme(spec.themeId)
+        if (pack != null) {
+            val markBounds = inset(rect, 0.98f)
+            val tile = pack.plate?.let { outline ->
+                Path(outline).apply {
+                    transform(Matrix().apply {
+                        setScale(markBounds.width() / 24f, markBounds.height() / 24f)
+                        postTranslate(markBounds.left, markBounds.top)
+                    })
+                }
+            } ?: maskPath(spec.shape, null, rect)
+            if (spec.depth) drawShadow(canvas, tile, size)
+            fill(canvas, tile, spec.tintPlateColor)
+            val mark = if (source is ThemeGlyphDrawable) source else {
+                // Keep unmatched apps and work-profile badges recognizable. Their
+                // native artwork sits inside the shared theme silhouette.
+                val native = inset(rect, (24 - 2 * pack.glyphInset) / 24f)
+                val nativeMask = maskPath(spec.shape, source as? AdaptiveIconDrawable, native)
+                if (spec.style == IconStyle.TINTED) {
+                    drawInset(canvas, source, native, nativeMask, 1f, toneFilter(spec.tintColor))
+                } else {
+                    drawFull(canvas, source, native)
+                }
+                ThemeGlyphDrawable(pack, null, size)
+            }
+            mark.setTint(spec.tintColor)
+            mark.setBounds(markBounds.left.toInt(), markBounds.top.toInt(), markBounds.right.toInt(), markBounds.bottom.toInt())
+            mark.draw(canvas)
+            return bitmap
+        }
 
         if (source is LivingIconDrawable) {
             renderLivingIcon(canvas, source, rect, size, spec)

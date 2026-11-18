@@ -547,15 +547,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val exactOverride = overrides[key]
                     ?: if (key.userSerial != 0L) overrides[key.copy(userSerial = 0L)] else null
                 val overrideLiving = (exactOverride as? com.lumaos.pro.launcher.icons.LivingIconOverride.UseLiving)
-                    ?.let { core.livingIcons.drawableForId(it.icon, size) }
+                    ?.let { core.livingIcons.drawableForTheme(it.icon, size, theme.id) }
                 val forceSystem = exactOverride == com.lumaos.pro.launcher.icons.LivingIconOverride.UseSystem
-                val packed = if (!forceSystem && overrideLiving == null && !iconPack.isNullOrBlank()) {
-                    core.iconPacks.iconFor(iconPack, component, metrics.densityDpi)
+                val packed = if (!forceSystem && overrideLiving == null && !spec.iconPack.isNullOrBlank()) {
+                    core.iconPacks.iconFor(spec.iconPack, component, metrics.densityDpi)
                 } else null
                 val defaultLiving = if (!forceSystem && overrideLiving == null && packed == null) {
                     com.lumaos.pro.launcher.icons.LivingIconResolver
                         .resolve(key, livingIconsEnabled = livingIconsEnabled, overrides = overrides)
-                        ?.let { core.livingIcons.drawableForId(it, size) }
+                        ?.let { core.livingIcons.drawableForTheme(it, size, theme.id) }
                 } else null
                 val source = overrideLiving
                     ?: packed

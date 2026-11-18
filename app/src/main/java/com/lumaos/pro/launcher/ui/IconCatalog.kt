@@ -5,7 +5,6 @@ import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import androidx.annotation.DrawableRes
-import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.R
 
 /**
@@ -115,14 +114,14 @@ object LumaIcons {
      */
     fun drawable(context: Context, icon: LumaIcon, selected: Boolean = false, tint: Int? = null): Drawable {
         val id = if (selected) icon.filledRes ?: icon.res else icon.res
-        val d = ContextCompat.getDrawable(context, id)
-            ?: ContextCompat.getDrawable(context, LumaIcon.fallback.res)!!
+        val d = ThemedUiIcons.drawable(context, id)
+            ?: ThemedUiIcons.drawable(context, LumaIcon.fallback.res)!!
         return d.mutate().apply { tint?.let { setTint(it) } }
     }
 
     /** Applies a glyph and tint to an ImageView (used by themed View surfaces). */
     fun apply(view: ImageView, icon: LumaIcon, tint: Int, selected: Boolean = false) {
-        view.setImageDrawable(drawable(view.context, icon, selected, tint))
+        ThemedUiIcons.bind(view, if (selected) icon.filledRes ?: icon.res else icon.res)
         view.imageTintList = ColorStateList.valueOf(tint)
         view.contentDescription = view.contentDescription ?: icon.label
     }

@@ -96,6 +96,7 @@ import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.home.LivingIconPickerSheet
 import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
 import com.lumaos.pro.launcher.launcher.home.LumaShade
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.theme.IconStyle
 import com.lumaos.pro.launcher.launcher.home.MenuEntry
 import com.lumaos.pro.launcher.launcher.home.PlacementGuideView
@@ -476,6 +477,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onResume() {
         super.onResume()
+        lifecycleScope.launch { com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgets.refreshAll(applicationContext) }
         // Refresh on every return to the desktop: an app installed while away
         // must appear without waiting for a broadcast round-trip.
         viewModel.refreshApps()
@@ -1712,8 +1714,24 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
+    private fun bindThemedControls(themeId: ThemeId) {
+        fun bind(viewId: Int, drawableId: Int) {
+            findViewById<android.widget.ImageView>(viewId)?.let { ThemedUiIcons.bind(it, drawableId, themeId) }
+        }
+        bind(R.id.search_pill_icon, R.drawable.ic_rx_search)
+        bind(R.id.search_pill_voice, R.drawable.ic_rx_voice)
+        bind(R.id.edit_remove_target, R.drawable.ic_rx_remove)
+        bind(R.id.drawer_sort, R.drawable.ic_rx_sort)
+        bind(R.id.drawer_voice, R.drawable.ic_rx_voice)
+        bind(R.id.drawer_close, R.drawable.ic_rx_close)
+        bind(R.id.search_clear, R.drawable.ic_rx_close)
+    }
+
     private fun finishTheme(target: ResolvedTheme) {
         appliedTheme = target
+        // These controls are inflated from XML, rather than from the glyph catalog.
+        bindThemedControls(target.id)
+        ThemedUiIcons.refresh(window.decorView, target.id)
         applyColors(target)
         applyTypography(target)
         updateIconSpec()

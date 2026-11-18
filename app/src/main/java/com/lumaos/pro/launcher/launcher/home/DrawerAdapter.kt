@@ -1,5 +1,6 @@
 package com.lumaos.pro.launcher.launcher.home
 
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
@@ -108,7 +109,7 @@ class DrawerAdapter(
                 holder.subtitle.setTextColor(style.subtitleColor)
                 style.titleTypeface?.let { holder.title.typeface = it }
                 style.subtitleTypeface?.let { holder.subtitle.typeface = it }
-                holder.action.setImageResource(R.drawable.ic_rx_chevron_right)
+                ThemedUiIcons.bind(holder.action, R.drawable.ic_rx_chevron_right)
                 holder.action.imageTintList = android.content.res.ColorStateList.valueOf(style.iconTint)
                 holder.action.visibility = View.GONE
                 when (row) {
@@ -129,7 +130,7 @@ class DrawerAdapter(
                         }
                         holder.title.text = ctx.getString(titleRes, row.query)
                         holder.subtitle.visibility = View.GONE
-                        holder.icon.setImageResource(icon)
+                        holder.icon.setImageDrawable(ThemedUiIcons.drawable(holder.icon.context, icon))
                         holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(style.iconTint)
                         holder.itemView.contentDescription = holder.title.text
                     }

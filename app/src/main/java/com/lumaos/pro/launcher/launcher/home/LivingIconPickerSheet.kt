@@ -163,7 +163,7 @@ class LivingIconPickerSheet(
                 controlSpec = controlSpec,
                 loadDrawable = {
                     if (defaultId != null) {
-                        livingIcons.drawableForId(defaultId, dp(42f))
+                        livingIcons.drawableForTheme(defaultId, dp(42f), theme.id)
                     } else {
                         systemIconProvider(key, densityDpi)
                     }
@@ -200,7 +200,7 @@ class LivingIconPickerSheet(
                     subtitle = null,
                     selected = selected,
                     controlSpec = controlSpec,
-                    loadDrawable = { livingIcons.drawableForId(id, dp(42f)) },
+                    loadDrawable = { livingIcons.drawableForTheme(id, dp(42f), theme.id) },
                     onClick = {
                         LumaHaptics.tap(sheet)
                         onSelection(LivingIconOverride.UseLiving(id))
@@ -219,7 +219,7 @@ class LivingIconPickerSheet(
                     subtitle = null,
                     selected = selected,
                     controlSpec = controlSpec,
-                    loadDrawable = { livingIcons.drawableForId(id, dp(42f)) },
+                    loadDrawable = { livingIcons.drawableForTheme(id, dp(42f), theme.id) },
                     onClick = {
                         LumaHaptics.tap(sheet)
                         onSelection(LivingIconOverride.UseLiving(id))

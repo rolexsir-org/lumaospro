@@ -13,6 +13,8 @@ import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.widgets.WidgetGlassPalette
 import com.lumaos.pro.launcher.widgets.WidgetGlassRenderer
+import com.lumaos.pro.launcher.widgets.WidgetLabArt
+import com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgetSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,9 +34,12 @@ class BatteryWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
+        BuiltinWidgetSettings.restore(context, oldWidgetIds, newWidgetIds)
         observeTheme(context.applicationContext)
         refresh(context.applicationContext)
     }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) = BuiltinWidgetSettings.delete(context, appWidgetIds)
 
     override fun onDisabled(context: Context) { themeJob?.cancel(); themeJob = null }
 
@@ -62,30 +67,31 @@ class BatteryWidgetProvider : AppWidgetProvider() {
             val status = BatteryLogic.status(battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1)
             val theme = (app as LumaApp).core.themes.theme.value
             val palette = WidgetGlassPalette.fromTheme(theme)
-            val views = RemoteViews(app.packageName, R.layout.widget_luma_battery)
-            runCatching { WidgetGlassRenderer.plateBitmap(app, theme) }
-                .onSuccess { views.setImageViewBitmap(R.id.battery_glass_plate, it) }
-                .onFailure {
-                    views.setImageViewResource(
-                        R.id.battery_glass_plate,
-                        if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light
-                    )
-                }
-            views.setInt(R.id.battery_icon, "setColorFilter", palette.accent)
-            views.setTextColor(R.id.battery_level, palette.primaryText)
-            views.setTextColor(R.id.battery_status, palette.mutedText)
-            views.setTextColor(R.id.battery_updated, palette.mutedText)
-            views.setTextViewText(R.id.battery_level, level?.let { app.getString(R.string.battery_percent, it) } ?: app.getString(R.string.battery_unknown))
-            val statusText = when (status) {
-                BatteryStatus.CHARGING -> R.string.battery_status_charging
-                BatteryStatus.FULL -> R.string.battery_status_full
-                BatteryStatus.NOT_CHARGING -> R.string.battery_status_not_charging
-                BatteryStatus.UNKNOWN -> R.string.battery_status_unknown
-            }
-            views.setTextViewText(R.id.battery_status, app.getString(statusText))
-            val time = android.text.format.DateFormat.getTimeFormat(app).format(Date())
-            views.setTextViewText(R.id.battery_updated, app.getString(R.string.battery_updated, time))
             ids.forEach { id ->
+                val views = RemoteViews(app.packageName, R.layout.widget_luma_battery)
+                runCatching { WidgetGlassRenderer.plateBitmap(app, theme, BuiltinWidgetSettings.radius(app, id)) }
+                    .onSuccess { views.setImageViewBitmap(R.id.battery_glass_plate, it) }
+                    .onFailure {
+                        views.setImageViewResource(
+                            R.id.battery_glass_plate,
+                            if (theme.isDark) R.drawable.bg_music_glass_dark else R.drawable.bg_music_glass_light
+                        )
+                    }
+                views.setImageViewBitmap(R.id.battery_icon, WidgetLabArt.battery(level, palette))
+                views.setTextColor(R.id.battery_level, palette.primaryText)
+                views.setTextColor(R.id.battery_status, palette.mutedText)
+                views.setTextColor(R.id.battery_updated, palette.mutedText)
+                views.setTextViewText(R.id.battery_level, level?.let { app.getString(R.string.battery_percent, it) } ?: app.getString(R.string.battery_unknown))
+                val statusText = when (status) {
+                    BatteryStatus.CHARGING -> R.string.battery_status_charging
+                    BatteryStatus.FULL -> R.string.battery_status_full
+                    BatteryStatus.NOT_CHARGING -> R.string.battery_status_not_charging
+                    BatteryStatus.UNKNOWN -> R.string.battery_status_unknown
+                }
+                views.setTextViewText(R.id.battery_status, app.getString(statusText))
+                val time = android.text.format.DateFormat.getTimeFormat(app).format(Date())
+                views.setTextViewText(R.id.battery_updated, app.getString(R.string.battery_updated, time))
+
                 runCatching { manager.updateAppWidget(id, views) }
                     .onFailure { LumaLog.w("Battery widget update failed") }
             }

@@ -433,7 +433,7 @@ None of those harness files are committed; the scripts live outside the reposito
 | 6 | Everything encrypted at rest | ✅ | `VaultStorageTests.objectFileContainsNoPlaintext`, `…metadataDoesNotStoreNamesInTheClear`, `…backupContainerContainsNoPlaintext` |
 | 7 | Invisible to ordinary galleries and file managers | 🟡 | No MediaStore insert anywhere in Vault; storage is app-private with opaque names; requires on-device confirmation |
 | 8 | Excluded from system backup and device transfer | ✅ | `VaultPlatformIntegrationTests.cloudBackupNeverIncludesTheVaultDirectory`, `…legacyBackupRulesNeverIncludeTheVaultDirectory`, plus `noBackupFilesDir` |
-| 9 | Fully offline | ✅ | Vault requests no network permission; there is no networking code in the package |
+| 9 | Fully offline | ✅ | Vault has no networking code; the optional Weather widget is the only network feature |
 | 10 | Ciphertext-only backup with verified restore | ✅ | `VaultBackupTests` (7 tests) including integrity rejection and incomplete-vault abort |
 | 11 | Lifecycle locking (screen-off, background, timeout, process death) | ✅ | `VaultSessionTests` (screen-off, idle, conceal, lock-on-leave, process death) — the Android wiring itself is 🟡 |
 | 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the rest of the suite (93 test sources project-wide) was **not** executed here (no Gradle) — must be run before release |

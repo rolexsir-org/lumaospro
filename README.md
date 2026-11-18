@@ -19,7 +19,7 @@ opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYST
 
 | Document | What it covers |
 |---|---|
-| [CHANGELOG.md](CHANGELOG.md) | Every notable change, by release. Current source is 1.5.0 / `versionCode` 150; nothing has been published yet |
+| [CHANGELOG.md](CHANGELOG.md) | Every notable change, by release. Current source is 1.5.1 / `versionCode` 151; nothing has been published yet |
 | [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) | Publisher-review draft for the Play Data safety form. Has placeholders — **not** a publishable policy |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Design System v3.2 / Luma Glass reference: tokens, colour, type, iconography, shapes, motion, token map |
 | [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) | What has actually been verified versus what still needs a build or a device, plus the release acceptance gate |
@@ -31,7 +31,7 @@ opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYST
 | [docs/design/v3.2/](docs/design/v3.2/README.md) | The authored v3.2 bundle: [spec](docs/design/v3.2/SPEC.md), one [token file per theme](docs/design/v3.2/tokens), and provenance. `DesignTokensParityTest` reads these JSON files, so they are load-bearing |
 | [design-src/README.md](design-src/README.md) | The studio build the bundle was exported from, and the wallpaper pipeline |
 | [store-assets/README.md](store-assets/README.md) | Play icon and feature graphic. Brand assets, **not** app screenshots |
-| [dist/README.md](dist/README.md) | Why no signed release artifact is checked in |
+| [docs/WIDGET_SYSTEM_AUDIT.md](docs/WIDGET_SYSTEM_AUDIT.md) | Native widget architecture, Theme Lab styling, and device-test checklist |
 | [toolchain/manual-build/README.md](toolchain/manual-build/README.md) | Historical non-Gradle build pipeline, kept for provenance. Not the release path |
 
 Dated point-in-time engineering reports (build, recovery, polish, UI-repair,
@@ -104,6 +104,10 @@ is checked in.
 
 ### Google Play release checklist
 
+Release APKs and AABs are not committed. Build with `./build.sh assembleRelease`
+or `./build.sh bundleRelease`, then verify the artifacts under `app/build/outputs/`.
+A debug-signed APK is not a Play release artifact.
+
 - The project targets Android 16 / API 36. Recheck the target-API requirement
   at submission time; Google Play's policy requires API 36 for submissions from
   August 31, 2026 ([current policy](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)).
@@ -130,7 +134,7 @@ is checked in.
   package namespace, and listing artwork have been updated in source. Confirm
   `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
   clearance before first upload. `versionCode` follows
-  `major * 100 + minor * 10 + patch` (1.5.0 → 150), so increment it on each
+  `major * 100 + minor * 10 + patch` (1.5.1 → 151), so increment it on each
   later upload and follow any account-specific Play testing gates shown in
   Console. The new name and package have not been independently cleared.
 
@@ -144,7 +148,7 @@ is checked in.
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 1.5.0 (versionCode 150) |
+| Version | 1.5.1 (versionCode 151) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 
@@ -530,7 +534,7 @@ verified.
 
 ## Privacy
 
-- No account, backend, analytics, advertising SDK, or app network permission.
+- No account, app-operated backend, analytics, or advertising SDK.
   LumaOS Pro itself does not upload app-list or diagnostics data.
 - Installed app labels/icons are read from Android for launcher display and
   search. Preferences, home layout, launch history and diagnostics are stored
@@ -589,12 +593,10 @@ so with existing content still accessible. Both `<uses-feature>` entries
 Deliberately **not** requested: `QUERY_ALL_PACKAGES` (app discovery uses
 Android's `LauncherApps` API plus a declared `<queries>` block), `KILL_BACKGROUND_PROCESSES`
 and `FORCE_STOP` (LumaOS Pro does not terminate other applications),
-`PACKAGE_USAGE_STATS` (foreground detection uses the optional accessibility
-binding instead of polled usage stats), and any device-admin binding. The
+and any device-admin binding. The
 accessibility binding above is optional and off by default; every core feature
 works without it, and the service stays inert until the in-app disclosure is
-accepted, even if the user enabled it in system settings. No network permission
-is declared at all.
+accepted, even if the user enabled it in system settings. `PACKAGE_USAGE_STATS` is used only for the opt-in Screen Time widget. Calendar access is requested only by its widget. The optional Weather widget uses internet access for coordinates entered by the user. See [Widget implementation audit](docs/WIDGET_SYSTEM_AUDIT.md).
 
 ---
 

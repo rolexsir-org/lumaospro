@@ -1,10 +1,12 @@
-# LumaOS Pro — Design System QA Checklist
+# LumaOS Pro 1.5.1 — Design System QA Checklist
+
+Current source identity: **1.5.1 / `versionCode` 151**. Historical PASS results below are not a new release sign-off. The widget audit tracks the earlier debug build and outstanding device checks.
 
 This checklist separates **what has been verified in this workspace** from **what
 must be verified on a device or in a real build**. Nothing in the "device" section
 has been executed here.
 
-Environment of record: no full JDK, Gradle, Android SDK, emulator or physical
+Historical environment for the 1.5.0 checks below: no full JDK, Gradle, Android SDK, emulator or physical
 device was available. The Android application was therefore **not compiled with
 Gradle, not linted, not linked and not rendered**. A standalone Kotlin compiler
 and JRE were bootstrapped locally for pure-JVM tests only. Do not treat any
@@ -58,7 +60,7 @@ v3.2 adoption** (rows A12–A13 updated, A17–A22 added). The v3.2 rows are mar
 | A36 | Sibling imports resolve after the disclosure refactor and the gesture-label extraction | Project package/declaration index + source review | PASS — `FocusAccessDisclosureContent`/`FocusAccessDisclosureScreen` call sites consistent; `gestureKindLabel`/`gestureActionLabel` moved to `settings/GestureLabels.kt` and used by both Settings and onboarding |
 
 
-Re-verified on the current tree (1.5.0): 109 XML files parsed (108 under
+Historical 1.5.0 source check: 109 XML files parsed (108 under
 `app/src/main/res` plus `AndroidManifest.xml`), 0 malformed; 273 Kotlin sources
 (180 main + 93 test) indexed; 754 distinct `R.*` references resolved against the
 declared resource table with 0 unresolved (the only matches outside it are

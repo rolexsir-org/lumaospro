@@ -30,6 +30,7 @@ import com.lumaos.pro.launcher.notifications.NotificationCardAdapter
 import com.lumaos.pro.launcher.notifications.NotificationCardHost
 import com.lumaos.pro.launcher.notifications.NotificationCardModel
 import com.lumaos.pro.launcher.notifications.NotificationHub
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassPalette
@@ -413,7 +414,7 @@ class LumaShade(
 
     private fun headerButton(iconRes: Int, descriptionRes: Int, onClick: (View) -> Unit): ImageButton =
         ImageButton(context).apply {
-            setImageResource(iconRes)
+            ThemedUiIcons.bind(this, iconRes, host.theme().id)
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM))
             contentDescription = context.getString(descriptionRes)
@@ -514,6 +515,7 @@ class LumaShade(
 
     fun applyTheme() {
         if (!built) return
+        sheet?.let { ThemedUiIcons.refresh(it, host.theme().id) }
         val theme = host.theme()
         val palette = host.glassPalette()
         val panelSpec = palette[GlassRole.PRIMARY]
