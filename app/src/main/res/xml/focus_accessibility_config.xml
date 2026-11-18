@@ -11,7 +11,7 @@
     android:description="@string/focus_service_description"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="default"
+    android:accessibilityFlags="flagDefault"
     android:canRetrieveWindowContent="false"
     android:canPerformGestures="false"
     android:canRequestFilterKeyEvents="false"

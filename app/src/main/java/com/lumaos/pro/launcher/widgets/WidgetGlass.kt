@@ -4,6 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.LinearGradient
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.RectF
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.RadiusRole
@@ -125,9 +128,9 @@ object WidgetGlassRenderer {
     @Volatile
     private var cached: Pair<CacheKey, Bitmap>? = null
 
-    fun plateBitmap(context: Context, theme: ResolvedTheme): Bitmap {
+    fun plateBitmap(context: Context, theme: ResolvedTheme, customRadiusDp: Float? = null): Bitmap {
         val dm = context.resources.displayMetrics
-        val radiusDp = theme.radius(RadiusRole.LARGE)
+        val radiusDp = customRadiusDp ?: theme.radius(RadiusRole.LARGE)
         val key = CacheKey(theme.colors, theme.isDark, radiusDp, dm.densityDpi)
         cached?.takeIf { it.first == key && !it.second.isRecycled }?.let { return it.second }
 
@@ -144,27 +147,23 @@ object WidgetGlassRenderer {
         val rect = RectF(stroke, stroke, width - stroke, height - stroke)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // A quiet, nearly opaque material makes real metadata legible on external
-        // launcher hosts too; character comes from the theme's colour and shape,
-        // not a synthetic highlight gradient painted over every widget.
-        paint.color = palette.fillTop
+        paint.shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+            palette.fillTop, palette.fillBottom, Shader.TileMode.CLAMP)
         canvas.drawRoundRect(rect, radius, radius, paint)
+        val clip = android.graphics.Path().apply { addRoundRect(rect, radius, radius, android.graphics.Path.Direction.CW) }
+        val save = canvas.save()
+        canvas.clipPath(clip)
+        if (theme.usesBlur) {
+            paint.shader = RadialGradient(width * 0.23f, height * 0.12f, width * 0.61f,
+                ColorMath.withAlpha(palette.accent, 0.075f), 0, Shader.TileMode.CLAMP)
+            canvas.drawRect(rect, paint)
+        }
+        canvas.restoreToCount(save)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = stroke
-        paint.color = palette.edgeTop
+        paint.shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+            if (theme.usesBlur) palette.specular else palette.edgeTop, palette.edgeBottom, Shader.TileMode.CLAMP)
         canvas.drawRoundRect(rect, radius, radius, paint)
-
-        if (theme.usesBlur) {
-            // One restrained internal keyline distinguishes glass from solid stone.
-            val inset = stroke + 2f
-            paint.color = palette.specular
-            canvas.drawRoundRect(
-                RectF(inset, inset, width - inset, height - inset),
-                (radius - inset).coerceAtLeast(1f),
-                (radius - inset).coerceAtLeast(1f),
-                paint
-            )
-        }
 
         cached = key to bitmap
         return bitmap

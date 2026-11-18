@@ -15,8 +15,6 @@
             PackageManager lookups.
           * KILL_BACKGROUND_PROCESSES / FORCE_STOP - LumaOS Pro does not terminate
             other applications.
-          * PACKAGE_USAGE_STATS - foreground detection uses the optional
-            accessibility binding below instead of polled usage stats.
           * Any device-admin binding: enforcement stays within what a normal
             Play Store launcher may do.
 
@@ -29,6 +27,11 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Calendar and Usage Access are opt-in and only read for their respective widgets. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Normal permissions for the optional platform biometric Vault unlock path. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
@@ -230,6 +233,43 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <activity android:name=".widgets.builtin.WidgetSettingsActivity" android:exported="true"
+            android:theme="@style/Theme.LumaOS.Settings">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+        <service android:name=".widgets.builtin.WeatherRefreshJob" android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <receiver android:name=".widgets.builtin.DigitalClockWidgetProvider"
+            android:label="@string/widget_digital_clock" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_digital_widget" />
+        </receiver>
+        <receiver android:name=".widgets.builtin.AnalogClockWidgetProvider"
+            android:label="@string/widget_analog_clock" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_analog_widget" />
+        </receiver>
+        <receiver android:name=".widgets.builtin.CalendarWidgetProvider"
+            android:label="@string/widget_calendar" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_calendar_widget" />
+        </receiver>
+        <receiver android:name=".widgets.builtin.WeatherWidgetProvider"
+            android:label="@string/widget_weather" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_weather_widget" />
+        </receiver>
+        <receiver android:name=".widgets.builtin.StorageWidgetProvider"
+            android:label="@string/widget_storage" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_storage_widget" />
+        </receiver>
+        <receiver android:name=".widgets.builtin.ScreenTimeWidgetProvider"
+            android:label="@string/widget_screen_time" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/luma_usage_widget" />
+        </receiver>
 
         <receiver android:name=".widgets.music.MusicWidgetProvider"
             android:label="@string/music_widget_name" android:exported="true">

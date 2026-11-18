@@ -138,6 +138,9 @@ class LumaCore(private val application: Application) {
         vaultGuard.start()
         themes.start()
         themeManager.start()
+        coreScope.launch {
+            themes.theme.collect { com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgets.refreshAll(application) }
+        }
         effects.start()
 
         coreScope.launch {

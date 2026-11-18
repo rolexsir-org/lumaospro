@@ -25,6 +25,7 @@ import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassRole
@@ -164,7 +165,7 @@ class WidgetPicker(
             gravity = Gravity.CENTER
             setPadding(dp(24f), dp(48f), dp(24f), dp(16f))
             compoundDrawablePadding = dp(16f)
-            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_rx_grid)?.mutate()?.let { d ->
+            ThemedUiIcons.drawable(context, R.drawable.ic_rx_grid)?.mutate()?.let { d ->
                 d.setTint(ColorMath.withAlpha(ColorMath.opaque(c.onSurface), 0.35f))
                 d.setBounds(0, 0, dp(40f), dp(40f))
                 setCompoundDrawablesRelative(null, d, null, null)

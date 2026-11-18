@@ -109,7 +109,14 @@ class WidgetHostController(context: Context) {
         return pending to consent
     }
 
-    fun needsConfiguration(pending: Pending): Boolean = pending.info.configure != null
+    fun needsConfiguration(pending: Pending): Boolean {
+        val info = pending.info
+        if (info.configure == null) return false
+        // Preserve the existing one-step add flow for bundled music and battery
+        // on modern Android. External providers opt in to the same contract.
+        return Build.VERSION.SDK_INT < 31 ||
+            info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL == 0
+    }
 
     /** Launches the provider's configuration screen; the result arrives in onActivityResult(requestCode). */
     fun startConfiguration(activity: Activity, pending: Pending, requestCode: Int): Boolean = runCatching {

@@ -41,8 +41,7 @@ Vault's data lives in the app's private, no-backup directory and is not exported
 provider or activity (asserted by `VaultPlatformIntegrationTests`). Screenshots are blocked
 with `FLAG_SECURE`. Content leaves the app only through an explicit user export to a
 system-chosen location, an explicit user copy to the clipboard (marked sensitive, §5), or an
-explicit user-chosen backup file. The manifest carries no `INTERNET` permission, so no Vault
-code path can transmit anything.
+explicit user-chosen backup file. The optional Weather widget requires an app-wide `INTERNET` permission. Vault does not call the Weather transport, make network requests, or pass Vault data to network code. This is a code boundary, not OS network isolation.
 
 ### Adversary 3 — an attacker with the unlocked phone in hand
 

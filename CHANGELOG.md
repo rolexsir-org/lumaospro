@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1 — Unreleased (`versionCode` 151)
+
+- Active themes automatically select their matching launcher icon artwork; Signature keeps its original pack.
+- Added native digital and analog clocks, calendar, weather, internal storage, and screen-time widgets alongside music and battery. All eight share Theme Lab-inspired styling and configurable corners.
+- Existing notes below describe earlier work carried into this unreleased build. See the [QA checklist](docs/QA_CHECKLIST.md) and [widget audit](docs/WIDGET_SYSTEM_AUDIT.md) for verification status.
+
 ## Unreleased — First-run walkthrough and "Getting started"
 
 The single-screen welcome has become a seven-step walkthrough, built on the
@@ -428,19 +434,6 @@ second APK, and no change to existing launcher behaviour.
 - Integration is limited to `LumaCore`, one Settings row, the manifest and four strings.
 
 
-
-Notable changes to LumaOS Pro. Entries use the app's `versionName`; the Play
-`versionCode` is derived as `major * 100 + minor * 10 + patch` (1.5.0 → 150).
-
-The current source is **1.5.0 / `versionCode` 150**. Nothing below has been
-published: the sections headed *Unreleased* are the work that ships as 1.5.0, and
-the 1.0.0 / 1.0.1 identities they sit on were configured but never uploaded to
-Play. The tree was previously configured as 1.2.0 / 120 before any release; that
-identity was superseded by 1.5.0 and no 1.2.0 artefact exists. Nothing in this
-file is a claim that a build was produced, tested or published. See
-[docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) for the verification boundary and
-the acceptance gate, and the Google Play release checklist in
-[README.md](README.md).
 
 ## 1.0.0 / 1.0.1 — never published (rolled into 1.5.0)
 

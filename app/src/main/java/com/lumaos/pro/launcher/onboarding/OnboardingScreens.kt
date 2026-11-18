@@ -128,7 +128,7 @@ fun OnboardingShell(
 @Composable
 private fun StepProgress(theme: ResolvedTheme, step: OnboardingStep, label: String) {
     val current = OnboardingFlow.stepNumber(step)
-    val active = Color(theme.colors.primary)
+    val active = Color(theme.colors.accent)
     val track = Color(theme.colors.onSurfaceMuted).copy(alpha = 0.22f)
     Row(
         modifier = Modifier
@@ -269,7 +269,7 @@ private fun WelcomePoint(theme: ResolvedTheme, text: String) {
             Modifier
                 .size(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(Color(theme.colors.primary))
+                .background(Color(theme.colors.accent))
         )
         Spacer(Modifier.size(10.dp))
         Text(text, color = Color(theme.colors.onSurface), fontSize = 13.sp)

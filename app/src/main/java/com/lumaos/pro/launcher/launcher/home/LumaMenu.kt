@@ -13,13 +13,13 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.effects.EffectsDecision
 import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.LumaTypeScale
@@ -179,7 +179,7 @@ class LumaMenu(
                 when {
                     entry.icon != null -> setImageDrawable(entry.icon)
                     entry.iconRes != null -> {
-                        setImageDrawable(ContextCompat.getDrawable(context, entry.iconRes)?.mutate())
+                        setImageDrawable(ThemedUiIcons.drawable(context, entry.iconRes))
                         imageTintList = android.content.res.ColorStateList.valueOf(tint)
                     }
                     else -> visibility = View.INVISIBLE

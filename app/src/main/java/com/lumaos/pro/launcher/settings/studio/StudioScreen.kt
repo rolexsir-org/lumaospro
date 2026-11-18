@@ -578,8 +578,12 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             effects = draft.effects,
             livingIcons = draft.livingIconsEnabled,
             backdropText = backdropLabel(draft.theme.backdrop, resolved.id, WallpaperArt.forTheme(resolved.id) != null || activeWallpaper != null),
-            iconPackText = packs.firstOrNull { it.packageName == draft.iconPack }?.label
-                ?: draft.iconPack ?: stringResource(R.string.studio_icon_pack_none)
+            iconPackText = if (resolved.id != ThemeId.SIGNATURE) {
+                stringResource(R.string.studio_icon_pack_follows_theme)
+            } else {
+                packs.firstOrNull { it.packageName == draft.iconPack }?.label
+                    ?: draft.iconPack ?: stringResource(R.string.studio_icon_pack_none)
+            }
         )
 
         Spacer(Modifier.height(LumaDesignTokens.SP_7.dp))
@@ -782,7 +786,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 val packOptions = listOf<String?>(null) + packs.map { it.packageName } +
                     listOfNotNull(draft.iconPack.takeIf { p -> p != null && packs.none { it.packageName == p } })
                 CompactChoiceRow(
-                    label = stringResource(R.string.studio_icon_pack),
+                    label = stringResource(R.string.studio_icon_pack_signature),
                     selected = packs.firstOrNull { it.packageName == draft.iconPack }?.label
                         ?: draft.iconPack
                         ?: stringResource(R.string.studio_icon_pack_none),

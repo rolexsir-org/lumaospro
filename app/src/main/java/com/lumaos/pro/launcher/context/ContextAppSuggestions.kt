@@ -25,7 +25,7 @@ object ContextAppSuggestions {
     fun suggestedVisible(profile: ContextProfile, apps: List<AppEntry>): Set<ComponentKey> {
         if (apps.isEmpty()) return emptySet()
         if (profile == ContextProfile.PERSONAL) return apps.mapTo(HashSet()) { it.key }
-        return apps.filterTo(HashSet()) { visibleIn(profile, it) }
+        return apps.asSequence().filter { visibleIn(profile, it) }.mapTo(HashSet()) { it.key }
     }
 
     /**
@@ -34,7 +34,7 @@ object ContextAppSuggestions {
      */
     fun suggestedRestricted(profile: ContextProfile, apps: List<AppEntry>): Set<ComponentKey> {
         if (profile !in ContextEngine.FOCUS_PROFILES || apps.isEmpty()) return emptySet()
-        return apps.filterTo(HashSet()) { distracting(it) }
+        return apps.asSequence().filter { distracting(it) }.mapTo(HashSet()) { it.key }
     }
 
     private fun visibleIn(profile: ContextProfile, app: AppEntry): Boolean {

@@ -407,4 +407,6 @@
     <string name="settings_group_getting_started">Getting started</string>
     <string name="settings_getting_started">Replay the tour</string>
     <string name="settings_getting_started_subtitle">Walk through gestures, appearance, Focus Protection and the home-app setup again. Nothing is reset.</string>
+    <string name="studio_icon_pack_follows_theme">Follows theme</string>
+    <string name="studio_icon_pack_signature">External icon pack (Signature only)</string>
 </resources>

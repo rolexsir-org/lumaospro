@@ -11,6 +11,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.RadiusRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
@@ -95,7 +96,7 @@ class FocusRestrictionView @JvmOverloads constructor(
             setPadding(dp(28f), dp(32f), dp(28f), dp(28f))
         }
         icon = ImageView(context).apply {
-            setImageResource(R.drawable.ic_rx_focus)
+            ThemedUiIcons.bind(this, R.drawable.ic_rx_focus)
             layoutParams = LinearLayout.LayoutParams(dp(44f), dp(44f)).apply {
                 bottomMargin = dp(16f)
             }

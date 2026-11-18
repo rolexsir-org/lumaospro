@@ -8,11 +8,13 @@
          ever leaves the device through the user-initiated encrypted backup. -->
     <cloud-backup>
         <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="widget_weather_cache.xml" />
         <include domain="file" path="datastore/" />
     </cloud-backup>
     <!-- Device-to-device transfer: a direct switch should carry the history too. -->
     <device-transfer>
         <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="widget_weather_cache.xml" />
         <include domain="file" path="datastore/" />
         <include domain="file" path="databases/" />
     </device-transfer>

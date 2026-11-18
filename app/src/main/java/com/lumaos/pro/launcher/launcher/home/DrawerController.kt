@@ -15,7 +15,6 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.graphics.drawable.GradientDrawable
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
@@ -29,6 +28,7 @@ import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
@@ -402,7 +402,7 @@ class DrawerController(
         searchField.setHintTextColor(searchColors.muted)
         clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchColors.muted)
         searchField.typeface = Typefaces.body(theme.typography)
-        ContextCompat.getDrawable(context, R.drawable.ic_rx_search)?.mutate()?.let { d ->
+        ThemedUiIcons.drawable(context, R.drawable.ic_rx_search, theme.id)?.let { d ->
             d.setTint(searchColors.muted)
             d.setBounds(0, 0, dp(LumaTokens.iconInline), dp(LumaTokens.iconInline))
             searchField.setCompoundDrawablesRelative(d, null, null, null)

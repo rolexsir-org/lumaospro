@@ -22,6 +22,7 @@ import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.SmartKind
 import com.lumaos.pro.launcher.launcher.view.FolderIconDrawable
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetResizeGesture
 import com.lumaos.pro.launcher.widgets.WidgetResizeResult
@@ -279,6 +280,7 @@ class HomeGridAdapter(
         holder.itemView.contentDescription = holder.itemView.context.getString(R.string.widget_description, displayRows)
         holder.outline.visibility = if (editMode) View.VISIBLE else View.GONE
         holder.remove.visibility = if (editMode) View.VISIBLE else View.GONE
+        ThemedUiIcons.bind(holder.remove, R.drawable.ic_rx_remove)
         holder.remove.imageTintList = android.content.res.ColorStateList.valueOf(config().labelColor)
         holder.remove.setOnClickListener {
             val pos = holder.bindingAdapterPosition

@@ -17,6 +17,8 @@ import com.lumaos.pro.launcher.icons.LivingIconDrawable
 import com.lumaos.pro.launcher.icons.LivingIconManager
 import com.lumaos.pro.launcher.icons.LivingIconOverride
 import com.lumaos.pro.launcher.icons.LivingIconResolver
+import com.lumaos.pro.launcher.icons.ThemeGlyphDrawable
+import com.lumaos.pro.launcher.ui.theme.ThemeId
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -132,6 +134,7 @@ class IconLoader(
             density = density,
             targetPx = targetPx,
             iconPackPackage = s?.iconPack,
+            themeId = s?.themeId ?: ThemeId.SIGNATURE,
             livingIconsEnabled = s?.livingIcons ?: (livingIcons?.enabled ?: true),
             overrides = livingIcons?.overrides.orEmpty()
         ) ?: return null
@@ -140,7 +143,7 @@ class IconLoader(
             resources,
             renderer.render(resolved.drawable, s, fromIconPack = resolved.fromIconPack)
         )
-        return if (resolved.drawable is LivingIconDrawable && key.userSerial != 0L) {
+        return if ((resolved.drawable is LivingIconDrawable || resolved.drawable is ThemeGlyphDrawable) && key.userSerial != 0L) {
             repository.badgeIfManagedProfile(rendered, key.userSerial)
         } else {
             rendered
@@ -168,6 +171,7 @@ class IconLoader(
             density = density,
             targetPx = draft.sizePx,
             iconPackPackage = draft.iconPack,
+            themeId = draft.themeId,
             livingIconsEnabled = draft.livingIcons,
             overrides = overrides
         ) ?: return null
@@ -181,6 +185,7 @@ class IconLoader(
         density: Int,
         targetPx: Int,
         iconPackPackage: String?,
+        themeId: ThemeId,
         livingIconsEnabled: Boolean,
         overrides: Map<ComponentKey, LivingIconOverride>
     ): ResolvedSource? {
@@ -192,7 +197,7 @@ class IconLoader(
             ?: if (key.userSerial != 0L) overrides[key.copy(userSerial = 0L)] else null
 
         if (exactOverride is LivingIconOverride.UseLiving && livingIcons != null) {
-            livingIcons.drawableForId(exactOverride.icon, targetPx)?.let {
+            livingIcons.drawableForTheme(exactOverride.icon, targetPx, themeId)?.let {
                 return ResolvedSource(it, fromIconPack = false)
             }
         }
@@ -210,7 +215,7 @@ class IconLoader(
         if (livingIcons != null) {
             val id = LivingIconResolver.resolve(key, livingIconsEnabled = livingIconsEnabled, overrides = overrides)
             if (id != null) {
-                livingIcons.drawableForId(id, targetPx)?.let {
+                livingIcons.drawableForTheme(id, targetPx, themeId)?.let {
                     return ResolvedSource(it, fromIconPack = false)
                 }
             }

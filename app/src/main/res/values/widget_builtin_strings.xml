@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_digital_clock">Digital clock</string>
+    <string name="widget_analog_clock">Analog clock</string>
+    <string name="widget_calendar">Calendar</string>
+    <string name="widget_weather">Weather</string>
+    <string name="widget_storage">Internal storage</string>
+    <string name="widget_screen_time">Screen time</string>
+    <string name="widget_config_heading">Widget settings</string>
+    <string name="widget_save_configuration">Save widget settings</string>
+    <string name="widget_theme_radius">Corner radius: Follow theme</string>
+    <string name="widget_corner_radius">Widget corner radius</string>
+    <string name="widget_custom_radius">Corner radius: %1$d dp</string>
+    <string name="widget_calendar_permission">Manage calendar access</string>
+    <string name="widget_calendar_disclosure">Allow read-only calendar access to show the next visible event on your home screen. Event details stay on this device and are visible to the widget host.</string>
+    <string name="widget_untitled_event">Untitled event</string>
+    <string name="widget_no_events">No events in the next 7 days</string>
+    <string name="widget_usage_permission">Manage Usage Access</string>
+    <string name="widget_usage_disclosure">Grant Usage Access in Android Settings to show the time your screen has been active today. The widget does not upload usage information.</string>
+    <string name="widget_usage_today">Screen active today</string>
+    <string name="widget_usage_app_today">App foreground time reported today</string>
+    <string name="widget_usage_duration">%1$d h %2$d min</string>
+    <string name="widget_open_storage_settings">Open Android storage settings</string>
+    <string name="widget_storage_free">%1$s free</string>
+    <string name="widget_storage_total">%1$s total on internal data volume</string>
+    <string name="widget_latitude">Latitude (−90 to 90)</string>
+    <string name="widget_longitude">Longitude (−180 to 180)</string>
+    <string name="widget_invalid_coordinates">Enter valid decimal latitude and longitude.</string>
+    <string name="widget_weather_privacy">Enter coordinates for the place you want. LumaOS sends those coordinates to Open-Meteo to load weather; it does not use your device location.</string>
+    <string name="widget_weather_configure">Set weather location</string>
+    <string name="widget_weather_waiting">No weather data yet</string>
+    <string name="widget_weather_source">Weather by Open-Meteo</string>
+    <string name="widget_weather_temperature">%1$.1f °C</string>
+    <string name="widget_weather_detail">%1$s · %2$s\nOpen-Meteo</string>
+    <string name="widget_weather_clear">Clear</string>
+    <string name="widget_weather_cloud">Cloudy</string>
+    <string name="widget_weather_fog">Fog</string>
+    <string name="widget_weather_rain">Rain</string>
+    <string name="widget_weather_snow">Snow</string>
+    <string name="widget_weather_storm">Thunderstorms</string>
+    <string name="widget_weather_unknown_condition">Conditions unavailable</string>
+    <string name="widget_data_unavailable">Data unavailable</string>
+    <item type="id" name="widget_corner_slider" />
+    <item type="id" name="widget_latitude_input" />
+    <item type="id" name="widget_longitude_input" />
+</resources>

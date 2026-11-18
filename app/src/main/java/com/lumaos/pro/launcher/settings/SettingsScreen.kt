@@ -43,7 +43,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -237,7 +236,7 @@ private fun CleanRow(
     ) {
         if (icon != null) {
             Icon(
-                painter = painterResource(icon.res),
+                painter = themedIconPainter(icon.res),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
@@ -613,7 +612,7 @@ private fun ActiveThemeBanner(
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
-                    painter = painterResource(R.drawable.ic_rx_chevron_right),
+                    painter = themedIconPainter(R.drawable.ic_rx_chevron_right),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)

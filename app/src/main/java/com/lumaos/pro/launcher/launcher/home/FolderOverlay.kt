@@ -28,6 +28,7 @@ import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassRole
@@ -272,7 +273,7 @@ class FolderOverlay(
                 typeface = Typefaces.body(host.theme().typography)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
                 gravity = Gravity.CENTER
-                setCompoundDrawablesRelativeWithIntrinsicBounds(0, R.drawable.ic_rx_folder, 0, 0)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(null, ThemedUiIcons.drawable(context, R.drawable.ic_rx_folder), null, null)
                 compoundDrawableTintList = ColorStateList.valueOf(colors.muted)
                 compoundDrawablePadding = dp(LumaTokens.spaceXS)
                 setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXL), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXL))
@@ -435,6 +436,7 @@ class FolderOverlay(
             depth = LumaTokens.depthFolder
         )
         smartTitleView?.apply {
+            setCompoundDrawablesRelativeWithIntrinsicBounds(null, ThemedUiIcons.drawable(context, R.drawable.ic_rx_folder, theme.id), null, null)
             setTextColor(colors.content)
             typeface = Typefaces.title(theme.typography)
             gravity = titleGravity

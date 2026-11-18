@@ -95,7 +95,7 @@ snapshot from DataStore per event and gates repeated interventions with
 | Is it processed? | In memory only: compared with the configured restriction list, and — only when intervening — used to look up that app's display label for the restriction screen. |
 | Is it stored? | **No.** The observed package name is never written to DataStore, files, logs, analytics, or a database. The user's restriction list is stored because it is a setting the user created, not because of this service. |
 | Is it logged? | **No.** The one log line on an intervention (`LumaLog.i("Focus enforcement intervened on a foreground restricted app")`) contains no package name and no screen information. |
-| Is it transmitted? | **No.** The app declares no `INTERNET` permission at all, so no network request is possible from this process. |
+| Is it transmitted? | **No.** Focus does not transmit foreground observations. Internet access is used by the optional Weather widget, which receives only manually entered weather coordinates. |
 | Is it shared with third parties? | **No.** No SDKs, no advertising, no analytics, no server, no account. |
 | Does it affect other apps' data? | **No.** No input injection, no reading of other apps' content, no force-stop, no uninstall, no settings changes. The only action is "press Home and show a LumaOS Pro screen". |
 | What happens without a focus session? | The service still receives window-state events (it is bound while enabled) and reads the foreground package name, then discards it: no decision, no lookup, no screen, no storage. Only the safety allowlist and the active-context check run. |
@@ -232,7 +232,7 @@ restriction screen that is already showing.
 | Accessibility used for a disclosed, user-facing purpose | Foreground enforcement of the user's own focus restrictions; stated in the disclosure, the service description, and the docs |
 | Prominent disclosure shown **in the app** before the permission request | `FocusAccessDisclosureActivity`, full-screen, opened from two explicit entry points |
 | Disclosure explains what is accessed and why | Sections "Why this access is needed", "How it helps Focus Protection", "What is accessed" |
-| Disclosure explains collection, use and sharing | Section "Collected, stored or shared": nothing collected, stored or shared; no network permission |
+| Disclosure explains collection, use and sharing | Section "Collected, stored or shared": no accessibility observations collected, stored or shared |
 | Explicit affirmative consent; no pre-selected or coerced choice | Two equally reachable buttons, AGREE and DECLINE; nothing auto-advances |
 | Permission requested only after explicit consent | Settings screen is opened only from the AGREE path, after the consent write; verified by unit test and code ordering |
 | Consent recorded and respected; decline does not break the app | Consent persisted with a version; DECLINED keeps layer 2 off and layer 1 intact |

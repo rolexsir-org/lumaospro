@@ -11,13 +11,13 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
+import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassColors
@@ -309,7 +309,7 @@ class QuickControlsView(
     }
 
     private fun tinted(res: Int, color: Int): Drawable? =
-        ContextCompat.getDrawable(context, res)?.mutate()?.also { it.setTint(color) }
+        ThemedUiIcons.drawable(context, res, host.theme().id)?.also { it.setTint(color) }
 
     /**
      * One glass tile: glyph, label, truthful state.
