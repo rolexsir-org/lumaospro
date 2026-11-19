@@ -115,7 +115,10 @@ class ExperienceProfileTest {
 
         assertEquals(com.lumaos.pro.launcher.launcher.model.HomePreset.HORIZON, atm.preset)
         assertEquals(DockStyle.FLOAT, atm.dockStyle)
-        assertEquals(Backdrop.WALLPAPER, atm.backdrop)
+        // Phase 2: Atmosphere ships its approved Canopy / First Light art as its backdrop.
+        assertEquals(Backdrop.LUMA, atm.backdrop)
+        assertEquals(Backdrop.LUMA, mono.backdrop)
+        assertEquals(Backdrop.THEME, sig.backdrop)
         assertEquals(IconShape.CIRCLE, atm.iconShape)
         assertTrue(atm.dynamicWallpaperColors)
         assertTrue(atm.livingIcons)

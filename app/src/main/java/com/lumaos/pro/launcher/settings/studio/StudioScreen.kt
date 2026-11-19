@@ -160,12 +160,12 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         )
     }
     val context = LocalContext.current
-    val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, resolved.id, resolved.backdrop, activeWallpaper?.id) {
+    val artwork by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, resolved.id, resolved.backdrop, resolved.lumaArt, activeWallpaper?.id) {
         val selectedEntry = activeWallpaper
         value = when {
             selectedEntry != null && (resolved.backdrop == Backdrop.LUMA || resolved.backdrop == Backdrop.WALLPAPER) ->
                 runCatching { WallpaperImageStore(context.applicationContext).preview(selectedEntry, 640)?.asImageBitmap() }.getOrNull()
-            resolved.backdrop == Backdrop.LUMA -> WallpaperArt.forTheme(resolved.id)?.let { art ->
+            resolved.backdrop == Backdrop.LUMA -> resolved.lumaArt?.let { art ->
                 val entry = WallpaperCatalog.findBundled("art:${art.storageKey}")
                 if (entry == null) null else runCatching {
                     WallpaperImageStore(context.applicationContext).preview(entry, 640)?.asImageBitmap()
@@ -174,8 +174,8 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             else -> null
         }
     }
-    val previewFocalX = activeWallpaper?.focalX ?: WallpaperArt.forTheme(resolved.id)?.focalX
-    val previewFocalY = activeWallpaper?.focalY ?: WallpaperArt.forTheme(resolved.id)?.focalY
+    val previewFocalX = activeWallpaper?.focalX ?: resolved.lumaArt?.focalX
+    val previewFocalY = activeWallpaper?.focalY ?: resolved.lumaArt?.focalY
     val homeIcons = remember(bitmaps) { bitmaps.home.map { it.asImageBitmap() } }
     val dockIcons = remember(bitmaps) { bitmaps.dock.map { it.asImageBitmap() } }
     val locale = Locale.getDefault()

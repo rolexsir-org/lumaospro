@@ -105,20 +105,55 @@ class DesignSystemTest {
 
     // -------------------------------------------------------------- wallpaper
 
-    @Test fun `only the retained palettes ship bundled artwork`() {
-        // The v3.2 trio paints its own backdrop: Signature and Monolith use their
-        // authored atmosphere, Atmosphere follows the user's wallpaper.
-        for (theme in ThemePresets.SIGNATURE) {
-            assertNull("${theme.displayName} uses its own backdrop", WallpaperArt.forTheme(theme.id))
-            assertTrue(theme.defaultBackdrop != Backdrop.LUMA)
-        }
-        for (id in listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR)) {
-            assertNotNull("$id keeps its bundled artwork", WallpaperArt.forTheme(id))
-        }
-        // Specialist palettes deliberately keep the atmospheric backdrop instead.
-        for (id in listOf(ThemeId.OBSIDIAN, ThemeId.GRAPHITE, ThemeId.CHROMA)) {
+    @Test fun `every approved Phase 2 theme ships its own wallpaper and Signature keeps its backdrop`() {
+        // Signature paints its own authored backdrop; Graphite and Chroma keep the
+        // atmospheric / system-wallpaper backdrop.
+        for (id in listOf(ThemeId.SIGNATURE, ThemeId.GRAPHITE, ThemeId.CHROMA)) {
             assertNull("$id should not ship artwork", WallpaperArt.forTheme(id))
+            assertTrue(ThemePresets.of(id).defaultBackdrop != Backdrop.LUMA)
         }
+        // The seven approved designs (approval log 2026-11-19) are theme defaults.
+        val approved = mapOf(
+            ThemeId.LUMA_MONO to WallpaperArt.MONO_DARKROOM,
+            ThemeId.LUMA_GLASS to WallpaperArt.GLASS_PRISM,
+            ThemeId.MONOLITH to WallpaperArt.MONOLITH_BASALT,
+            ThemeId.ATMOSPHERE to WallpaperArt.ATMOSPHERE_CANOPY,
+            ThemeId.AURORA to WallpaperArt.AURORA_NIGHT,
+            ThemeId.IVORY to WallpaperArt.IVORY_PORCELAIN,
+            ThemeId.OBSIDIAN to WallpaperArt.OBSIDIAN_ONYX
+        )
+        for ((id, art) in approved) {
+            assertEquals("$id primary artwork", art, WallpaperArt.forTheme(id))
+            assertEquals("$id defaults to its own art", Backdrop.LUMA, ThemePresets.of(id).defaultBackdrop)
+            assertEquals("$id package applies its art", Backdrop.LUMA, ThemeLauncherPackage.forTheme(id).backdrop)
+        }
+        // Zen and Void keep the artwork they already had.
+        assertEquals(WallpaperArt.ZEN_MORNING, WallpaperArt.forTheme(ThemeId.PORCELAIN))
+        assertEquals(WallpaperArt.VOID_FLUX, WallpaperArt.forTheme(ThemeId.VECTOR))
+    }
+
+    @Test fun `day night pairs swap halves with the system mode`() {
+        assertEquals(WallpaperArt.MONO_DARKROOM, WallpaperArt.forTheme(ThemeId.LUMA_MONO, systemDark = true))
+        assertEquals(WallpaperArt.MONO_PAPER, WallpaperArt.forTheme(ThemeId.LUMA_MONO, systemDark = false))
+        assertEquals(WallpaperArt.ATMOSPHERE_CANOPY, WallpaperArt.forTheme(ThemeId.ATMOSPHERE, systemDark = true))
+        assertEquals(WallpaperArt.ATMOSPHERE_FIRST_LIGHT, WallpaperArt.forTheme(ThemeId.ATMOSPHERE, systemDark = false))
+        // Single-art themes return the same art in both modes.
+        for (id in listOf(ThemeId.IVORY, ThemeId.OBSIDIAN, ThemeId.AURORA, ThemeId.LUMA_GLASS, ThemeId.MONOLITH)) {
+            assertEquals(WallpaperArt.forTheme(id, true), WallpaperArt.forTheme(id, false))
+        }
+        assertEquals(listOf(WallpaperArt.MONO_DARKROOM, WallpaperArt.MONO_PAPER), WallpaperArt.allForTheme(ThemeId.LUMA_MONO))
+    }
+
+    @Test fun `storage keys stay stable and unique`() {
+        // Persisted in favourites, backups and context wallpapers: never renamed.
+        assertEquals("aurora_night", WallpaperArt.AURORA_NIGHT.storageKey)
+        assertEquals("zen_morning", WallpaperArt.ZEN_MORNING.storageKey)
+        assertEquals("void_flux", WallpaperArt.VOID_FLUX.storageKey)
+        assertEquals(0, WallpaperArt.AURORA_NIGHT.ordinal)
+        assertEquals(1, WallpaperArt.ZEN_MORNING.ordinal)
+        assertEquals(2, WallpaperArt.VOID_FLUX.ordinal)
+        assertEquals(WallpaperArt.entries.size, WallpaperArt.entries.map { it.storageKey }.toSet().size)
+        for (art in WallpaperArt.entries) assertEquals(art, WallpaperArt.fromStorageKey(art.storageKey))
     }
 
     @Test fun `artwork declares a usable crop and a light or dark surface`() {
@@ -128,11 +163,17 @@ class DesignSystemTest {
             assertTrue("${art.storageKey} scrimTop", art.scrimTop in 0f..0.6f)
             assertTrue("${art.storageKey} scrimBottom", art.scrimBottom in 0f..0.6f)
             assertTrue(art.storageKey.isNotBlank())
+            // The measured seeds agree with the artwork's own light/dark property.
+            assertEquals("${art.storageKey} seeds", art.supportsDarkText, art.seeds.supportsDarkText)
         }
-        // Zen is the light artwork the engine must use dark text on.
-        assertTrue(WallpaperArt.ZEN_MORNING.supportsDarkText)
-        assertFalse(WallpaperArt.AURORA_NIGHT.supportsDarkText)
-        assertFalse(WallpaperArt.VOID_FLUX.supportsDarkText)
+        for (art in listOf(
+            WallpaperArt.ZEN_MORNING, WallpaperArt.MONO_PAPER, WallpaperArt.MONOLITH_BASALT,
+            WallpaperArt.ATMOSPHERE_FIRST_LIGHT, WallpaperArt.IVORY_PORCELAIN
+        )) assertTrue("${art.storageKey} is light", art.supportsDarkText)
+        for (art in listOf(
+            WallpaperArt.AURORA_NIGHT, WallpaperArt.VOID_FLUX, WallpaperArt.MONO_DARKROOM,
+            WallpaperArt.GLASS_PRISM, WallpaperArt.ATMOSPHERE_CANOPY, WallpaperArt.OBSIDIAN_ONYX
+        )) assertFalse("${art.storageKey} is dark", art.supportsDarkText)
     }
 
     @Test fun `home text follows the artwork it sits on`() {
@@ -141,17 +182,47 @@ class DesignSystemTest {
         )
         assertTrue("Zen artwork is light, so home text must be dark", ColorMath.isDark(zen.colors.homeForeground))
 
-        for (id in listOf(ThemeId.AURORA, ThemeId.VECTOR)) {
+        for (id in listOf(ThemeId.AURORA, ThemeId.VECTOR, ThemeId.OBSIDIAN, ThemeId.LUMA_GLASS)) {
             val dark = ThemeEngine.resolve(
                 ThemeSettings().pinned(id).copy(backdrop = Backdrop.LUMA), envDark
             )
             assertFalse("$id artwork is dark, so home text must be light", ColorMath.isDark(dark.colors.homeForeground))
         }
+        for (id in listOf(ThemeId.IVORY, ThemeId.MONOLITH)) {
+            val light = ThemeEngine.resolve(
+                ThemeSettings().pinned(id).copy(backdrop = Backdrop.LUMA), envDark
+            )
+            assertTrue("$id artwork is light, so home text must be dark", ColorMath.isDark(light.colors.homeForeground))
+        }
+        // Mono's Paper & Ink half is light; its Darkroom half is dark.
+        val monoDay = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.LUMA_MONO).copy(backdrop = Backdrop.LUMA), envLight)
+        val monoNight = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.LUMA_MONO).copy(backdrop = Backdrop.LUMA), envDark)
+        assertTrue(ColorMath.isDark(monoDay.colors.homeForeground))
+        assertFalse(ColorMath.isDark(monoNight.colors.homeForeground))
+    }
+
+    @Test fun `theme art seeds stand in for the system wallpaper only while the art is shown`() {
+        val system = WallpaperSeeds(primary = 0xFF336699.toInt(), supportsDarkText = false)
+        val onArt = ThemeEngine.resolve(
+            ThemeSettings().pinned(ThemeId.OBSIDIAN).copy(backdrop = Backdrop.LUMA),
+            envDark.copy(wallpaper = system)
+        )
+        assertEquals(WallpaperArt.OBSIDIAN_ONYX.seeds, onArt.wallpaperSeeds)
+        val onSystem = ThemeEngine.resolve(
+            ThemeSettings().pinned(ThemeId.OBSIDIAN).copy(backdrop = Backdrop.WALLPAPER),
+            envDark.copy(wallpaper = system)
+        )
+        assertEquals(system, onSystem.wallpaperSeeds)
+        val onStudio = ThemeEngine.resolve(
+            ThemeSettings().pinned(ThemeId.OBSIDIAN).copy(backdrop = Backdrop.LUMA),
+            envDark.copy(wallpaper = system, hasSelectedArtwork = true)
+        )
+        assertEquals(system, onStudio.wallpaperSeeds)
     }
 
     @Test fun `a theme without artwork cannot resolve the luma backdrop`() {
         val t = ThemeEngine.resolve(
-            ThemeSettings().pinned(ThemeId.OBSIDIAN).copy(backdrop = Backdrop.LUMA), envDark
+            ThemeSettings().pinned(ThemeId.GRAPHITE).copy(backdrop = Backdrop.LUMA), envDark
         )
         assertEquals(Backdrop.THEME, t.backdrop)
         assertFalse(t.backdrop.usesArtwork)

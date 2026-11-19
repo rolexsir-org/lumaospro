@@ -41,7 +41,7 @@ enum class ThemeId(val storageKey: String) {
     CHROMA("chroma"),
     /** Deep-navy liquid glass (2026-11 reference). Appended: existing keys/order untouched. */
     LUMA_GLASS("luma_glass"),
-    /** Warm peach duotone on charcoal-brown (2026-11 reference). */
+    /** Paper & Ink / Darkroom monochrome (approved 2026-11-19; storage key unchanged). */
     LUMA_MONO("luma_mono"),
     /**
      * Premium collection - elegant authored light theme. Appended so every
@@ -261,7 +261,13 @@ data class ResolvedTheme(
     /** Authored v3.2 tokens; null for a retained pre-3.2 palette. */
     val tokens: ThemeTokens? = null,
     /** Active wallpaper optical profile when known, used by split-horizon legibility scrims. */
-    val wallpaperSeeds: WallpaperSeeds? = null
+    val wallpaperSeeds: WallpaperSeeds? = null,
+    /**
+     * The theme's own wallpaper for the current system mode (the day half of a
+     * day/night pair in light mode). Shown when [backdrop] is LUMA and no Studio
+     * wallpaper is selected; null for themes without artwork.
+     */
+    val lumaArt: WallpaperArt? = WallpaperArt.forTheme(id)
 ) {
     val isDark: Boolean get() = colors.isDark
 
@@ -424,17 +430,17 @@ object ThemePresets {
     // Obsidian and Aurora keep their historic storage keys, so a user who had
     // either selected is upgraded in place rather than reset; Ivory is new.
 
-    /** Obsidian: premium OLED dark. Pure black field, graphite glass, champagne light. */
+    /** Obsidian "Onyx & Ember": true-black OLED field, onyx glass, steel and one ember accent. */
     val OBSIDIAN = ThemeSpec(
         id = ThemeId.OBSIDIAN,
         displayName = "Obsidian",
-        tagline = "Premium OLED dark: pure black, graphite glass and a quiet champagne light.",
+        tagline = "Onyx & Ember: true black for OLED, steel glyphs and a single ember light.",
         dark = true,
         amoled = true,
         background = 0xFF000000.toInt(),
-        accent = 0xFFD9BC8C.toInt(),
-        secondary = 0xFFB9C3D3.toInt(),
-        neutralTint = 0xFFD9BC8C.toInt(),
+        accent = 0xFFE8A33D.toInt(),
+        secondary = 0xFFC9CDD6.toInt(),
+        neutralTint = 0xFFC9CDD6.toInt(),
         neutralChroma = 0.004,
         typography = TypeStyle.PRECISION,
         motionCharacter = MotionCharacter.SUBTLE,
@@ -442,20 +448,20 @@ object ThemePresets {
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.NONE,
         surfaceStyle = SurfaceStyle.TRANSLUCENT,
-        defaultBackdrop = Backdrop.THEME,
+        defaultBackdrop = Backdrop.LUMA,
         cornerScale = 1.0f,
         tokens = LumaDesignTokens.OBSIDIAN
     )
 
-    /** Ivory: elegant light. Warm paper field, white cards, sapphire ink, bronze detail. */
+    /** Ivory "Porcelain": warm ivory field, porcelain cards, warm ink and one sapphire accent. */
     val IVORY = ThemeSpec(
         id = ThemeId.IVORY,
         displayName = "Ivory",
-        tagline = "Elegant light: warm paper, crisp white cards and a sapphire ink accent.",
+        tagline = "Porcelain: warm ivory daylight, porcelain tiles and a single sapphire mark.",
         dark = false,
         amoled = false,
         background = 0xFFF6F3EC.toInt(),
-        accent = 0xFF2E5AAC.toInt(),
+        accent = 0xFF3A5F8A.toInt(),
         secondary = 0xFF8E6E42.toInt(),
         neutralTint = 0xFFB9A98C.toInt(),
         neutralChroma = 0.008,
@@ -465,7 +471,7 @@ object ThemePresets {
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.HALO,
         surfaceStyle = SurfaceStyle.TRANSLUCENT,
-        defaultBackdrop = Backdrop.THEME,
+        defaultBackdrop = Backdrop.LUMA,
         cornerScale = 1.0f,
         tokens = LumaDesignTokens.IVORY
     )
@@ -525,19 +531,19 @@ object ThemePresets {
     val VECTOR: ThemeSpec get() = VOID
 
     /**
-     * Aurora: expressive gradient. Indigo night with a slow orchid-and-teal
-     * aurora; the one premium theme allowed real colour in its backdrop. Its
-     * bundled "Nightfall" artwork stays selectable through the LUMA backdrop.
+     * Aurora "Borealis": deep-space indigo under layered aurora light fields; the
+     * one premium theme allowed real colour in its backdrop. The Borealis wallpaper
+     * is its default (LUMA) backdrop; THEME still paints the drifting aurora.
      */
     val AURORA = ThemeSpec(
         id = ThemeId.AURORA,
         displayName = "Aurora",
-        tagline = "Expressive gradient: indigo night, orchid light and a drifting teal aurora.",
+        tagline = "Borealis: deep-space indigo, violet edge light and a teal-magenta aurora.",
         dark = true,
         amoled = false,
         background = 0xFF070A1C.toInt(),
-        accent = 0xFFB48CFF.toInt(),
-        secondary = 0xFF4FE3C1.toInt(),
+        accent = 0xFF8A5AF0.toInt(),
+        secondary = 0xFF3AD8C8.toInt(),
         neutralTint = 0xFF8C84E8.toInt(),
         neutralChroma = 0.024,
         typography = TypeStyle.AMBIENT,
@@ -546,7 +552,7 @@ object ThemePresets {
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.AURORA,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.THEME,
+        defaultBackdrop = Backdrop.LUMA,
         // Medium radius 20 dp over the pre-3.2 16 dp base.
         cornerScale = 1.25f,
         tokens = LumaDesignTokens.AURORA
@@ -632,7 +638,10 @@ object ThemePresets {
         tokens = LumaDesignTokens.SIGNATURE
     )
 
-    /** Atmosphere: immersive, cinematic, adaptive. Wallpaper-led, aurora mint. */
+    /**
+     * Atmosphere: immersive, cinematic, adaptive. Its default backdrop is the
+     * approved "Canopy" wallpaper (night), swapping to "First Light" in light mode.
+     */
     val ATMOSPHERE_THEME = ThemeSpec(
         id = ThemeId.ATMOSPHERE,
         displayName = "Atmosphere",
@@ -650,14 +659,14 @@ object ThemePresets {
         iconStyle = IconStyle.PLATE,
         atmosphere = Atmosphere.TINT,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.WALLPAPER,
+        defaultBackdrop = Backdrop.LUMA,
         // Medium radius 20 dp over the pre-3.2 16 dp base, so legacy component
         // tokens scale to the authored geometry instead of contradicting it.
         cornerScale = 1.25f,
         tokens = LumaDesignTokens.ATMOSPHERE
     )
 
-    /** Monolith: architectural, bold, exact. Stone neutrals, vermilion, no blur. */
+    /** Monolith: architectural, bold, exact. Stone neutrals, vermilion, no blur; "Basalt & Signal" concrete wallpaper. */
     val MONOLITH_THEME = ThemeSpec(
         id = ThemeId.MONOLITH,
         displayName = "Monolith",
@@ -675,22 +684,22 @@ object ThemePresets {
         iconStyle = IconStyle.PLATE,
         atmosphere = Atmosphere.NONE,
         surfaceStyle = SurfaceStyle.SOLID,
-        defaultBackdrop = Backdrop.THEME,
+        defaultBackdrop = Backdrop.LUMA,
         // Medium radius 2 dp / 16 dp base: the near-square Monolith geometry.
         cornerScale = 0.125f,
         tokens = LumaDesignTokens.MONOLITH
     )
 
-    /** Luma Glass: deep navy, liquid glass, glossy natural icons over the wallpaper. */
+    /** Luma Glass "Prism": clear glass over deep water, backlit white glyphs, floating dock. */
     val LUMA_GLASS_THEME = ThemeSpec(
         id = ThemeId.LUMA_GLASS,
         displayName = "Luma Glass",
-        tagline = "Deep navy liquid glass: glossy icons, floating dock, glass context pill.",
+        tagline = "Prism: clear glass over deep water, backlit glyphs and a caustic glint.",
         dark = true, amoled = false,
-        background = 0xFF050D1F.toInt(),
-        accent = 0xFF5FB8FF.toInt(),
+        background = 0xFF0B161E.toInt(),
+        accent = 0xFF7FC4FF.toInt(),
         secondary = 0xFF7FE7DC.toInt(),
-        neutralTint = 0xFF5FB8FF.toInt(),
+        neutralTint = 0xFF7FC4FF.toInt(),
         neutralChroma = 0.020,
         typography = TypeStyle.AMBIENT,
         motionCharacter = MotionCharacter.CINEMATIC,
@@ -698,29 +707,32 @@ object ThemePresets {
         iconStyle = IconStyle.NATURAL,
         atmosphere = Atmosphere.AURORA,
         surfaceStyle = SurfaceStyle.GLASS,
-        defaultBackdrop = Backdrop.WALLPAPER,
+        defaultBackdrop = Backdrop.LUMA,
         cornerScale = 1.125f,
         tokens = LumaDesignTokens.GLASS
     )
 
-    /** Luma Mono: warm peach duotone glyphs on charcoal-brown plates, no blur. */
+    /**
+     * Luma Mono: a paired monochrome material system. "Darkroom" by night (carbon
+     * stage, lit-chalk tiles), "Paper & Ink" by day (paper stage, ink tiles). No blur.
+     */
     val LUMA_MONO_THEME = ThemeSpec(
         id = ThemeId.LUMA_MONO,
         displayName = "Luma Mono",
-        tagline = "Warm peach duotone on charcoal brown: one ink, geometric plates, no blur.",
+        tagline = "Paper & Ink by day, Darkroom by night: one achromatic ink, no blur.",
         dark = true, amoled = false,
-        background = 0xFF161110.toInt(),
-        accent = 0xFFF0BE9A.toInt(),
-        secondary = 0xFFC98F6A.toInt(),
-        neutralTint = 0xFFF0BE9A.toInt(),
-        neutralChroma = 0.012,
+        background = 0xFF0B0B0D.toInt(),
+        accent = 0xFFF2F2EE.toInt(),
+        secondary = 0xFFC9C9C4.toInt(),
+        neutralTint = 0xFFC9C9C4.toInt(),
+        neutralChroma = 0.003,
         typography = TypeStyle.MONOGRAPH,
         motionCharacter = MotionCharacter.EXACT,
         iconShape = IconShape.ROUNDED,
         iconStyle = IconStyle.TINTED,
         atmosphere = Atmosphere.NONE,
         surfaceStyle = SurfaceStyle.SOLID,
-        defaultBackdrop = Backdrop.THEME,
+        defaultBackdrop = Backdrop.LUMA,
         cornerScale = 0.875f,
         tokens = LumaDesignTokens.MONO
     )
@@ -763,9 +775,9 @@ object ThemePresets {
      * premium theme stays inside its design language.
      */
     fun curatedAccents(id: ThemeId): List<Int> = when (id) {
-        ThemeId.OBSIDIAN -> listOf(0xFFD9BC8C, 0xFFB9C3D3, 0xFFE8A598, 0xFF9FD3B8, 0xFF8FB6FF, 0xFFC9A7FF)
-        ThemeId.IVORY -> listOf(0xFF2E5AAC, 0xFF8E6E42, 0xFF2F6B55, 0xFFA2453A, 0xFF5B4BA8, 0xFF1F2A36)
-        ThemeId.AURORA -> listOf(0xFFB48CFF, 0xFF4FE3C1, 0xFFFF8FC8, 0xFF7FB6FF, 0xFFFFC870, 0xFF9AE66E)
+        ThemeId.OBSIDIAN -> listOf(0xFFE8A33D, 0xFFC9CDD6, 0xFFD9BC8C, 0xFFE8A598, 0xFF9FD3B8, 0xFF8FB6FF)
+        ThemeId.IVORY -> listOf(0xFF3A5F8A, 0xFF8E6E42, 0xFF2F6B55, 0xFFA2453A, 0xFF5B4BA8, 0xFF2B2620)
+        ThemeId.AURORA -> listOf(0xFF8A5AF0, 0xFF3AD8C8, 0xFFD85AF0, 0xFF7FB6FF, 0xFFFFC870, 0xFF9AE66E)
         else -> listOf(of(id).accent.toLong() and 0xFFFFFFFFL) +
             listOf(0xFF7C86FF, 0xFF46E0B0, 0xFFE2B66B, 0xFFFF8FA3, 0xFF8AB4F8)
     }.map { it.toInt() }.distinct()
@@ -774,9 +786,11 @@ object ThemePresets {
 
     /** Curated accent swatches offered in the Studio (plus the theme's own). */
     val ACCENT_SWATCHES: List<Int> = listOf(
-        0xFFD9BC8C.toInt(), // Obsidian champagne
-        0xFF2E5AAC.toInt(), // Ivory sapphire
-        0xFFB48CFF.toInt(), // Aurora orchid
+        0xFFE8A33D.toInt(), // Obsidian ember
+        0xFF3A5F8A.toInt(), // Ivory sapphire
+        0xFF8A5AF0.toInt(), // Aurora violet
+        0xFF3AD8C8.toInt(), // Aurora teal
+        0xFFD9BC8C.toInt(), // champagne
         0xFF7C86FF.toInt(), // Signature indigo-violet (v3.2)
         0xFFA78BFA.toInt(), // Signature secondary violet (v3.2)
         0xFF46E0B0.toInt(), // Atmosphere aurora mint (v3.2)
@@ -788,8 +802,8 @@ object ThemePresets {
         0xFF69E2F2.toInt(), // Void cyan
         0xFFE28BCB.toInt(), // Void magenta
         0xFF526B60.toInt(), // Zen sage
-        0xFF5FB8FF.toInt(), // Luma Glass sky
-        0xFFF0BE9A.toInt(), // Luma Mono peach
+        0xFF7FC4FF.toInt(), // Luma Glass prism sky
+        0xFFF0BE9A.toInt(), // peach
         0xFF3DF2E0.toInt(), // signal cyan
         0xFF6EE7B7.toInt(), // aurora green
         0xFF8AB4F8.toInt(), // sky
@@ -806,8 +820,8 @@ object ThemePresets {
         0xFF06070B.toInt(), // Signature midnight (v3.2)
         0xFF04131A.toInt(), // Atmosphere deep teal (v3.2)
         0xFF0B0B0A.toInt(), // Monolith stone (v3.2)
-        0xFF050D1F.toInt(), // Luma Glass deep navy
-        0xFF161110.toInt(), // Luma Mono charcoal brown
+        0xFF0B161E.toInt(), // Luma Glass deep water
+        0xFF0B0B0D.toInt(), // Luma Mono carbon
         0xFF000000.toInt(),
         0xFF080D1A.toInt(), // midnight blue
         0xFF080815.toInt(), // Void indigo

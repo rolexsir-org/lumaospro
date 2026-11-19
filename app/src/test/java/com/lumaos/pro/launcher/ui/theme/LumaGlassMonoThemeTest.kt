@@ -5,7 +5,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The 2026-11 reference identities: Luma Glass (deep-navy liquid glass) and Luma Mono (peach duotone). */
+/**
+ * The 2026-11 reference identities as approved in Phase 2: Luma Glass "Prism"
+ * (clear glass over deep water) and Luma Mono "Paper & Ink · Darkroom" (achromatic duotone).
+ */
 class LumaGlassMonoThemeTest {
 
     private val env = ThemeEnvironment(systemDark = true, minuteOfDay = 600)
@@ -21,17 +24,19 @@ class LumaGlassMonoThemeTest {
         assertEquals(ThemeId.entries.toSet(), ThemePresets.ALL.map { it.id }.toSet())
     }
 
-    @Test fun `glass is deep navy glass with glossy natural icons`() {
+    @Test fun `glass is clear glass over deep water with glossy natural icons`() {
         val t = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.LUMA_GLASS), env)
         assertTrue(t.isDark)
         assertTrue(t.usesBlur)
         assertEquals(SurfaceStyle.GLASS, t.surfaceStyle)
         assertEquals(IconStyle.NATURAL, t.iconStyle)
         assertEquals(IconShape.SQUIRCLE, t.iconShape)
+        // An explicit system-wallpaper choice is still honoured.
         assertEquals(Backdrop.WALLPAPER, t.backdrop)
         assertEquals(72f, t.clockSp, 0f)
-        // Deep navy, not black and not the Signature midnight.
+        // Deep water: blue-led, not black and not the Signature midnight.
         assertTrue(ColorMath.blue(t.colors.background) > ColorMath.red(t.colors.background))
+        assertEquals(0xFF0B161E.toInt(), ThemePresets.of(ThemeId.LUMA_GLASS).background)
     }
 
     @Test fun `mono is zero blur duotone with mono voice`() {
@@ -44,8 +49,11 @@ class LumaGlassMonoThemeTest {
         assertEquals(TypeStyle.MONOGRAPH, t.typography)
         assertTrue(t.typography.readoutCaps)
         assertEquals(FontFamilyId.SYSTEM_MONO, t.typography.label.family)
-        // Warm: red channel dominates the peach accent.
-        assertTrue(ColorMath.red(t.colors.accent) > ColorMath.blue(t.colors.accent))
+        // Achromatic: the chalk ink carries no hue (channels within a few steps).
+        val a = t.colors.accent
+        val channels = listOf(ColorMath.red(a), ColorMath.green(a), ColorMath.blue(a))
+        assertTrue("Mono accent ${ColorMath.toHex(a)} must be achromatic", channels.max() - channels.min() <= 8)
+        assertTrue("chalk ink is light", !ColorMath.isDark(a))
     }
 
     @Test fun `both themes keep body text at AAA on their own surfaces`() {
@@ -64,6 +72,15 @@ class LumaGlassMonoThemeTest {
         assertTrue(glass.livingIcons)
         assertEquals(IconStyle.TINTED, mono.iconStyle)
         assertFalse(mono.livingIcons)
+        // Both packages apply the theme's own approved wallpaper.
+        assertEquals(Backdrop.LUMA, glass.backdrop)
+        assertEquals(Backdrop.LUMA, mono.backdrop)
+        assertEquals(WallpaperArt.GLASS_PRISM, ThemeEngine.resolve(glass.toThemeSettings(), env).lumaArt)
+        assertEquals(WallpaperArt.MONO_DARKROOM, ThemeEngine.resolve(mono.toThemeSettings(), env).lumaArt)
+        assertEquals(
+            WallpaperArt.MONO_PAPER,
+            ThemeEngine.resolve(mono.toThemeSettings(), env.copy(systemDark = false)).lumaArt
+        )
     }
 
     @Test fun `switching themes does not rewrite unrelated settings`() {

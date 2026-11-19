@@ -257,7 +257,8 @@ object LumaDesignTokens {
     )
 
     /**
-     * Luma Glass — deep navy liquid glass (reference home/drawer, 2026-11).
+     * Luma Glass — Concept B "Prism" (approved 2026-11-19): clear glass over deep
+     * water, backlit white glyphs, a transmitted brand hue and a caustic glint.
      * Post-v3.2 addition: deliberately NOT in [ALL], which remains the exact
      * v3.2 JSON-parity set compared by `DesignTokensParityTest`.
      */
@@ -265,21 +266,21 @@ object LumaDesignTokens {
         key = "luma_glass",
         version = VERSION,
         colors = TokenColors(
-            background0 = 0xFF050D1F.toInt(),
-            background1 = 0xFF071426.toInt(),
-            background2 = 0xFF0A1D38.toInt(),
+            background0 = 0xFF0B161E.toInt(),
+            background1 = 0xFF0E1B25.toInt(),
+            background2 = 0xFF132634.toInt(),
             surface1 = translucent(0xFFBFE0FF.toInt(), 0.055f),
             surface2 = translucent(0xFFBFE0FF.toInt(), 0.09f),
             surface3 = translucent(0xFFBFE0FF.toInt(), 0.14f),
-            surfaceSolid = 0xFF0C1B31.toInt(),
+            surfaceSolid = 0xFF112230.toInt(),
             stroke1 = translucent(0xFF9FD0FF.toInt(), 0.14f),
             stroke2 = translucent(0xFF9FD0FF.toInt(), 0.28f),
-            text1 = 0xFFF2F7FF.toInt(),
-            text2 = 0xFFA9C2DC.toInt(),
-            text3 = 0xFF718CA8.toInt(),
-            accent = 0xFF5FB8FF.toInt(),
+            text1 = 0xFFF4F9FF.toInt(),
+            text2 = 0xFFA9C2D6.toInt(),
+            text3 = 0xFF7690A6.toInt(),
+            accent = 0xFF7FC4FF.toInt(),
             accent2 = 0xFF7FE7DC.toInt(),
-            accentSoft = translucent(0xFF5FB8FF.toInt(), 0.16f),
+            accentSoft = translucent(0xFF7FC4FF.toInt(), 0.16f),
             ok = 0xFF4FD1A5.toInt(),
             warn = 0xFFF0C25C.toInt(),
             danger = 0xFFFF7070.toInt()
@@ -294,36 +295,38 @@ object LumaDesignTokens {
     )
 
     /**
-     * Luma Mono — warm peach duotone on deep charcoal-brown (reference drawer, 2026-11).
-     * Zero blur by design, like Monolith; also excluded from the v3.2 parity set [ALL].
+     * Luma Mono — paired material system (approved 2026-11-19). These are the
+     * "Darkroom" roles (carbon void stage, lit-chalk tiles, achromatic 7-stop
+     * scale); by day the "Paper & Ink" wallpaper turns the same tiles into ink on
+     * paper. Zero blur by design, like Monolith; excluded from the v3.2 parity set [ALL].
      */
     val MONO = ThemeTokens(
         key = "luma_mono",
         version = VERSION,
         colors = TokenColors(
-            background0 = 0xFF161110.toInt(),
-            background1 = 0xFF1D1714.toInt(),
-            background2 = 0xFF261D18.toInt(),
-            surface1 = translucent(0xFFF0BE9A.toInt(), 0.055f),
-            surface2 = translucent(0xFFF0BE9A.toInt(), 0.09f),
-            surface3 = translucent(0xFFF0BE9A.toInt(), 0.14f),
-            surfaceSolid = 0xFF241B16.toInt(),
-            stroke1 = translucent(0xFFF0BE9A.toInt(), 0.14f),
-            stroke2 = translucent(0xFFF0BE9A.toInt(), 0.26f),
-            text1 = 0xFFF7E8DC.toInt(),
-            text2 = 0xFFC9A98F.toInt(),
-            text3 = 0xFF93765F.toInt(),
-            accent = 0xFFF0BE9A.toInt(),
-            accent2 = 0xFFC98F6A.toInt(),
-            accentSoft = translucent(0xFFF0BE9A.toInt(), 0.15f),
-            ok = 0xFFB7CE8B.toInt(),
-            warn = 0xFFF2C14E.toInt(),
-            danger = 0xFFFF8A6B.toInt()
+            background0 = 0xFF0B0B0D.toInt(),
+            background1 = 0xFF15151A.toInt(),
+            background2 = 0xFF22222A.toInt(),
+            surface1 = translucent(0xFFF2F2EE.toInt(), 0.055f),
+            surface2 = translucent(0xFFF2F2EE.toInt(), 0.09f),
+            surface3 = translucent(0xFFF2F2EE.toInt(), 0.14f),
+            surfaceSolid = 0xFF1C1C22.toInt(),
+            stroke1 = translucent(0xFFF2F2EE.toInt(), 0.12f),
+            stroke2 = translucent(0xFFF2F2EE.toInt(), 0.24f),
+            text1 = 0xFFF2F2EE.toInt(),
+            text2 = 0xFFC9C9C4.toInt(),
+            text3 = 0xFF8E8E96.toInt(),
+            accent = 0xFFF2F2EE.toInt(),
+            accent2 = 0xFFC9C9C4.toInt(),
+            accentSoft = translucent(0xFFF2F2EE.toInt(), 0.14f),
+            ok = 0xFFB9D3B0.toInt(),
+            warn = 0xFFE8D29A.toInt(),
+            danger = 0xFFFF8F80.toInt()
         ),
         shape = TokenShape(extraLarge = 22f, large = 18f, medium = 14f, small = 10f, extraSmall = 6f, dockRadius = 22f, tileRadius = 18f, tileSize = 58f),
         material = TokenMaterial(
             blurDp = 0f, saturation = 1f,
-            shadow2 = "0 2px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,230,200,.07)",
+            shadow2 = "0 2px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07)",
             shadow3 = "0 24px 60px -28px rgba(0,0,0,.9)"
         ),
         type = TYPE_SCALE, clockSp = 62f, appLabelSp = 10f
@@ -337,7 +340,10 @@ object LumaDesignTokens {
     // [TokenElevation] so shadows are a theme decision rather than a constant:
     // Ivory's light surfaces need far softer shadows than Obsidian's black field.
 
-    /** Obsidian — premium OLED dark. Pure black field, graphite glass, champagne. */
+    /**
+     * Obsidian — "Onyx & Ember" (approved 2026-11-19). True-black OLED field, onyx
+     * glass, steel text and a single ember accent rationed to live marks.
+     */
     val OBSIDIAN = ThemeTokens(
         key = "obsidian",
         version = VERSION,
@@ -353,12 +359,12 @@ object LumaDesignTokens {
             surfaceSolid = 0xFF161619.toInt(),
             stroke1 = translucent(0xFFFFFFFF.toInt(), 0.08f),
             stroke2 = translucent(0xFFFFFFFF.toInt(), 0.15f),
-            text1 = 0xFFF5F3EF.toInt(),
-            text2 = 0xFFAAA7A1.toInt(),
-            text3 = 0xFF79766F.toInt(),
-            accent = 0xFFD9BC8C.toInt(),
-            accent2 = 0xFFB9C3D3.toInt(),
-            accentSoft = translucent(0xFFD9BC8C.toInt(), 0.14f),
+            text1 = 0xFFF1F2F5.toInt(),
+            text2 = 0xFFC9CDD6.toInt(),
+            text3 = 0xFF80848E.toInt(),
+            accent = 0xFFE8A33D.toInt(),
+            accent2 = 0xFFC9CDD6.toInt(),
+            accentSoft = translucent(0xFFE8A33D.toInt(), 0.14f),
             ok = 0xFF7AD3A6.toInt(),
             warn = 0xFFE9C46A.toInt(),
             danger = 0xFFFF7A6E.toInt()
@@ -373,7 +379,10 @@ object LumaDesignTokens {
         elevation = TokenElevation(cardDp = 2f, floatingDp = 8f, shadowAlpha = 0.34f)
     )
 
-    /** Ivory — elegant light. Warm paper field, white cards, sapphire ink, bronze. */
+    /**
+     * Ivory — "Porcelain" (approved 2026-11-19). Warm ivory field, porcelain cards
+     * (pearl to warm ivory), warm ink #2B2620 and one sapphire accent on live marks.
+     */
     val IVORY = ThemeTokens(
         key = "ivory",
         version = VERSION,
@@ -389,12 +398,12 @@ object LumaDesignTokens {
             surfaceSolid = 0xFFFFFFFF.toInt(),
             stroke1 = translucent(0xFF1D1B17.toInt(), 0.08f),
             stroke2 = translucent(0xFF1D1B17.toInt(), 0.15f),
-            text1 = 0xFF1B1A17.toInt(),
-            text2 = 0xFF5D5950.toInt(),
-            text3 = 0xFF8A857A.toInt(),
-            accent = 0xFF2E5AAC.toInt(),
+            text1 = 0xFF2B2620.toInt(),
+            text2 = 0xFF5E574D.toInt(),
+            text3 = 0xFF7A7368.toInt(),
+            accent = 0xFF3A5F8A.toInt(),
             accent2 = 0xFF8E6E42.toInt(),
-            accentSoft = translucent(0xFF2E5AAC.toInt(), 0.11f),
+            accentSoft = translucent(0xFF3A5F8A.toInt(), 0.11f),
             ok = 0xFF2E7D57.toInt(),
             warn = 0xFFA86A12.toInt(),
             danger = 0xFFC0392B.toInt()
@@ -409,7 +418,10 @@ object LumaDesignTokens {
         elevation = TokenElevation(cardDp = 1f, floatingDp = 6f, shadowAlpha = 0.10f)
     )
 
-    /** Aurora — expressive gradient. Indigo night, orchid accent, teal aurora. */
+    /**
+     * Aurora — "Borealis" (approved 2026-11-19). Deep-space indigo, violet edge
+     * light, ice-white text and the jewel palette: violet, teal and magenta.
+     */
     val AURORA = ThemeTokens(
         key = "aurora",
         version = VERSION,
@@ -423,13 +435,13 @@ object LumaDesignTokens {
             surfaceSolid = 0xFF141A3A.toInt(),
             stroke1 = translucent(0xFFBDB4FF.toInt(), 0.14f),
             stroke2 = translucent(0xFFBDB4FF.toInt(), 0.27f),
-            text1 = 0xFFF3F1FF.toInt(),
+            text1 = 0xFFF2F4FF.toInt(),
             text2 = 0xFFB3B0D6.toInt(),
-            text3 = 0xFF7F7CA8.toInt(),
-            accent = 0xFFB48CFF.toInt(),
-            accent2 = 0xFF4FE3C1.toInt(),
-            accentSoft = translucent(0xFFB48CFF.toInt(), 0.16f),
-            ok = 0xFF4FE3C1.toInt(),
+            text3 = 0xFF8380AE.toInt(),
+            accent = 0xFF8A5AF0.toInt(),
+            accent2 = 0xFF3AD8C8.toInt(),
+            accentSoft = translucent(0xFF8A5AF0.toInt(), 0.18f),
+            ok = 0xFF3AD8C8.toInt(),
             warn = 0xFFFFC870.toInt(),
             danger = 0xFFFF7A90.toInt()
         ),

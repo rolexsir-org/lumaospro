@@ -69,7 +69,7 @@ object AtmospherePlan {
             // own scrim strengths; a system wallpaper uses balanced defaults.
             val darkScrim = ColorMath.isDark(ColorMath.opaque(c.homeShadow))
             val base = if (darkScrim) ColorMath.BLACK else ColorMath.WHITE
-            val art = if (luma) WallpaperArt.forTheme(theme.id) else null
+            val art = if (luma) theme.lumaArt else null
             val top = art?.scrimTop ?: 0.30f
             val bottom = art?.scrimBottom ?: 0.34f
             out += AtmosphereLayer.VerticalFade(0f, 0.34f, ColorMath.withAlpha(base, top), ColorMath.withAlpha(base, 0f))
@@ -99,7 +99,8 @@ object AtmospherePlan {
             }
             // A whisper of the theme accent keeps the bundled art and the
             // surface palette reading as one material without recolouring it.
-            if (luma) {
+            // Obsidian is the exception: Onyx & Ember keeps ember for live marks only.
+            if (luma && theme.id != ThemeId.OBSIDIAN) {
                 out += AtmosphereLayer.Glow(0.18f, 0.12f, 0.55f, ColorMath.withAlpha(c.accent, 0.06f), 0.8f)
             }
             return out

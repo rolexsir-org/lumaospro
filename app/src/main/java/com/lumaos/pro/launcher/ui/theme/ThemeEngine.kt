@@ -144,9 +144,17 @@ object ThemeEngine {
     fun resolve(settings: ThemeSettings, env: ThemeEnvironment): ResolvedTheme {
         val id = settings.effectiveThemeId(env.systemDark, env.minuteOfDay, env.profile)
         val rawBase = ThemePresets.of(id)
-        val dynamicActive = id == ThemeId.CHROMA || (settings.dynamicWallpaperColors && env.wallpaper != null)
+        // The theme's own wallpaper for the current mode (a day/night pair swaps
+        // halves with the system mode). When it is the backdrop - LUMA without an
+        // explicit Studio selection - its measured seeds stand in for the hidden
+        // system wallpaper, so adaptive colour and legibility follow the art.
+        val themeArt = WallpaperArt.forTheme(id, env.systemDark)
+        val requestedBackdrop = settings.backdrop ?: rawBase.defaultBackdrop
+        val showsThemeArt = requestedBackdrop == Backdrop.LUMA && !env.hasSelectedArtwork && themeArt != null
+        val wallpaper = if (showsThemeArt) themeArt?.seeds else env.wallpaper
+        val dynamicActive = id == ThemeId.CHROMA || (settings.dynamicWallpaperColors && wallpaper != null)
         val base = if (dynamicActive) {
-            wallpaperSpec(rawBase, env.wallpaper, env.systemDark)
+            wallpaperSpec(rawBase, wallpaper, env.systemDark)
         } else {
             rawBase
         }
@@ -156,8 +164,7 @@ object ThemeEngine {
         // LUMA is meaningful for themes with bundled artwork or when the user has
         // chosen an active Wallpaper Studio item. An older preference without
         // either falls back to the theme's own atmosphere instead of a blank frame.
-        val requestedBackdrop = settings.backdrop ?: base.defaultBackdrop
-        val hasLumaArt = WallpaperArt.forTheme(id) != null || env.hasSelectedArtwork
+        val hasLumaArt = themeArt != null || env.hasSelectedArtwork
         val backdrop = if (requestedBackdrop == Backdrop.LUMA && !hasLumaArt) {
             Backdrop.THEME
         } else {
@@ -187,11 +194,11 @@ object ThemeEngine {
         val curated = !dynamicActive && settings.backgroundOverride == null
         val colors = if (tokens != null && curated) {
             authoredColors(
-                spec, tokens, backdrop, env.wallpaper, env.hasSelectedArtwork,
+                spec, tokens, backdrop, wallpaper, env.hasSelectedArtwork, themeArt,
                 accentOverride = settings.accentOverride?.let { ColorMath.opaque(it) }
             )
         } else {
-            deriveColors(spec, backdrop, env.wallpaper, env.hasSelectedArtwork)
+            deriveColors(spec, backdrop, wallpaper, env.hasSelectedArtwork, themeArt)
         }
         return ResolvedTheme(
             id = id,
@@ -206,7 +213,8 @@ object ThemeEngine {
             backdrop = backdrop,
             cornerScale = base.cornerScale,
             tokens = tokens,
-            wallpaperSeeds = env.wallpaper
+            wallpaperSeeds = wallpaper,
+            lumaArt = themeArt
         )
     }
 
@@ -319,6 +327,7 @@ object ThemeEngine {
         backdrop: Backdrop,
         wallpaper: WallpaperSeeds?,
         hasSelectedArtwork: Boolean = false,
+        themeArt: WallpaperArt? = null,
         accentOverride: Int? = null
     ): ThemeColors {
         val t = tokens.colors
@@ -344,6 +353,7 @@ object ThemeEngine {
             backdrop = backdrop,
             wallpaper = wallpaper,
             hasSelectedArtwork = hasSelectedArtwork,
+            themeArt = themeArt,
             neutral = neutralFn(spec),
             surfaces = intArrayOf(surface0, surface1, surface2, surface3),
             text = RawText(ColorMath.opaque(t.text1), ColorMath.opaque(t.text2), ColorMath.opaque(t.text3)),
@@ -365,7 +375,8 @@ object ThemeEngine {
         spec: ThemeSpec,
         backdrop: Backdrop,
         wallpaper: WallpaperSeeds?,
-        hasSelectedArtwork: Boolean = false
+        hasSelectedArtwork: Boolean = false,
+        themeArt: WallpaperArt? = null
     ): ThemeColors {
         val neutral = neutralFn(spec)
         val bg = spec.background
@@ -425,6 +436,7 @@ object ThemeEngine {
             backdrop = backdrop,
             wallpaper = wallpaper,
             hasSelectedArtwork = hasSelectedArtwork,
+            themeArt = themeArt,
             neutral = neutral,
             surfaces = intArrayOf(surface0, surface1, surface2, surface3),
             text = RawText(onSurface, muted, faint),
@@ -449,6 +461,7 @@ object ThemeEngine {
         backdrop: Backdrop,
         wallpaper: WallpaperSeeds?,
         hasSelectedArtwork: Boolean = false,
+        themeArt: WallpaperArt? = null,
         neutral: (Double, Double) -> Int,
         surfaces: IntArray,
         text: RawText,
@@ -502,9 +515,9 @@ object ThemeEngine {
             // provides a platform hint when available) and back it with a shadow.
             val lightWallpaper = if (backdrop == Backdrop.LUMA) {
                 if (hasSelectedArtwork) {
-                    wallpaper?.supportsDarkText ?: WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+                    wallpaper?.supportsDarkText ?: themeArt?.supportsDarkText ?: false
                 } else {
-                    WallpaperArt.forTheme(spec.id)?.supportsDarkText ?: false
+                    themeArt?.supportsDarkText ?: false
                 }
             } else {
                 wallpaper?.supportsDarkText ?: false

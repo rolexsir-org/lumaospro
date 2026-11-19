@@ -80,7 +80,10 @@ class DesignSystemV32Test {
         // The three differ in composition inputs, not only in hue.
         assertNotEquals(signature.defaultBackdrop, atmosphere.defaultBackdrop)
         assertNotEquals(signature.iconShape, monolith.iconShape)
-        assertEquals(Backdrop.WALLPAPER, atmosphere.defaultBackdrop)
+        // Phase 2: Atmosphere ships its approved Canopy / First Light pair as its own backdrop.
+        assertEquals(Backdrop.LUMA, atmosphere.defaultBackdrop)
+        assertEquals(Backdrop.LUMA, monolith.defaultBackdrop)
+        assertEquals(Backdrop.THEME, signature.defaultBackdrop)
     }
 
     @Test fun `retained palettes keep their exact pre-3_2 seeds`() {
@@ -241,12 +244,26 @@ class DesignSystemV32Test {
 
     // ------------------------------------------------------------------ backdrop
 
-    @Test fun `v3_2 themes have no bundled artwork and cannot resolve LUMA`() {
-        for (id in listOf(ThemeId.SIGNATURE, ThemeId.ATMOSPHERE, ThemeId.MONOLITH)) {
-            assertNull("$id should not ship artwork", WallpaperArt.forTheme(id))
-            val themed = ThemeEngine.resolve(ThemeSettings().pinned(id).copy(backdrop = Backdrop.LUMA), envDark)
-            assertEquals(Backdrop.THEME, themed.backdrop)
-        }
+    @Test fun `Signature has no bundled artwork while Atmosphere and Monolith ship their approved art`() {
+        assertNull("Signature paints its own backdrop", WallpaperArt.forTheme(ThemeId.SIGNATURE))
+        val signature = ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.SIGNATURE).copy(backdrop = Backdrop.LUMA), envDark)
+        assertEquals(Backdrop.THEME, signature.backdrop)
+        assertNull(signature.lumaArt)
+
+        // Applying a theme (Studio / Settings) goes through its launcher package,
+        // which now selects the theme's own art. Atmosphere: Canopy at night, First Light by day.
+        val atmNight = ThemeEngine.resolve(ThemeLauncherPackage.forTheme(ThemeId.ATMOSPHERE).toThemeSettings(), envDark)
+        assertEquals(Backdrop.LUMA, atmNight.backdrop)
+        assertEquals(WallpaperArt.ATMOSPHERE_CANOPY, atmNight.lumaArt)
+        val atmDay = ThemeEngine.resolve(ThemeLauncherPackage.forTheme(ThemeId.ATMOSPHERE).toThemeSettings(), envLight)
+        assertEquals(WallpaperArt.ATMOSPHERE_FIRST_LIGHT, atmDay.lumaArt)
+
+        // Monolith: Basalt & Signal concrete, light enough for dark text.
+        val monolith = ThemeEngine.resolve(ThemeLauncherPackage.forTheme(ThemeId.MONOLITH).toThemeSettings(), envDark)
+        assertEquals(Backdrop.LUMA, monolith.backdrop)
+        assertEquals(WallpaperArt.MONOLITH_BASALT, monolith.lumaArt)
+        assertTrue(WallpaperArt.MONOLITH_BASALT.supportsDarkText)
+
         // The retained themes keep theirs.
         for (id in listOf(ThemeId.AURORA, ThemeId.PORCELAIN, ThemeId.VECTOR)) {
             assertTrue("$id keeps its bundled artwork", WallpaperArt.forTheme(id) != null)

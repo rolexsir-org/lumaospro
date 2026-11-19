@@ -144,7 +144,6 @@ import com.lumaos.pro.launcher.ui.theme.TypeStyle
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine
 import com.lumaos.pro.launcher.ui.theme.ThemeEnvironment
 import com.lumaos.pro.launcher.ui.theme.ThemeSettings
-import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.widgets.InsertionPlan
 import com.lumaos.pro.launcher.widgets.WidgetCapabilities
 import com.lumaos.pro.launcher.widgets.WidgetHostController
@@ -1960,7 +1959,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
      */
     private fun renderWallpaper(t: ResolvedTheme) {
         val selectedEntry = core.themes.activeWallpaper.value
-        val themeArt = WallpaperArt.forTheme(t.id)
+        val themeArt = t.lumaArt
         val crossfadeMs = if (motion.enabled && !motion.reduced) t.motionProfile.themeChangeMs.toLong() else 0L
         when {
             t.backdrop == Backdrop.LUMA && selectedEntry != null -> {
@@ -1994,7 +1993,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private fun applyTypography(t: ResolvedTheme) {
         val style = t.typography
         val isMonolith = t.id == ThemeId.MONOLITH || style == TypeStyle.MONOGRAPH
-        homeClock.typeface = Typefaces.clock(style)
+        homeClock.typeface = Typefaces.clock(t)
         homeClock.letterSpacing = style.clockTracking
         homeDate.typeface = if (isMonolith) Typefaces.readout(style) else Typefaces.body(style)
         homeDate.letterSpacing = style.readoutTracking

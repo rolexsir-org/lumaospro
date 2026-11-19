@@ -61,11 +61,13 @@ data class IconRenderSpec(
             val plateColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
                 ThemeId.ATMOSPHERE -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.16f)
-                ThemeId.LUMA_GLASS -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.12f)
+                // Prism: clear glass over deep water — barely washed with the sky accent.
+                ThemeId.LUMA_GLASS -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.08f)
+                // Darkroom: an achromatic carbon plate.
                 ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
-                // Premium: graphite plate on Obsidian, an orchid-washed glass plate on Aurora.
-                ThemeId.OBSIDIAN -> ColorMath.opaque(c.surface2)
-                ThemeId.AURORA -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.14f)
+                // Onyx & Ember: near-black onyx tile; Borealis: an indigo window tile.
+                ThemeId.OBSIDIAN -> ColorMath.opaque(c.surface1)
+                ThemeId.AURORA -> ColorMath.lerp(ColorMath.opaque(c.surface2), ColorMath.opaque(c.accent), 0.10f)
                 else -> if (theme.isDark) c.surface2 else ColorMath.WHITE
             }
             val rimColor = when (theme.id) {
@@ -78,19 +80,20 @@ data class IconRenderSpec(
             val tintPlateColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.opaque(c.surface1)
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.10f)
-                // Luma Mono plates stay deep charcoal-brown so the single peach ink reads on every tile.
+                // Luma Mono plates stay carbon so the single chalk ink reads on every tile.
                 ThemeId.LUMA_MONO -> ColorMath.opaque(c.surface1)
-                ThemeId.OBSIDIAN -> ColorMath.lerp(ColorMath.opaque(c.surface1), ColorMath.opaque(c.accent), 0.08f)
+                // Onyx plate, no ember wash: ember is reserved for live marks.
+                ThemeId.OBSIDIAN -> ColorMath.opaque(c.surface1)
                 ThemeId.IVORY -> ColorMath.lerp(ColorMath.WHITE, ColorMath.opaque(c.accent), 0.07f)
                 else -> c.accentContainer
             }
             val tintColor = when (theme.id) {
                 ThemeId.MONOLITH -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.28f)
                 ThemeId.SIGNATURE -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.22f)
-                // The duotone ink itself: warm peach, never a near-white that would wash out on the plate.
-                ThemeId.LUMA_MONO -> ColorMath.lerp(ColorMath.opaque(c.accent), ColorMath.opaque(c.onSurface), 0.18f)
-                // Champagne ink on graphite; sapphire ink on paper.
-                ThemeId.OBSIDIAN -> ColorMath.lerp(ColorMath.opaque(c.onSurface), ColorMath.opaque(c.accent), 0.55f)
+                // The duotone ink itself: achromatic chalk on carbon (Paper & Ink · Darkroom).
+                ThemeId.LUMA_MONO -> ColorMath.opaque(c.onSurface)
+                // Brushed-steel ink on onyx (ember never inks glyphs); sapphire ink on porcelain.
+                ThemeId.OBSIDIAN -> ColorMath.opaque(c.secondary)
                 ThemeId.IVORY -> ColorMath.opaque(c.accent)
                 else -> c.onAccentContainer
             }

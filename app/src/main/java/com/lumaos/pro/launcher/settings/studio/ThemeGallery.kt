@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.launcher.model.DockStyle
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
@@ -99,7 +100,30 @@ internal fun ThemeMiniature(theme: ResolvedTheme, dock: DockStyle, modifier: Mod
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        if (theme.backdrop.usesArtwork) {
+        val art = theme.lumaArt.takeIf { theme.backdrop == Backdrop.LUMA }
+        if (art != null) {
+            // The theme's own approved wallpaper, painted from its measured seeds
+            // (top band, body, low band) so a thumbnail never decodes full artwork.
+            val seeds = art.seeds
+            drawRect(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(seeds.secondary ?: seeds.primary),
+                        Color(seeds.primary),
+                        Color(seeds.tertiary ?: seeds.primary)
+                    )
+                )
+            )
+            seeds.accent?.let { accent ->
+                val center = Offset(w * art.focalX, h * art.focalY)
+                val radius = w * 0.72f
+                drawCircle(
+                    Brush.radialGradient(listOf(Color(accent).copy(alpha = 0.18f), Color.Transparent), center, radius),
+                    radius,
+                    center
+                )
+            }
+        } else if (theme.backdrop.usesArtwork) {
             // No artwork in a thumbnail: stand in with the theme's own surface pair.
             drawRect(Brush.linearGradient(listOf(Color(theme.colors.surface2), Color(theme.colors.background)), Offset.Zero, Offset(w, h)))
         }
@@ -126,7 +150,12 @@ internal fun ThemeMiniature(theme: ResolvedTheme, dock: DockStyle, modifier: Mod
 
         // Tiles: the theme's own tile radius ratio, filled from its palette so
         // the identity reads even at thumbnail size.
-        val tileFills = listOf(c.accent, c.secondary, c.surface3, c.accentContainer, c.surface2, c.accent, c.surface3, c.secondary)
+        val tileFills = if (theme.id == ThemeId.OBSIDIAN) {
+            // Onyx & Ember: steel and onyx tiles; ember marks a single live tile.
+            listOf(c.accent, c.secondary, c.surface3, c.surface2, c.surface3, c.secondary, c.surface2, c.surface3)
+        } else {
+            listOf(c.accent, c.secondary, c.surface3, c.accentContainer, c.surface2, c.accent, c.surface3, c.secondary)
+        }
         val cols = 4
         val tile = w * 0.13f
         val gap = (w - gutter * 2f - tile * cols) / (cols - 1)
