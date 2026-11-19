@@ -380,6 +380,10 @@ private fun DrawScope.drawBackdrop(
             .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
             .map { Color(it) }
         drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
+    } else if (theme.backdrop == Backdrop.LUMA) {
+        // Artwork still decoding (or unavailable): the same solid the home screen
+        // paints, i.e. the art's own dominant colour the home text was chosen for.
+        drawRect(Color(theme.backdropFallbackColor))
     }
     drawAtmosphere(theme, 0.18f)
     val scrim = GlassBackdrop.scrim(theme)

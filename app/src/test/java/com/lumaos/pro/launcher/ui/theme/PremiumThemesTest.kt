@@ -20,6 +20,10 @@ class PremiumThemesTest {
     private fun resolve(id: ThemeId, settings: ThemeSettings = ThemeSettings(), env: ThemeEnvironment = envDark) =
         ThemeEngine.resolve(settings.copy(backdrop = null).pinned(id), env)
 
+    /** Like [resolve] but keeps an explicit backdrop instead of the theme default. */
+    private fun resolveOn(id: ThemeId, backdrop: Backdrop, env: ThemeEnvironment = envDark) =
+        ThemeEngine.resolve(ThemeSettings(backdrop = backdrop).pinned(id), env)
+
     private fun ratio(a: Int, b: Int) = ColorMath.contrast(ColorMath.opaque(a), ColorMath.opaque(b))
 
     @Test fun `the premium trio is offered first, in order, under stable keys`() {
@@ -78,7 +82,8 @@ class PremiumThemesTest {
     }
 
     @Test fun `obsidian is true black for OLED and its field carries no glow`() {
-        val t = resolve(ThemeId.OBSIDIAN, ThemeSettings(backdrop = Backdrop.THEME))
+        val t = resolveOn(ThemeId.OBSIDIAN, Backdrop.THEME)
+        assertEquals(Backdrop.THEME, t.backdrop)
         assertEquals(ColorMath.BLACK, t.colors.background)
         assertEquals(ColorMath.BLACK, t.colors.surface0)
         assertEquals(listOf(AtmosphereLayer.Solid(ColorMath.BLACK)), AtmospherePlan.layers(t, 0.4f, true))
@@ -116,7 +121,7 @@ class PremiumThemesTest {
 
     @Test fun `aurora paints a real multi-colour gradient that drifts`() {
         // The synthetic field is what Aurora draws on its THEME backdrop.
-        val t = resolve(ThemeId.AURORA, ThemeSettings(backdrop = Backdrop.THEME))
+        val t = resolveOn(ThemeId.AURORA, Backdrop.THEME)
         val a = AtmospherePlan.layers(t, 0f, true)
         val b = AtmospherePlan.layers(t, 0.25f, true)
         val glows = a.filterIsInstance<AtmosphereLayer.Glow>()

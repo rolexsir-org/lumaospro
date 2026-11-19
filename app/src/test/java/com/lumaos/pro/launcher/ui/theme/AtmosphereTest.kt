@@ -29,8 +29,18 @@ class AtmosphereTest {
     }
 
     @Test fun `obsidian is pure black with nothing on top`() {
-        val layers = AtmospherePlan.layers(theme(ThemeId.OBSIDIAN), 0.3f, true)
+        val layers = AtmospherePlan.layers(theme(ThemeId.OBSIDIAN, Backdrop.THEME), 0.3f, true)
         assertEquals(listOf(AtmosphereLayer.Solid(ColorMath.BLACK)), layers)
+    }
+
+    @Test fun `obsidian over its onyx art adds legibility scrims only`() {
+        // Phase 2: the theme default (backdrop left unset) is the Onyx & Ember art;
+        // ember never glows on the field.
+        val t = theme(ThemeId.OBSIDIAN)
+        assertEquals(Backdrop.LUMA, t.backdrop)
+        val layers = AtmospherePlan.layers(t, 0.3f, true)
+        assertEquals(2, layers.size)
+        assertTrue(layers.all { it is AtmosphereLayer.VerticalFade })
     }
 
     @Test fun `grid hairlines are dropped when detail is off`() {

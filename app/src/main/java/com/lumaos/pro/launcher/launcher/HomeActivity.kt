@@ -1967,7 +1967,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 backdrop.setFallbackSolid(false)
                 wallpaperArt.showEntry(
                     entry = selectedEntry,
-                    fallback = t.colors.background,
+                    fallback = t.backdropFallbackColor,
                     crossfadeMs = crossfadeMs
                 )
             }
@@ -1976,7 +1976,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 backdrop.setFallbackSolid(false)
                 wallpaperArt.show(
                     artwork = themeArt,
-                    fallback = t.colors.background,
+                    fallback = t.backdropFallbackColor,
                     crossfadeMs = crossfadeMs
                 )
             }

@@ -277,6 +277,26 @@ data class ResolvedTheme(
     /** Motion tokens for this theme's character. */
     val motionProfile: MotionProfile get() = LumaMotionProfiles.of(motionCharacter)
 
+    /**
+     * Stable `art:<storageKey>` id of [lumaArt] while the LUMA backdrop is active,
+     * resolvable through `WallpaperCatalog.findBundled`. A Wallpaper Studio
+     * selection still takes precedence wherever this is consumed.
+     */
+    val lumaArtId: String?
+        get() = lumaArt?.takeIf { backdrop == Backdrop.LUMA }?.let { "art:${it.storageKey}" }
+
+    /**
+     * Solid colour painted while backdrop artwork is decoding, or in place of it
+     * when it cannot be shown. Over LUMA this is the artwork's own dominant colour,
+     * the same surface [ThemeColors.homeForeground] was chosen against. Painting
+     * the theme background there would put dark home text from a light artwork
+     * (Basalt, Paper & Ink, First Light) on a dark fill.
+     */
+    val backdropFallbackColor: Int
+        get() = if (backdrop == Backdrop.LUMA) {
+            wallpaperSeeds?.primary?.let { ColorMath.opaque(it) } ?: colors.background
+        } else colors.background
+
     /** Corner radius in dp for a given base radius, scaled by the theme's geometry. */
     fun corner(baseDp: Float): Float = baseDp * cornerScale
 

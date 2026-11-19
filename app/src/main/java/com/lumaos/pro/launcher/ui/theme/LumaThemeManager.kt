@@ -24,6 +24,7 @@ import com.lumaos.pro.launcher.wallpaper.WallpaperLimits
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -354,6 +355,9 @@ class LumaThemeManager(
     private var extractJob: Job? = null
     private var started = false
 
+    /** `art:` id of the theme wallpaper currently used as the LUMA backdrop, if any. */
+    private val themeArtId = MutableStateFlow<String?>(null)
+
     private val wallpaperReceiver = object : BroadcastReceiver() {
         @Suppress("DEPRECATION")
         override fun onReceive(c: Context?, intent: Intent?) {
@@ -409,12 +413,28 @@ class LumaThemeManager(
         scheduleExtraction()
     }
 
+    /**
+     * Follows the theme's own wallpaper ([ResolvedTheme.lumaArtId]). While it is the
+     * LUMA backdrop and no Studio wallpaper is active, the palette and the glass blur
+     * source are sampled from that artwork instead of the hidden system wallpaper.
+     */
+    fun followThemeArt(ids: Flow<String?>) {
+        scope.launch {
+            ids.distinctUntilChanged().collect { id ->
+                if (themeArtId.value != id) {
+                    themeArtId.value = id
+                    if (started) scheduleExtraction()
+                }
+            }
+        }
+    }
+
     /** Triggers a non-blocking background re-extraction of the active wallpaper. */
     fun scheduleExtraction() {
         extractJob?.cancel()
         extractJob = scope.launch(Dispatchers.Default) {
             val activeId = runCatching { prefs.activeWallpaperId.first() }.getOrNull()
-            val extracted = extractCurrentWallpaper(activeId) ?: return@launch
+            val extracted = extractCurrentWallpaper(activeId, themeArtId.value) ?: return@launch
             if (_palette.value != extracted) {
                 _palette.value = extracted
                 runCatching { prefs.setCachedLumaPaletteRaw(extracted.encode()) }
@@ -450,11 +470,14 @@ class LumaThemeManager(
     @Composable
     fun collectPaletteAsState(): State<LumaWallpaperPalette> = palette.collectAsState()
 
-    private suspend fun extractCurrentWallpaper(activeWallpaperId: String?): LumaWallpaperPalette? =
+    private suspend fun extractCurrentWallpaper(activeWallpaperId: String?, themeArtId: String? = null): LumaWallpaperPalette? =
         withContext(Dispatchers.Default) {
-            // 1. Try Luma Studio bundled or custom wallpaper if active.
-            if (!activeWallpaperId.isNullOrBlank()) {
-                decodeLumaWallpaperSample(activeWallpaperId)?.let { bmp ->
+            // 1. Try the active Luma Studio wallpaper (bundled or custom), then the
+            //    theme's own wallpaper when it is the LUMA backdrop. The Studio
+            //    selection always wins; the system wallpaper is only sampled when
+            //    neither is on screen.
+            for (id in listOfNotNull(activeWallpaperId?.takeIf { it.isNotBlank() }, themeArtId).distinct()) {
+                decodeLumaWallpaperSample(id)?.let { bmp ->
                     try {
                         cacheDownsampledBitmap(bmp)
                         LumaWallpaperPalette.fromBitmap(bmp)?.let { return@withContext it }

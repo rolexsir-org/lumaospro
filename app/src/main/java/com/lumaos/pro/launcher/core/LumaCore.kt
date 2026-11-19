@@ -36,6 +36,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -138,6 +139,9 @@ class LumaCore(private val application: Application) {
         vaultGuard.start()
         themes.start()
         themeManager.start()
+        // Glass blur and the adaptive palette follow the theme wallpaper when it is
+        // the backdrop (a Studio selection still takes precedence in the manager).
+        themeManager.followThemeArt(themes.theme.map { it.lumaArtId })
         coreScope.launch {
             themes.theme.collect { com.lumaos.pro.launcher.widgets.builtin.BuiltinWidgets.refreshAll(application) }
         }
