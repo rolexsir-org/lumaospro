@@ -1,4 +1,4 @@
-# LumaOS Pro 1.5.1 widget system — implementation audit
+# LumaOS Pro 1.6.0 widget system — implementation audit
 
 ## Architecture inspected
 
