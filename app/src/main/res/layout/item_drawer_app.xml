@@ -3,12 +3,13 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:minHeight="@dimen/luma_min_touch_target"
+    android:layout_marginBottom="4dp"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingStart="@dimen/luma_space_sm"
-    android:paddingTop="@dimen/luma_space_xs"
+    android:paddingTop="10dp"
     android:paddingEnd="@dimen/luma_space_sm"
-    android:paddingBottom="@dimen/luma_space_xs"
+    android:paddingBottom="10dp"
     android:background="?android:attr/selectableItemBackground">
 
     <FrameLayout

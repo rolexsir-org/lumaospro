@@ -13,7 +13,20 @@ import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.launcher.HomeActivity
+import com.lumaos.pro.launcher.launcher.AppCellViewHolder
+import com.lumaos.pro.launcher.launcher.CellConfig
+import com.lumaos.pro.launcher.launcher.IconLoader
+import com.lumaos.pro.launcher.launcher.home.DrawerRowStyle
+import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
+import com.lumaos.pro.launcher.icons.MonogramDrawable
 import com.lumaos.pro.launcher.launcher.home.EditModeController
+import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
+import com.lumaos.pro.launcher.launcher.home.DrawerController
+import com.lumaos.pro.launcher.launcher.model.ObsidianPage
+import com.lumaos.pro.launcher.launcher.model.DrawerModel
+import com.lumaos.pro.launcher.launcher.model.DrawerRow
+import com.lumaos.pro.launcher.core.apps.AppEntry
+import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.launcher.home.HomePagePagerAdapter
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.onboarding.OnboardingActivity
@@ -84,6 +97,108 @@ class HomeActivityRuntimeTest {
         assertNotNull(activity.findViewById<AlphaIndexView>(R.id.alpha_index))
         activity.findViewById<android.view.View>(R.id.drawer_scrim).also { assertNotNull(it) }
         activity.findViewById<android.view.View>(R.id.drawer_bottom_pad).also { assertNotNull(it) }
+    }
+
+    @Test
+    fun `Obsidian keeps accessible search and drawer controls in the real layout`() {
+        val activity = buildHome()
+        assertEquals(activity.getString(R.string.drawer_title), activity.findViewById<TextView>(R.id.drawer_title).text.toString())
+        val search = activity.findViewById<EditText>(R.id.search_field)
+        assertEquals(activity.getString(R.string.drawer_search_hint), search.hint.toString())
+        assertTrue(activity.findViewById<android.view.View>(R.id.drawer_sort).contentDescription.isNotEmpty())
+        assertTrue(activity.findViewById<android.view.View>(R.id.drawer_close).contentDescription.isNotEmpty())
+        search.setText("camera")
+        val clear = activity.findViewById<android.view.View>(R.id.search_clear)
+        assertEquals(android.view.View.VISIBLE, clear.visibility)
+        clear.performClick()
+        assertEquals("", search.text.toString())
+        assertEquals(android.view.View.GONE, clear.visibility)
+    }
+
+    @Test
+    fun `drawer opens closes and its page controls restore safely`() {
+        val activity = buildHome()
+        val field = HomeActivity::class.java.getDeclaredField("drawer").apply { isAccessible = true }
+        val controller = field.get(activity) as DrawerController
+        val container = activity.findViewById<FrameLayout>(R.id.drawer_container)
+        controller.open(false)
+        assertTrue(controller.isOpen)
+        assertEquals(android.view.View.VISIBLE, container.visibility)
+        activity.findViewById<TextView>(R.id.drawer_library).performClick()
+        assertEquals(ObsidianPage.LIBRARY, controller.page)
+        controller.restorePage("not-a-page")
+        assertEquals(ObsidianPage.OVERVIEW, controller.page)
+        controller.restorePage("LIBRARY")
+        assertEquals(ObsidianPage.LIBRARY, controller.page)
+        controller.closeInstantly()
+        assertEquals(android.view.View.GONE, container.visibility)
+        assertEquals(ObsidianPage.OVERVIEW, controller.page)
+    }
+
+    @Test
+    fun `drawer cells forward launch and long press and fall back when icon is missing`() {
+        val activity = buildHome()
+        val recycler = activity.findViewById<RecyclerView>(R.id.drawer_grid)
+        val loader = HomeActivity::class.java.getDeclaredField("iconLoader").apply { isAccessible = true }
+            .get(activity) as IconLoader
+        val entry = AppEntry(ComponentKey("missing.test.app", "missing.test.app.Main"), "Example")
+        val row = DrawerRow.App(entry, DrawerModel.SECTION_RESULTS)
+        var clicked: DrawerRow? = null
+        var held: DrawerRow? = null
+        val adapter = DrawerAdapter(
+            cellConfig = { CellConfig(48, true, 1f, android.graphics.Color.WHITE, false) },
+            presentation = { DrawerPresentation.LIST },
+            rowStyle = { DrawerRowStyle(android.graphics.Color.WHITE, null, false, 0f,
+                android.graphics.Color.WHITE, null, android.graphics.Color.GRAY, null,
+                android.graphics.Color.WHITE, 0x22FFFFFF, 12f) },
+            iconLoader = loader,
+            density = activity.resources.displayMetrics.densityDpi,
+            shortcutIcon = { null },
+            onClick = { item, _ -> clicked = item },
+            onLongClick = { item, _ -> held = item }
+        )
+        adapter.submitList(listOf(row))
+        val holder = adapter.createViewHolder(recycler, adapter.getItemViewType(0)) as AppCellViewHolder
+        adapter.bindViewHolder(holder, 0)
+        assertTrue(holder.icon.drawable is MonogramDrawable)
+        holder.itemView.performClick()
+        holder.itemView.performLongClick()
+        assertEquals(row, clicked)
+        assertEquals(row, held)
+    }
+
+    @Test
+    fun `selected drawer page survives activity recreation`() {
+        val controller = Robolectric.buildActivity(HomeActivity::class.java).setup()
+        val activity = controller.get()
+        activity.findViewById<TextView>(R.id.drawer_library).performClick()
+        val recreated = controller.configurationChange(
+            android.content.res.Configuration().apply {
+                orientation = android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            }
+        ).get()
+        val field = HomeActivity::class.java.getDeclaredField("drawer").apply { isAccessible = true }
+        assertEquals(ObsidianPage.LIBRARY, (field.get(recreated) as DrawerController).page)
+    }
+
+    @Test
+    fun `curated apps use compact shelves while the app list and search stay full width`() {
+        val activity = buildHome()
+        val recycler = activity.findViewById<RecyclerView>(R.id.drawer_grid)
+        val adapter = recycler.adapter as DrawerAdapter
+        val app = AppEntry(ComponentKey("example.app", "example.app.Main"), "Example")
+        // Clearing first makes the next ListAdapter submission synchronous.
+        adapter.submitList(null)
+        adapter.submitList(listOf(
+            DrawerRow.Header(DrawerModel.SECTION_RECENT, "Recent"),
+            DrawerRow.App(app, DrawerModel.SECTION_RECENT),
+            DrawerRow.App(app, DrawerModel.SECTION_ALL),
+            DrawerRow.App(app, DrawerModel.SECTION_RESULTS)
+        ))
+        assertTrue(adapter.isFullSpan(0))
+        assertFalse(adapter.isFullSpan(1))
+        assertTrue(adapter.isFullSpan(2))
+        assertTrue(adapter.isFullSpan(3))
     }
 
     @Test

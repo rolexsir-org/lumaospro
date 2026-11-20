@@ -85,6 +85,7 @@ import com.lumaos.pro.launcher.launcher.home.AppLaunchPortalView
 import com.lumaos.pro.launcher.launcher.home.DesktopLayout
 import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
 import com.lumaos.pro.launcher.launcher.home.DrawerController
+import com.lumaos.pro.launcher.launcher.home.ObsidianStyle
 import com.lumaos.pro.launcher.launcher.home.DrawerRowStyle
 import com.lumaos.pro.launcher.launcher.home.EditModeController
 import com.lumaos.pro.launcher.launcher.home.EditModeDesign
@@ -402,6 +403,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         setupAdapters()
         setupControllers()
+        drawer.restorePage(savedInstanceState?.getString(STATE_DRAWER_PAGE))
         setupGestures()
         setupInsets()
         registerPowerAndWallpaperGuards()
@@ -418,7 +420,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
                     widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
                     folders.isOpen -> folders.close()
-                    drawer.isOpen -> drawer.close()
+                    drawer.isOpen || drawer.isAnimating || drawer.progress > 0f -> drawer.close()
                     edit.isActive -> edit.exit()
                 }
             }
@@ -442,6 +444,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT, onboardingLaunchInFlight)
         outState.putInt(STATE_ACTIVE_PAGE_INDEX, viewModel.activePageIndex.value)
+        if (::drawer.isInitialized) outState.putString(STATE_DRAWER_PAGE, drawer.page.name)
         pendingWidget?.let {
             outState.putInt(STATE_PENDING_WIDGET_ID, it.appWidgetId)
             outState.putParcelable(STATE_PENDING_WIDGET_INFO, it.info)
@@ -555,7 +558,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             livingIconPicker?.isShowing == true -> livingIconPicker?.dismiss()
             widgetPicker?.isShowing == true -> widgetPicker?.dismiss()
             folders.isOpen -> folders.close()
-            drawer.isOpen -> drawer.close()
+            drawer.isOpen || drawer.isAnimating || drawer.progress > 0f -> drawer.close()
             edit.isActive -> edit.exit()
             else -> {
                 if (::homePagesAdapter.isInitialized && viewModel.activePageIndex.value != 0) {
@@ -713,9 +716,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshResponsiveIcons() }
     }
 
+    private var drawerManagerPresentation = DrawerPresentation.GRID
+
     private fun createDrawerLayoutManager(presentation: DrawerPresentation): RecyclerView.LayoutManager {
-        if (presentation == DrawerPresentation.LIST) return LinearLayoutManager(this)
-        return GridLayoutManager(this, drawerColumns).apply {
+        // In list mode the curated sections form compact icon shelves; ordinary
+        // app rows, search results and actions still occupy the full width.
+        val spans = if (presentation == DrawerPresentation.LIST) 4 else drawerColumns
+        return GridLayoutManager(this, spans).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int =
                     if (::drawerAdapter.isInitialized && drawerAdapter.isFullSpan(position)) spanCount else 1
@@ -1482,7 +1489,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                             // Stale transient UI must not leak across contexts:
                             // the drawer, folders, edit mode and any restriction
                             // screen belong to the context that opened them.
-                            if (::drawer.isInitialized && drawer.isOpen) drawer.closeInstantly()
+                            if (::drawer.isInitialized && (drawer.isOpen || drawer.isAnimating || drawer.progress > 0f)) drawer.closeInstantly()
                             if (::folders.isInitialized && folders.isOpen) folders.closeImmediately()
                             if (::edit.isInitialized && edit.isActive) edit.exitImmediately()
                             hideFocusRestriction()
@@ -1831,9 +1838,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         applyDockStyle(t)
         drawer.applyTheme(t, glass)
         val sheetColors = glass[GlassRole.SHEET].rest
-        findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(sheetColors.content)
-        findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(sheetColors.content)
-        findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(sheetColors.content)
+        val drawerContent = if (t.isDark) ObsidianStyle.CONTENT else sheetColors.content
+        val drawerMuted = if (t.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
+        findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(drawerContent)
+        findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(drawerContent)
+        findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(drawerContent)
 
         val cellCorner = t.iconTileRadiusDp * d
         // Press feedback follows the active theme's motion character (0.96 Signature, 0.94 Atmosphere, 0.98 Monolith).
@@ -1858,8 +1867,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             pressScale = pressScale, pressMs = pressMs, iconShape = t.iconShape
         )
         drawerCellConfig = drawerCellConfig.copy(
-            labelColor = sheetColors.content, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
-            placeholderFill = s.disabledSurface, placeholderText = sheetColors.muted,
+            labelColor = drawerContent, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
+            placeholderFill = if (t.isDark) ObsidianStyle.SURFACE else s.disabledSurface, placeholderText = drawerMuted,
             pressScale = pressScale, pressMs = pressMs,
             labelAlpha = LumaTokens.typeAppLabelAlpha,
             iconShape = t.iconShape
@@ -1867,6 +1876,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val folderColors = glass[GlassRole.FOLDER].rest
         folderCellConfig = drawerCellConfig.copy(
             labelColor = folderColors.content,
+            placeholderFill = s.disabledSurface,
             placeholderText = folderColors.muted,
             labelAlpha = LumaTokens.typeAppLabelAlpha
         )
@@ -2056,6 +2066,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val folderColors = glassPalette[GlassRole.FOLDER].rest
         folderCellConfig = drawerCellConfig.copy(
             labelColor = folderColors.content,
+            placeholderFill = folderCellConfig.placeholderFill,
             placeholderText = folderColors.muted,
             labelAlpha = LumaTokens.typeAppLabelAlpha
         )
@@ -2161,15 +2172,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val colors = glassPalette[GlassRole.SHEET].rest
         val style = theme.typography
         return DrawerRowStyle(
-            headerColor = ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
+            headerColor = if (theme.isDark) ObsidianStyle.MUTED_DARK else ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
             headerTypeface = Typefaces.readout(style),
             headerCaps = style.readoutCaps,
             headerTracking = style.readoutTracking,
-            titleColor = colors.content,
+            titleColor = if (theme.isDark) ObsidianStyle.CONTENT else colors.content,
             titleTypeface = Typefaces.body(style),
-            subtitleColor = colors.muted,
+            subtitleColor = if (theme.isDark) ObsidianStyle.MUTED_DARK else colors.muted,
             subtitleTypeface = Typefaces.body(style),
-            iconTint = colors.content,
+            iconTint = if (theme.isDark) ObsidianStyle.CONTENT else colors.content,
             rippleColor = colors.ripple,
             cornerPx = theme.radius(RadiusRole.SMALL) * resources.displayMetrics.density
         )
@@ -2187,20 +2198,16 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 (grid.layoutManager as? GridLayoutManager)?.spanCount = cols
             }
         }
-        val currentDrawerManager = drawerGrid.layoutManager
-        val presentationChanged = when (a.drawerPresentation) {
-            DrawerPresentation.LIST -> currentDrawerManager !is LinearLayoutManager
-            DrawerPresentation.GRID -> currentDrawerManager !is GridLayoutManager
-        }
+        val presentationChanged = drawerManagerPresentation != a.drawerPresentation
+        drawerColumns = GridRules.effectiveColumns(a.drawerColumns, widthDp)
+        val shelfColumns = GridRules.effectiveColumns(4, widthDp)
+        (drawerGrid.layoutManager as GridLayoutManager).spanCount =
+            if (a.drawerPresentation == DrawerPresentation.LIST) shelfColumns else drawerColumns
         if (presentationChanged) {
-            drawerGrid.layoutManager = createDrawerLayoutManager(a.drawerPresentation)
+            drawerManagerPresentation = a.drawerPresentation
             drawerGrid.recycledViewPool.clear()
             @Suppress("NotifyDataSetChanged")
             drawerAdapter.notifyDataSetChanged()
-        }
-        drawerColumns = GridRules.effectiveColumns(a.drawerColumns, widthDp)
-        if (a.drawerPresentation == DrawerPresentation.GRID) {
-            (drawerGrid.layoutManager as GridLayoutManager).spanCount = drawerColumns
         }
         homeCellConfig = homeCellConfig.copy(showLabels = a.showLabels, textScale = a.textScale)
         // Floating dock never shows text labels (Apple-precision Phase 2 B2).
@@ -2208,6 +2215,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerCellConfig = drawerCellConfig.copy(showLabels = true, textScale = a.textScale)
         folderCellConfig = drawerCellConfig.copy(
             labelColor = glassPalette[GlassRole.FOLDER].rest.content,
+            placeholderFill = folderCellConfig.placeholderFill,
             placeholderText = glassPalette[GlassRole.FOLDER].rest.muted
         )
         applyPreset(a.preset)
@@ -2327,6 +2335,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             drawerCellConfig = drawerCellConfig.copy(iconSizePx = drawerSize)
             folderCellConfig = drawerCellConfig.copy(
                 iconSizePx = folderSize,
+                placeholderFill = folderCellConfig.placeholderFill,
                 labelColor = glassPalette[GlassRole.FOLDER].rest.content,
                 placeholderText = glassPalette[GlassRole.FOLDER].rest.muted
             )
@@ -3661,6 +3670,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val STATE_RECONFIGURE_WIDGET_ID = "reconfigure_widget_id"
         private const val STATE_ONBOARDING_LAUNCH_IN_FLIGHT = "onboarding_launch_in_flight"
         private const val STATE_ACTIVE_PAGE_INDEX = "active_page_index"
+        private const val STATE_DRAWER_PAGE = "drawer_page"
 
         private const val SWIPE_MIN_DISTANCE_DP = 60
 

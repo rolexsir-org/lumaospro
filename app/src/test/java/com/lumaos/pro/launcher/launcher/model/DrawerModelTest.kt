@@ -4,6 +4,7 @@ import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.apps.AppMatcher
 import com.lumaos.pro.launcher.core.apps.DrawerCategory
 import com.lumaos.pro.launcher.core.model.ComponentKey
+import com.lumaos.pro.launcher.core.usage.LaunchRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -141,6 +142,52 @@ class DrawerModelTest {
         assertEquals(listOf("Camera", "Chrome"), cleared.rows.filterIsInstance<DrawerRow.App>().map { it.entry.label })
         assertEquals(2, cleared.appCount)
         assertTrue(cleared.buckets.isNotEmpty())
+    }
+
+    private fun record(app: AppEntry, time: Long) =
+        LaunchRecord(app.key, 1, time, 1.0, time)
+
+    @Test
+    fun `recent uses local history in time order and excludes pinned hidden and uninstalled apps`() {
+        val removed = app("Removed", "com.removed")
+        val output = DrawerModel.build(DrawerModel.Input(
+            apps = apps,
+            pinned = listOf(camera.key),
+            hidden = setOf(clock.key),
+            history = listOf(record(chrome, 10), record(camera, 30), record(clock, 40), record(removed, 50)),
+            nowMillis = 50
+        ))
+        assertEquals(listOf(chrome.key), output.rows.filterIsInstance<DrawerRow.App>()
+            .filter { it.section == DrawerModel.SECTION_RECENT }.map { it.entry.key })
+        output.buckets.forEach { (letter, position) ->
+            val row = output.rows[position] as DrawerRow.App
+            assertEquals(DrawerModel.SECTION_ALL, row.section)
+            assertEquals(letter, AppMatcher.bucketOf(row.entry.sortLabel))
+        }
+        assertEquals(2, output.appCount)
+    }
+
+    @Test
+    fun `recent is bounded ordered and absent when history is disabled`() {
+        val history = listOf(record(camera, 1), record(chrome, 3), record(clock, 2))
+        val input = DrawerModel.Input(apps = apps, history = history, suggestionCount = 2, nowMillis = 3)
+        val recent = DrawerModel.build(input).rows.filterIsInstance<DrawerRow.App>()
+            .filter { it.section == DrawerModel.SECTION_RECENT }
+        assertEquals(listOf(chrome.key, clock.key), recent.map { it.entry.key })
+        val disabled = DrawerModel.build(input.copy(suggestionsEnabled = false))
+        assertTrue(disabled.rows.none { it is DrawerRow.Header && it.id == DrawerModel.SECTION_RECENT })
+    }
+
+    @Test
+    fun `search and category views do not leak recent entries`() {
+        val history = listOf(record(camera, 1), record(chrome, 2))
+        val input = DrawerModel.Input(apps = apps, history = history)
+        val search = DrawerModel.build(input.copy(query = "camera"))
+        val category = DrawerModel.build(input.copy(filter = DrawerFilter.Category(DrawerCategory.GAMES)))
+        for (output in listOf(search, category)) {
+            assertTrue(output.rows.none { it is DrawerRow.App && it.section == DrawerModel.SECTION_RECENT })
+        }
+        assertEquals(listOf(camera.key), search.rows.filterIsInstance<DrawerRow.App>().map { it.entry.key })
     }
 
 }
