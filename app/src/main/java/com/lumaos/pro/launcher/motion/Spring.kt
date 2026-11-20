@@ -41,6 +41,9 @@ object MotionTokens {
     val LUMA = SpringSpec(stiffness = LumaTokens.springStiffness, dampingRatio = LumaTokens.springDamping)
     /** Drawer settle, menus, chips: quick and firm, barely any overshoot. */
     val SNAPPY = SpringSpec(stiffness = 1100f, dampingRatio = 0.86f)
+    /** App drawer open/close: crisp and firm so a swipe-up settles without the
+     *  soft, lingering tail of the OS [LUMA] spring on blurred themes. */
+    val DRAWER = SpringSpec(stiffness = 820f, dampingRatio = 0.90f)
     /** General UI repositioning. */
     val STANDARD = SpringSpec(stiffness = 600f, dampingRatio = 0.9f)
     /** Large surfaces and colour/theme changes: no overshoot, unhurried. */
