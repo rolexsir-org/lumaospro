@@ -84,7 +84,6 @@ import com.lumaos.pro.launcher.launcher.home.AppLaunchPortalView
 import com.lumaos.pro.launcher.launcher.home.DesktopLayout
 import com.lumaos.pro.launcher.launcher.home.DrawerAdapter
 import com.lumaos.pro.launcher.launcher.home.DrawerController
-import com.lumaos.pro.launcher.launcher.home.ObsidianStyle
 import com.lumaos.pro.launcher.launcher.home.DrawerRowStyle
 import com.lumaos.pro.launcher.launcher.home.EditModeController
 import com.lumaos.pro.launcher.launcher.home.EditModeDesign
@@ -242,7 +241,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var homeAdapter: HomeGridAdapter
     private lateinit var dockAdapter: HomeGridAdapter
     private lateinit var drawerAdapter: DrawerAdapter
-    private lateinit var drawerIconLoader: IconLoader
 
     private lateinit var drawer: DrawerController
     private lateinit var edit: EditModeController
@@ -396,11 +394,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         iconLoader = IconLoader(core.appRepository, core.iconCache, core.iconPacks, resources, core.livingIcons)
         iconLoader.onIconReady = ::onIconReady
-        // A separate bounded cache keeps original installed icons independent of
-        // the home screen's selected icon treatments and their cache keys.
-        drawerIconLoader = IconLoader(core.appRepository, com.lumaos.pro.launcher.core.apps.IconCache(64),
-            core.iconPacks, resources, nativeOnly = true)
-        drawerIconLoader.onIconReady = ::onDrawerIconReady
         widgets = WidgetHostController(this)
         restorePendingWidgets(savedInstanceState)
         readouts = ReadoutSources(this)
@@ -513,7 +506,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         shade?.shutdown()
         shade = null
         iconLoader.shutdown()
-        drawerIconLoader.shutdown()
         widgets.clearViews()
         super.onDestroy()
     }
@@ -828,7 +820,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             cellConfig = { drawerCellConfig },
             presentation = { DrawerPresentation.GRID },
             rowStyle = ::drawerRowStyle,
-            iconLoader = drawerIconLoader,
+            iconLoader = iconLoader,
             density = density,
             shortcutIcon = ::shortcutIcon,
             onClick = ::onDrawerRowClick,
@@ -1814,8 +1806,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         applyDockStyle(t)
         drawer.applyTheme(t, glass)
         val sheetColors = glass[GlassRole.SHEET].rest
-        val drawerContent = if (t.isDark) ObsidianStyle.CONTENT else sheetColors.content
-        val drawerMuted = if (t.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
+        val drawerContent = sheetColors.content
+        val drawerMuted = sheetColors.muted
         findViewById<ImageButton>(R.id.drawer_options).imageTintList = ColorStateList.valueOf(drawerContent)
         findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(drawerContent)
 
@@ -1843,7 +1835,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         )
         drawerCellConfig = drawerCellConfig.copy(
             labelColor = drawerContent, labelShadow = false, rippleColor = c.ripple, cornerPx = cellCorner,
-            placeholderFill = if (t.isDark) ObsidianStyle.SURFACE else s.disabledSurface, placeholderText = drawerMuted,
+            placeholderFill = s.disabledSurface, placeholderText = drawerMuted,
             pressScale = pressScale, pressMs = pressMs,
             labelAlpha = LumaTokens.typeAppLabelAlpha,
             iconShape = t.iconShape
@@ -2147,15 +2139,15 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val colors = glassPalette[GlassRole.SHEET].rest
         val style = theme.typography
         return DrawerRowStyle(
-            headerColor = if (theme.isDark) ObsidianStyle.MUTED_DARK else ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
+            headerColor = ColorMath.withAlpha(colors.content, LumaTokens.typeSectionHeaderAlpha),
             headerTypeface = Typefaces.readout(style),
             headerCaps = style.readoutCaps,
             headerTracking = style.readoutTracking,
-            titleColor = if (theme.isDark) ObsidianStyle.CONTENT else colors.content,
+            titleColor = colors.content,
             titleTypeface = Typefaces.body(style),
-            subtitleColor = if (theme.isDark) ObsidianStyle.MUTED_DARK else colors.muted,
+            subtitleColor = colors.muted,
             subtitleTypeface = Typefaces.body(style),
-            iconTint = if (theme.isDark) ObsidianStyle.CONTENT else colors.content,
+            iconTint = colors.content,
             rippleColor = colors.ripple,
             cornerPx = theme.radius(RadiusRole.SMALL) * resources.displayMetrics.density
         )
@@ -2341,11 +2333,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
         dockAdapter.positionsFor(key).forEach { dockAdapter.notifyItemChanged(it) }
         folders.refreshIcon(key)
-    }
-
-    private fun onDrawerIconReady(key: ComponentKey) {
-        drawerAdapter.currentList.forEachIndexed { i, row ->
-            if (row is DrawerRow.App && row.entry.key == key) drawerAdapter.notifyItemChanged(i)
+        // The drawer shares the same themed loader and cache, so its rows
+        // refresh from the same callback without a second pipeline.
+        if (::drawerAdapter.isInitialized) {
+            drawerAdapter.currentList.forEachIndexed { i, row ->
+                if (row is DrawerRow.App && row.entry.key == key) drawerAdapter.notifyItemChanged(i)
+            }
         }
     }
 
@@ -3611,7 +3604,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             runOnUiThread {
                 core.iconPacks.invalidate(packageName)
                 iconLoader.invalidatePackage(packageName)
-                drawerIconLoader.invalidatePackage(packageName)
                 drawerAdapter.currentList.forEachIndexed { index, row ->
                     if (row is DrawerRow.App && row.entry.key.packageName == packageName) {
                         drawerAdapter.notifyItemChanged(index)

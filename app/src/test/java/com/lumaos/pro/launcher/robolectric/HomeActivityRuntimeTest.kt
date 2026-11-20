@@ -183,7 +183,7 @@ class HomeActivityRuntimeTest {
     fun `shortcut result is a tappable cell in the same grid`() {
         val activity = buildHome()
         val recycler = activity.findViewById<RecyclerView>(R.id.drawer_grid)
-        val loader = HomeActivity::class.java.getDeclaredField("drawerIconLoader").apply { isAccessible = true }
+        val loader = HomeActivity::class.java.getDeclaredField("iconLoader").apply { isAccessible = true }
             .get(activity) as IconLoader
         val row = DrawerRow.Shortcut(ShortcutRef("test.clock", "timer", "Timer"), "Clock")
         var clicked: DrawerRow? = null

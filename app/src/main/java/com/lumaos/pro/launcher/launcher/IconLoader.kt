@@ -37,14 +37,24 @@ import java.util.concurrent.atomic.AtomicBoolean
  * When the render spec changes (theme, shape, style, icon pack, size), the
  * pending requests are invalidated: the cache is cleared and results computed for
  * the old spec are discarded instead of being cached.
+ *
+ * The cache is keyed by [ComponentKey] (package + class + user profile) and the
+ * active [IconRenderSpec] is part of the effective key via invalidation: any
+ * spec change (theme identity, shape, style, plate/rim/tint colours, icon pack,
+ * living-icon overrides, size, depth) clears the cache, so a cached bitmap can
+ * never outlive the theme it was rendered for. Package add/remove/update
+ * invalidates per-package entries via [invalidatePackage].
+ *
+ * There is intentionally no native-only mode: every surface (home, dock,
+ * folders, drawer) resolves through the same themed pipeline, with the native
+ * app icon as the final fallback when no themed icon exists.
  */
 class IconLoader(
     private val repository: AppRepository,
     private val cache: IconCache,
     private val packs: IconPackManager,
     private val resources: Resources,
-    private val livingIcons: LivingIconManager? = null,
-    private val nativeOnly: Boolean = false
+    private val livingIcons: LivingIconManager? = null
 ) {
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
@@ -129,8 +139,6 @@ class IconLoader(
     }
 
     private fun produce(key: ComponentKey, density: Int, s: IconRenderSpec?): Drawable? {
-        // Drawer icons are the platform artwork, including the work-profile badge.
-        if (nativeOnly) return repository.iconFor(key, density)
         val targetPx = s?.sizePx ?: 256
         val resolved = resolveSourceDrawable(
             key = key,
