@@ -1,8 +1,8 @@
 package com.lumaos.pro.launcher.launcher.home
 
-import com.lumaos.pro.launcher.ui.glass.GlassCapabilities
-import com.lumaos.pro.launcher.ui.glass.GlassMaterials
-import com.lumaos.pro.launcher.ui.glass.GlassRole
+import com.lumaos.pro.launcher.ui.theme.GlassCapabilities
+import com.lumaos.pro.launcher.ui.theme.GlassMaterials
+import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
 import com.lumaos.pro.launcher.ui.theme.ThemeEngine

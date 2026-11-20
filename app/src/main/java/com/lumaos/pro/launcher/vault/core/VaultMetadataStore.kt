@@ -1,10 +1,8 @@
 package com.lumaos.pro.launcher.vault.core
 
 import com.lumaos.pro.launcher.backup.MiniJson
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 
 /**
  * The vault's encrypted metadata index (`meta.bin`).

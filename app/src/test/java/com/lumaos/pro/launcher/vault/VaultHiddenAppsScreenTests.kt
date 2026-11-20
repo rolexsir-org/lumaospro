@@ -93,20 +93,4 @@ class VaultHiddenAppsScreenTests {
             assertFalse("$forbidden must not appear in the Hidden Apps screen", text.contains(forbidden))
         }
     }
-
-    private fun resolveModuleDir(): File {
-        (System.getenv("VAULT_REPO") ?: System.getProperty("lumaos.repo"))?.let { root ->
-            val candidate = File(root, "app/src/main/AndroidManifest.xml")
-            if (candidate.isFile) return File(root, "app")
-        }
-        var directory: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (directory != null) {
-            val candidate = File(directory, "src/main/AndroidManifest.xml")
-            if (candidate.isFile) return directory
-            val nested = File(directory, "app/src/main/AndroidManifest.xml")
-            if (nested.isFile) return File(directory, "app")
-            directory = directory.parentFile
-        }
-        error("Could not locate the app module from ${System.getProperty("user.dir")}")
-    }
 }

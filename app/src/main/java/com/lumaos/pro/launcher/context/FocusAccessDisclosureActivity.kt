@@ -208,14 +208,5 @@ class FocusAccessDisclosureActivity : ComponentActivity() {
      * The only route to Android's screen. Resolved first: an OEM build that
      * cannot answer either intent gets an explanation instead of a dead tap.
      */
-    private fun openAccessibilitySettings() {
-        val intent = FocusAccess.settingsIntent(this)
-        if (intent == null) {
-            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
-            return
-        }
-        runCatching { startActivity(intent) }.onFailure {
-            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
-        }
-    }
+    private fun openAccessibilitySettings() = FocusAccess.openSettings(this)
 }

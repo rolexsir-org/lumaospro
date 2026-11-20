@@ -1,6 +1,6 @@
 # LumaOS Pro — Design System
 
-**Release:** 1.5.1 (`versionCode` 151).
+**Release:** 1.6.0 (`versionCode` 160).
 
 > **Verification status (read first).** This document describes the design system as
 > implemented in this checkout. There is no Android SDK, Gradle distribution,
@@ -8,8 +8,8 @@
 > **not** been compiled with Gradle, linked, linted, or rendered on a phone. A
 > standalone Kotlin 2.2.21 compiler on a JRE was bootstrapped locally to compile
 > the pure token/theme layer and run 242 JVM-only unit tests with a JUnit shim.
-> That was a historical run: the suite has since grown to 819 `@Test` methods
-> across 93 test sources, and the shim is not the Gradle test task and never
+> That was a historical run: the suite has since grown to 1007 `@Test` methods
+> across 124 test sources, and the shim is not the Gradle test task and never
 > covered Robolectric or UI rendering. `./build.sh test` is the real suite.
 > Static resource, XML, delimiter and contract checks are listed in
 > `QA_CHECKLIST.md`. Nothing here should be presented as device-verified until
@@ -170,7 +170,7 @@ Material defaults plus a thin palette, which produced three problems:
 3. **Contrast by luck.** Text colours were chosen per widget; some pairs only
    passed AA on dark surfaces and failed on light ones.
 
-1.5.1 keeps that rule and ships the three-identity system above. The sections
+1.6.0 keeps that rule and ships the three-identity system above. The sections
 that follow (§1–§14) are the reference for the roles; they were written for the
 retained palettes before v3.2 and remain accurate for them.
 
@@ -380,8 +380,7 @@ every storage key is unchanged.
 60 original glyphs ship in `res/drawable/ic_rx_*.xml`. `ui/IconCatalog.kt`
 exposes 42 of them as the `LumaIcon` enum (39 base + 3 filled variants); the
 notification shade and quick controls reference 17 further glyphs directly, and
-`ic_rx_notifications` is packaged but currently unreferenced. All 60 parse as
-`<vector>`.
+every glyph file is referenced. All 60 parse as `<vector>`.
 
 | Property | Value |
 | --- | --- |

@@ -7,7 +7,6 @@ import com.lumaos.pro.launcher.backup.MiniJson
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.vault.core.VaultConcealment
 import com.lumaos.pro.launcher.vault.core.VaultCrypto
-import com.lumaos.pro.launcher.vault.core.VaultEncoding
 import com.lumaos.pro.launcher.vault.core.VaultFiles
 import com.lumaos.pro.launcher.vault.core.VaultPaths
 import java.io.File

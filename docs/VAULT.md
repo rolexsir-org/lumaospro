@@ -9,7 +9,7 @@
 
 **Status: source-complete for the security foundation, capture, files, notes, gallery,
 recorder, scanner, backup/restore and the Security Centre. The `vault/` suites currently
-hold 217 `@Test` methods across 20 test sources; the counts quoted further down are
+hold 217 `@Test` methods across 21 test sources; the counts quoted further down are
 historical harness runs and are not a current result. Not device-verified: this sandbox
 has no Android SDK, no Gradle, no emulator and no access to Google Maven, so the Gradle
 build, lint, and any on-device behaviour have not been run. Execute `./build.sh test`
@@ -436,9 +436,9 @@ None of those harness files are committed; the scripts live outside the reposito
 | 9 | Fully offline | ✅ | Vault has no networking code; the optional Weather widget is the only network feature |
 | 10 | Ciphertext-only backup with verified restore | ✅ | `VaultBackupTests` (7 tests) including integrity rejection and incomplete-vault abort |
 | 11 | Lifecycle locking (screen-off, background, timeout, process death) | ✅ | `VaultSessionTests` (screen-off, idle, conceal, lock-on-leave, process death) — the Android wiring itself is 🟡 |
-| 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the rest of the suite (93 test sources project-wide) was **not** executed here (no Gradle) — must be run before release |
+| 12 | No launcher regressions | 🟡 | Only 5 existing files touched, all additively; the rest of the suite (124 test sources project-wide) was **not** executed here (no Gradle) — must be run before release |
 | 13 | No false security claims | ✅ | UI states best-effort shredding, local-only throttling, and "no absolute protection"; see §10 |
-| 14 | Automated tests pass | 🟡 | 126/126 on the external JVM harness at the end of the 2026-11 remediation pass. That harness is gone and the suites have since grown to 217 `@Test` methods, so this is **not** a current result — run `./build.sh test`. Gradle has never been executed here; see criterion 15 |
+| 14 | Automated tests pass | 🟡 | 126/126 on the external JVM harness at the end of the 2026-11 remediation pass. That harness is gone and the suites have since grown to 1007 `@Test` methods, so this is **not** a current result — run `./build.sh test`. Gradle has never been executed here; see criterion 15 |
 | 15 | Real-device testing | ⛔ | No device, emulator or SDK in this environment |
 | 16 | Valid build and release configuration | 🟡 | No dependency, no Gradle, no ProGuard change was needed; the Gradle build itself has not been executed here |
 | 17 | Private camera, gallery, files, notes, recorder, scanner | 🟡 | All six surfaces exist; none has run on a device |

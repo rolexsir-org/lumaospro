@@ -6,7 +6,6 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 

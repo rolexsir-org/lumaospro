@@ -2,7 +2,6 @@
 <resources>
     <string name="wallpaper_studio_title">Wallpaper Studio</string>
     <string name="wallpaper_studio_subtitle">30 curated Luma compositions, private photos, and live Liquid Glass harmonisation</string>
-    <string name="wallpaper_discover">Choose wallpaper</string>
     <string name="wallpaper_discover_caption">30 curated compositions, personal photos, and dynamic Liquid Glass</string>
     <string name="wallpaper_back">Back</string>
     <string name="wallpaper_all">All (30+)</string>
@@ -95,7 +94,6 @@
     <string name="music_open_player">Open media player</string>
     <string name="music_artwork_unavailable">No album artwork available</string>
     <string name="music_artwork">Album artwork</string>
-    <string name="music_progress">Playback progress</string>
     <string name="music_elapsed_description">Elapsed %1$s</string>
     <string name="music_duration_description">Duration %1$s</string>
     <string name="battery_widget_name">Luma Glass Battery</string>

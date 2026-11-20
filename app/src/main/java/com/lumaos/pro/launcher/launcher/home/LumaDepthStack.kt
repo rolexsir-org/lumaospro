@@ -3,10 +3,8 @@ package com.lumaos.pro.launcher.launcher.home
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.view.View
 import android.widget.FrameLayout
 import com.lumaos.pro.launcher.core.model.ComponentKey

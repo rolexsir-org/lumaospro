@@ -19,7 +19,7 @@ opaque, readable surfaces on devices without blur support. See [docs/DESIGN_SYST
 
 | Document | What it covers |
 |---|---|
-| [CHANGELOG.md](CHANGELOG.md) | Every notable change, by release. Current source is 1.5.1 / `versionCode` 151; nothing has been published yet |
+| [CHANGELOG.md](CHANGELOG.md) | Every notable change, by release. Current source is 1.6.0 / `versionCode` 160; nothing has been published yet |
 | [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) | Publisher-review draft for the Play Data safety form. Has placeholders — **not** a publishable policy |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Design System v3.2 / Luma Glass reference: tokens, colour, type, iconography, shapes, motion, token map |
 | [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md) | What has actually been verified versus what still needs a build or a device, plus the release acceptance gate |
@@ -134,7 +134,7 @@ A debug-signed APK is not a Play release artifact.
   package namespace, and listing artwork have been updated in source. Confirm
   `com.lumaos.pro.launcher` is available and permanent, and obtain trademark
   clearance before first upload. `versionCode` follows
-  `major * 100 + minor * 10 + patch` (1.5.1 → 151), so increment it on each
+  `major * 100 + minor * 10 + patch` (1.6.0 → 160), so increment it on each
   later upload and follow any account-specific Play testing gates shown in
   Console. The new name and package have not been independently cleared.
 
@@ -148,7 +148,7 @@ A debug-signed APK is not a Play release artifact.
 | minSdk | 26 (Android 8.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | Build tools | JDK 17 · Gradle 8.13 · AGP 8.13.2 · Kotlin 2.2.21 |
-| Version | 1.5.1 (versionCode 151) |
+| Version | 1.6.0 (versionCode 160) |
 | UI | Views for the launcher hot path; Jetpack Compose for settings, Studio and diagnostics |
 | Signing | Optional local upload key (`keystore.properties`, gitignored); unsigned release if absent |
 

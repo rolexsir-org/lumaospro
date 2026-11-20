@@ -42,8 +42,8 @@ android {
         applicationId = "com.lumaos.pro.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 151
-        versionName = "1.5.1"
+        versionCode = 160
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("en")
@@ -128,15 +128,17 @@ dependencies {
     // --- Lifecycle (drives the whole intelligence engine) -------------
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // AndroidViewModel / viewModelScope live in lifecycle-viewmodel (the KTX
+    // extensions merged into the main artifact at 2.8); the app never calls
+    // the viewmodel-compose `viewModel()` composable, so that artifact is not
+    // declared.
+    implementation(libs.androidx.lifecycle.viewmodel)
 
     // --- Compose (settings + dashboard surfaces only) -----------------
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.compose)
-    debugImplementation(libs.androidx.compose.ui.tooling)
 
     // --- Persistence --------------------------------------------------
     implementation(libs.androidx.datastore.preferences)

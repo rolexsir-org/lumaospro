@@ -12,7 +12,6 @@ import android.graphics.RectF
 import android.media.ExifInterface
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.LruCache
 import android.view.View

@@ -12,22 +12,7 @@
     </style>
 
     <!-- Home & Lock clock: 72sp Thin/Light display typography. -->
-    <style name="TextAppearance.Luma.Clock">
-        <item name="android:fontFamily">@font/inter_light</item>
-        <item name="android:textSize">@dimen/luma_type_display_clock</item>
-        <item name="android:letterSpacing">-0.035</item>
-        <item name="android:includeFontPadding">false</item>
-        <item name="android:textColor">#FFFFFFFF</item>
-        <item name="android:maxLines">1</item>
-    </style>
 
-    <style name="TextAppearance.Luma.Display">
-        <item name="android:fontFamily">@font/inter_semibold</item>
-        <item name="android:textSize">@dimen/luma_type_display_hero</item>
-        <item name="android:letterSpacing">-0.02</item>
-        <item name="android:lineSpacingMultiplier">1.08</item>
-        <item name="android:textColor">#FFFFFFFF</item>
-    </style>
 
     <style name="TextAppearance.Luma.TitleLarge">
         <item name="android:fontFamily">@font/inter_semibold</item>
@@ -37,13 +22,6 @@
         <item name="android:textColor">#FFFFFFFF</item>
     </style>
 
-    <style name="TextAppearance.Luma.Title">
-        <item name="android:fontFamily">@font/inter_semibold</item>
-        <item name="android:textSize">@dimen/luma_type_heading</item>
-        <item name="android:letterSpacing">-0.012</item>
-        <item name="android:lineSpacingMultiplier">1.2</item>
-        <item name="android:textColor">#FFFFFFFF</item>
-    </style>
 
     <style name="TextAppearance.Luma.BodyLarge">
         <item name="android:fontFamily">@font/inter_regular</item>
@@ -81,10 +59,5 @@
         <item name="android:textColor">#99FFFFFF</item>
     </style>
 
-    <style name="TextAppearance.Luma.MenuRow">
-        <item name="android:fontFamily">@font/inter_regular</item>
-        <item name="android:textSize">@dimen/luma_type_body</item>
-        <item name="android:textColor">#FFFFFFFF</item>
-    </style>
 
 </resources>

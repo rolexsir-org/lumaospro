@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.5.1 — Unreleased (`versionCode` 151)
+## 1.6.0 — Unreleased (`versionCode` 160)
 
 - Active themes automatically select their matching launcher icon artwork; Signature keeps its original pack.
 - Added native digital and analog clocks, calendar, weather, internal storage, and screen-time widgets alongside music and battery. All eight share Theme Lab-inspired styling and configurable corners.
