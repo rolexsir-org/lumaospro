@@ -34,7 +34,6 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -120,7 +119,6 @@ import com.lumaos.pro.launcher.launcher.model.HomeItem
 import com.lumaos.pro.launcher.launcher.model.HomeLayout
 import com.lumaos.pro.launcher.launcher.model.HomePreset
 import com.lumaos.pro.launcher.launcher.model.SmartKind
-import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
@@ -244,6 +242,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     private lateinit var homeAdapter: HomeGridAdapter
     private lateinit var dockAdapter: HomeGridAdapter
     private lateinit var drawerAdapter: DrawerAdapter
+    private lateinit var drawerIconLoader: IconLoader
 
     private lateinit var drawer: DrawerController
     private lateinit var edit: EditModeController
@@ -397,13 +396,17 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         iconLoader = IconLoader(core.appRepository, core.iconCache, core.iconPacks, resources, core.livingIcons)
         iconLoader.onIconReady = ::onIconReady
+        // A separate bounded cache keeps original installed icons independent of
+        // the home screen's selected icon treatments and their cache keys.
+        drawerIconLoader = IconLoader(core.appRepository, com.lumaos.pro.launcher.core.apps.IconCache(64),
+            core.iconPacks, resources, nativeOnly = true)
+        drawerIconLoader.onIconReady = ::onDrawerIconReady
         widgets = WidgetHostController(this)
         restorePendingWidgets(savedInstanceState)
         readouts = ReadoutSources(this)
 
         setupAdapters()
         setupControllers()
-        drawer.restorePage(savedInstanceState?.getString(STATE_DRAWER_PAGE))
         setupGestures()
         setupInsets()
         registerPowerAndWallpaperGuards()
@@ -444,7 +447,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_ONBOARDING_LAUNCH_IN_FLIGHT, onboardingLaunchInFlight)
         outState.putInt(STATE_ACTIVE_PAGE_INDEX, viewModel.activePageIndex.value)
-        if (::drawer.isInitialized) outState.putString(STATE_DRAWER_PAGE, drawer.page.name)
         pendingWidget?.let {
             outState.putInt(STATE_PENDING_WIDGET_ID, it.appWidgetId)
             outState.putParcelable(STATE_PENDING_WIDGET_INFO, it.info)
@@ -511,6 +513,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         shade?.shutdown()
         shade = null
         iconLoader.shutdown()
+        drawerIconLoader.shutdown()
         widgets.clearViews()
         super.onDestroy()
     }
@@ -708,7 +711,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         })
         dockRow.layoutManager = GridLayoutManager(this, gridColumns)
         dockRow.itemAnimator = LumaSpring.ItemAnimator { motion }
-        drawerGrid.layoutManager = createDrawerLayoutManager(DrawerPresentation.GRID)
+        drawerGrid.layoutManager = createDrawerLayoutManager()
         drawerGrid.setHasFixedSize(true)
         drawerGrid.setItemViewCacheSize(LumaTokens.drawerItemViewCacheSize)
         drawerGrid.recycledViewPool.setMaxRecycledViews(0, LumaTokens.drawerRecycledPoolMax)
@@ -716,12 +719,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         drawerGrid.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshResponsiveIcons() }
     }
 
-    private var drawerManagerPresentation = DrawerPresentation.GRID
-
-    private fun createDrawerLayoutManager(presentation: DrawerPresentation): RecyclerView.LayoutManager {
-        // In list mode the curated sections form compact icon shelves; ordinary
-        // app rows, search results and actions still occupy the full width.
-        val spans = if (presentation == DrawerPresentation.LIST) 4 else drawerColumns
+    private fun createDrawerLayoutManager(): RecyclerView.LayoutManager {
+        val spans = drawerColumns
         return GridLayoutManager(this, spans).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int =
@@ -827,9 +826,9 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
         drawerAdapter = DrawerAdapter(
             cellConfig = { drawerCellConfig },
-            presentation = { appearance.drawerPresentation },
+            presentation = { DrawerPresentation.GRID },
             rowStyle = ::drawerRowStyle,
-            iconLoader = iconLoader,
+            iconLoader = drawerIconLoader,
             density = density,
             shortcutIcon = ::shortcutIcon,
             onClick = ::onDrawerRowClick,
@@ -922,14 +921,10 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             grid = drawerGrid,
             searchField = searchField,
             clearButton = findViewById(R.id.search_clear),
-            alphaIndex = findViewById<AlphaIndexView>(R.id.alpha_index),
             emptyView = findViewById(R.id.empty_view),
-            chipsScroll = findViewById<HorizontalScrollView>(R.id.drawer_chips_scroll),
-            chips = findViewById(R.id.drawer_chips),
             title = findViewById(R.id.drawer_title),
             subtitle = findViewById(R.id.drawer_subtitle),
             handle = findViewById(R.id.drawer_handle),
-            sortButton = findViewById(R.id.drawer_sort),
             host = this
         )
         edit = EditModeController(
@@ -965,7 +960,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         shade = LumaShade(this, homeRoot, lifecycleScope, this)
 
         findViewById<View>(R.id.drawer_close).setOnClickListener { drawer.close() }
-        findViewById<View>(R.id.drawer_voice).setOnClickListener { launchVoiceCommand() }
         findViewById<View>(R.id.home_search).setOnClickListener { drawer.open(focusSearch = true) }
         findViewById<View>(R.id.home_settings).setOnClickListener { openSettings() }
         searchPill.setOnClickListener { drawer.open(focusSearch = true) }
@@ -1212,8 +1206,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                     if (abs(dy) > touchSlop * 1.5f && abs(dy) > abs(dx) * 1.3f) {
                         val opening = !drawer.isOpen && dy < 0 && swipeUpAction() is GestureAction.OpenDrawer &&
                             !(downOnScrollableGrid && homeGrid.canScrollVertically(1))
-                        val closing = drawer.isOpen && dy > 0 && drawer.canDragClose() &&
-                            !isInside(findViewById(R.id.alpha_index), downX, downY)
+                        val closing = drawer.isOpen && dy > 0 && drawer.canDragClose()
                         val searchPull = !drawer.isOpen && dy > 0 && swipeDownAction() is GestureAction.OpenSearch &&
                             !(downOnScrollableGrid && homeGrid.canScrollVertically(-1))
                         // The panel is pulled down exactly where search would be, so
@@ -1458,14 +1451,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                         }
                 }
 
-                launch {
-                    combine(viewModel.categories, viewModel.filter, viewModel.suggestionsEnabled, viewModel.categoriesEnabled,
-                        core.launchHistory.records) { cats, filter, sugg, enabled, records ->
-                        ChipState(cats, filter, sugg && records.isNotEmpty(), enabled)
-                    }.distinctUntilChanged().collect { s -> drawer.bindChips(s.categories, s.filter, s.frequent, s.enabled) }
-                }
-
-                launch { viewModel.drawerSort.collect { drawer.currentSort = it } }
                 launch { viewModel.prefs.widgetsEnabled.collect { widgetsEnabled = it } }
 
                 launch {
@@ -1609,13 +1594,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         }
     }
 
-    private data class ChipState(
-        val categories: List<com.lumaos.pro.launcher.core.apps.DrawerCategory>,
-        val filter: DrawerFilter,
-        val frequent: Boolean,
-        val enabled: Boolean
-    )
-
     /**
      * Page dots.
      *
@@ -1727,8 +1705,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         bind(R.id.search_pill_icon, R.drawable.ic_rx_search)
         bind(R.id.search_pill_voice, R.drawable.ic_rx_voice)
         bind(R.id.edit_remove_target, R.drawable.ic_rx_remove)
-        bind(R.id.drawer_sort, R.drawable.ic_rx_sort)
-        bind(R.id.drawer_voice, R.drawable.ic_rx_voice)
         bind(R.id.drawer_close, R.drawable.ic_rx_close)
         bind(R.id.search_clear, R.drawable.ic_rx_close)
     }
@@ -1741,8 +1717,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         applyColors(target)
         applyTypography(target)
         updateIconSpec()
-        drawer.bindChips(viewModel.categories.value, viewModel.filter.value,
-            viewModel.suggestionsEnabled.value && core.launchHistory.size > 0, viewModel.categoriesEnabled.value)
         if (::edit.isInitialized) edit.applyTheme()
         if (::folders.isInitialized) folders.applyTheme()
         shade?.applyTheme()
@@ -1841,8 +1815,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val drawerContent = if (t.isDark) ObsidianStyle.CONTENT else sheetColors.content
         val drawerMuted = if (t.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
         findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(drawerContent)
-        findViewById<ImageButton>(R.id.drawer_voice).imageTintList = ColorStateList.valueOf(drawerContent)
-        findViewById<ImageButton>(R.id.drawer_sort).imageTintList = ColorStateList.valueOf(drawerContent)
 
         val cellCorner = t.iconTileRadiusDp * d
         // Press feedback follows the active theme's motion character (0.96 Signature, 0.94 Atmosphere, 0.98 Monolith).
@@ -2198,17 +2170,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
                 (grid.layoutManager as? GridLayoutManager)?.spanCount = cols
             }
         }
-        val presentationChanged = drawerManagerPresentation != a.drawerPresentation
         drawerColumns = GridRules.effectiveColumns(a.drawerColumns, widthDp)
-        val shelfColumns = GridRules.effectiveColumns(4, widthDp)
-        (drawerGrid.layoutManager as GridLayoutManager).spanCount =
-            if (a.drawerPresentation == DrawerPresentation.LIST) shelfColumns else drawerColumns
-        if (presentationChanged) {
-            drawerManagerPresentation = a.drawerPresentation
-            drawerGrid.recycledViewPool.clear()
-            @Suppress("NotifyDataSetChanged")
-            drawerAdapter.notifyDataSetChanged()
-        }
+        (drawerGrid.layoutManager as GridLayoutManager).spanCount = drawerColumns
         homeCellConfig = homeCellConfig.copy(showLabels = a.showLabels, textScale = a.textScale)
         // Floating dock never shows text labels (Apple-precision Phase 2 B2).
         dockCellConfig = dockCellConfig.copy(showLabels = false, textScale = a.textScale, cellHeightPx = null)
@@ -2328,8 +2291,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             forEachHomeAdapter { it.notifyItemRangeChanged(0, it.itemCount) }
             dockAdapter.notifyItemRangeChanged(0, dockAdapter.itemCount)
         }
-        val drawerSize = if (appearance.drawerPresentation == DrawerPresentation.LIST) requested else
-            iconSizeForGrid(requested, drawerGrid, drawerColumns, drawerGrid.paddingLeft + drawerGrid.paddingRight)
+        val drawerSize = iconSizeForGrid(requested, drawerGrid, drawerColumns, drawerGrid.paddingLeft + drawerGrid.paddingRight)
         val folderSize = requested.coerceAtMost(dp(LumaTokens.iconAppInt))
         if (drawerCellConfig.iconSizePx != drawerSize || folderCellConfig.iconSizePx != folderSize) {
             drawerCellConfig = drawerCellConfig.copy(iconSizePx = drawerSize)
@@ -2375,10 +2337,13 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             adapter.positionsFor(key).forEach { adapter.notifyItemChanged(it) }
         }
         dockAdapter.positionsFor(key).forEach { dockAdapter.notifyItemChanged(it) }
+        folders.refreshIcon(key)
+    }
+
+    private fun onDrawerIconReady(key: ComponentKey) {
         drawerAdapter.currentList.forEachIndexed { i, row ->
             if (row is DrawerRow.App && row.entry.key == key) drawerAdapter.notifyItemChanged(i)
         }
-        folders.refreshIcon(key)
     }
 
     /**
@@ -3614,6 +3579,12 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             runOnUiThread {
                 core.iconPacks.invalidate(packageName)
                 iconLoader.invalidatePackage(packageName)
+                drawerIconLoader.invalidatePackage(packageName)
+                drawerAdapter.currentList.forEachIndexed { index, row ->
+                    if (row is DrawerRow.App && row.entry.key.packageName == packageName) {
+                        drawerAdapter.notifyItemChanged(index)
+                    }
+                }
                 if (appearance.iconPack == packageName) {
                     if (removed) {
                         lifecycleScope.launch { viewModel.prefs.setIconPack(null) }
@@ -3670,7 +3641,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         private const val STATE_RECONFIGURE_WIDGET_ID = "reconfigure_widget_id"
         private const val STATE_ONBOARDING_LAUNCH_IN_FLIGHT = "onboarding_launch_in_flight"
         private const val STATE_ACTIVE_PAGE_INDEX = "active_page_index"
-        private const val STATE_DRAWER_PAGE = "drawer_page"
 
         private const val SWIPE_MIN_DISTANCE_DP = 60
 

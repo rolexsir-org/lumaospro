@@ -43,7 +43,8 @@ class IconLoader(
     private val cache: IconCache,
     private val packs: IconPackManager,
     private val resources: Resources,
-    private val livingIcons: LivingIconManager? = null
+    private val livingIcons: LivingIconManager? = null,
+    private val nativeOnly: Boolean = false
 ) {
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
@@ -128,6 +129,8 @@ class IconLoader(
     }
 
     private fun produce(key: ComponentKey, density: Int, s: IconRenderSpec?): Drawable? {
+        // Drawer icons are the platform artwork, including the work-profile badge.
+        if (nativeOnly) return repository.iconFor(key, density)
         val targetPx = s?.sizePx ?: 256
         val resolved = resolveSourceDrawable(
             key = key,

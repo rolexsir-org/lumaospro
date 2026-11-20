@@ -89,3 +89,29 @@ is not equivalent to the Gradle or Robolectric suite.
   screenshots are available in this environment. Validate all interactions,
   font scales, orientations, light/dark themes, animations and package/profile
   changes on CI and a device before calling this production ready.
+
+## Unified drawer revision (2026-11-20)
+
+The actual live drawer is Views/RecyclerView rather than Compose. This revision
+removes its page controls, category chips, alphabetical rail, sort and voice
+buttons from the drawer layout. The existing model is projected to only its
+`all` or search-result app rows, so each eligible component appears once, with
+no curated sections, shortcuts or external-search rows in the drawer. Existing
+visibility/hidden-search policy, persisted sort and column count, app discovery,
+launch and long-press callbacks, and spring/gesture controller remain in place.
+Stored list/category/suggestion preferences and pinned/history data are not
+changed, but do not create alternate drawer views. Other surfaces are unchanged.
+
+A bounded, asynchronous drawer icon cache uses the repository's native
+LauncherApps icon (including work-profile badges), independent of home icon
+styling; package changes invalidate it. Missing icons retain the existing
+monogram fallback. The drawer remains a single RecyclerView with diffing.
+
+The requested Gradle assembly and unit-test commands were attempted in this
+sandbox and stopped before configuration: no Java executable or JAVA_HOME is
+available. An attempt to obtain a JDK via GitHub was blocked at the release
+asset host; there is also no Android SDK or adb/physical device exposed here.
+XML parsing and `git diff --check` passed, but no build, test suite, physical
+device inspection, performance validation, or genuine screenshots can be
+claimed. Run both Gradle commands and validate the drawer on a physical device
+before release.
