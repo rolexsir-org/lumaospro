@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.ProfileSchedule
 import com.lumaos.pro.launcher.core.LumaApp
+import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.core.prefs.LumaPrefs
@@ -188,6 +189,20 @@ class PreferencesAndSamplersRuntimeTest {
 
         prefs.setAppPinned(ContextProfile.WORK, second, false)
         assertEquals(listOf(first), prefs.pinnedApps(ContextProfile.WORK).first())
+    }
+
+    @Test
+    fun `drawer sort and legacy layout preferences remain independently persisted`() = runTest {
+        prefs.setDrawerPresentation(DrawerPresentation.LIST)
+        prefs.setDrawerCategoriesEnabled(false)
+        prefs.setDrawerColumns(6)
+        for (sort in DrawerSort.entries) {
+            prefs.setDrawerSort(sort)
+            assertEquals(sort, prefs.drawerSort.first())
+            assertEquals(DrawerPresentation.LIST, prefs.drawerPresentation.first())
+            assertEquals(false, prefs.drawerCategoriesEnabled.first())
+            assertEquals(6, prefs.drawerColumns.first())
+        }
     }
 
     @Test

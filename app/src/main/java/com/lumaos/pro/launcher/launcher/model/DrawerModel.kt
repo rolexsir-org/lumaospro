@@ -137,7 +137,10 @@ object DrawerModel {
             matches.mapTo(rows) { DrawerRow.App(it, SECTION_RESULTS) }
             val q = AppMatcher.normalize(query)
             // Shortcuts of hidden apps follow the same opt-in as the apps.
-            val allowedPackages = pool.mapTo(HashSet()) { it.key.packageName }
+            // ShortcutRepository queries only the personal Android profile.
+            // A visible work-profile copy must not expose a hidden personal shortcut.
+            val allowedPackages = pool.asSequence().filter { it.key.userSerial == 0L }
+                .mapTo(HashSet()) { it.key.packageName }
             val shortcutMatches = input.shortcuts.asSequence()
                 .filter { it.packageName in allowedPackages }
                 .filter { AppMatcher.normalize(it.label).contains(q) }
@@ -146,7 +149,7 @@ object DrawerModel {
             if (shortcutMatches.isNotEmpty()) {
                 rows += DrawerRow.Header("shortcuts", "Shortcuts")
                 shortcutMatches.forEach { ref ->
-                    val appLabel = input.apps.firstOrNull { it.key.packageName == ref.packageName }?.label ?: ref.packageName
+                    val appLabel = pool.firstOrNull { it.key.userSerial == 0L && it.key.packageName == ref.packageName }?.label ?: ref.packageName
                     rows += DrawerRow.Shortcut(ref, appLabel)
                 }
             }

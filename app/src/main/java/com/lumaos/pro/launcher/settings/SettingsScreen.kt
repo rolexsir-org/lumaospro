@@ -76,7 +76,6 @@ import com.lumaos.pro.launcher.ui.LumaIcon
 import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.intelligence.ProfileId
-import com.lumaos.pro.launcher.launcher.model.DrawerPresentation
 import com.lumaos.pro.launcher.launcher.model.GestureAction
 import com.lumaos.pro.launcher.ui.ThemeMode
 import kotlinx.coroutines.launch
@@ -694,7 +693,6 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
     val gridColumns by viewModel.prefs.gridColumns.collectAsState(4)
     val gridRows by viewModel.prefs.gridRows.collectAsState(5)
     val drawerColumns by viewModel.prefs.drawerColumns.collectAsState(4)
-    val drawerPresentation by viewModel.prefs.drawerPresentation.collectAsState(DrawerPresentation.LIST)
     val iconSizeDp by viewModel.prefs.iconSizeDp.collectAsState(48)
     val showLabels by viewModel.prefs.showLabels.collectAsState(true)
     val textScale by viewModel.prefs.textScale.collectAsState(1.0f)
@@ -731,20 +729,8 @@ private fun AppearanceSection(viewModel: SettingsViewModel) {
             scope.launch { viewModel.prefs.setGridRows(it.roundToInt()) }
         }
         CleanDivider()
-        ChoiceRowCompact(
-            label = stringResource(R.string.pref_drawer_presentation),
-            selected = stringResource(if (drawerPresentation == DrawerPresentation.LIST) R.string.drawer_presentation_list else R.string.drawer_presentation_grid),
-            options = listOf(
-                DrawerPresentation.LIST to stringResource(R.string.drawer_presentation_list),
-                DrawerPresentation.GRID to stringResource(R.string.drawer_presentation_grid)
-            ).map { it as Pair<Any,String> },
-            onSelected = { scope.launch { viewModel.prefs.setDrawerPresentation(it as DrawerPresentation) } }
-        )
-        if (drawerPresentation == DrawerPresentation.GRID) {
-            CleanDivider()
-            SliderCompact(stringResource(R.string.pref_drawer_columns), drawerColumns.toFloat(), 3f..7f) {
-                scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
-            }
+        SliderCompact(stringResource(R.string.pref_drawer_columns), drawerColumns.toFloat(), 3f..7f) {
+            scope.launch { viewModel.prefs.setDrawerColumns(it.roundToInt()) }
         }
         CleanDivider()
         SliderCompact(stringResource(R.string.pref_icon_size), iconSizeDp.toFloat(), 36f..72f, suffix = " dp") {
@@ -777,18 +763,17 @@ private fun CleanSectionHeader(resId: Int) {
 
 @Composable
 private fun DrawerSection(viewModel: SettingsViewModel) {
-    val categories by viewModel.prefs.drawerCategoriesEnabled.collectAsState(true)
     val suggestions by viewModel.prefs.suggestionsEnabled.collectAsState(true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     Column {
         CleanSectionHeader(R.string.section_drawer)
-        CompactSwitchRow(
-            title = stringResource(R.string.pref_drawer_categories),
-            subtitle = stringResource(R.string.pref_drawer_categories_desc),
-            checked = categories,
-            onCheckedChange = { scope.launch { viewModel.prefs.setDrawerCategoriesEnabled(it) } }
+        Text(
+            text = stringResource(R.string.drawer_unified_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
         CleanDivider()
         CompactSwitchRow(

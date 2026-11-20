@@ -58,12 +58,13 @@ class DrawerAdapter(
         is DrawerRow.App -> if (presentation() == DrawerPresentation.LIST &&
             row.section !in curatedSections
         ) TYPE_APP_LIST else TYPE_APP
-        is DrawerRow.Shortcut, is DrawerRow.Action -> TYPE_ROW
+        is DrawerRow.Shortcut -> TYPE_SHORTCUT
+        is DrawerRow.Action -> TYPE_ROW
         is DrawerRow.Empty -> TYPE_EMPTY
     }
 
     fun isFullSpan(position: Int): Boolean =
-        position in 0 until itemCount && getItemViewType(position) != TYPE_APP
+        position in 0 until itemCount && getItemViewType(position) != TYPE_APP && getItemViewType(position) != TYPE_SHORTCUT
 
     fun rowAt(position: Int): DrawerRow? = currentList.getOrNull(position)
 
@@ -74,6 +75,7 @@ class DrawerAdapter(
             TYPE_ROW -> RowHolder(inflater.inflate(R.layout.item_drawer_row, parent, false))
             TYPE_EMPTY -> EmptyHolder(inflater.inflate(R.layout.item_drawer_empty, parent, false) as TextView)
             TYPE_APP_LIST -> AppCellViewHolder(inflater.inflate(R.layout.item_drawer_app, parent, false))
+            TYPE_SHORTCUT -> AppCellViewHolder(inflater.inflate(R.layout.item_app, parent, false))
             else -> AppCellViewHolder(inflater.inflate(R.layout.item_app, parent, false))
         }
     }
@@ -118,6 +120,15 @@ class DrawerAdapter(
                 style.subtitleTypeface?.let { holder.text.typeface = it }
             }
             is AppCellViewHolder -> {
+                if (row is DrawerRow.Shortcut) {
+                    AppEntryAdapter.bindCell(holder, cellConfig(), shortcutIcon(row), row.ref.label,
+                        holder.itemView.context.getString(R.string.drawer_shortcut_description, row.ref.label, row.appLabel))
+                    holder.itemView.background = ThemedDrawables.ripple(style.rippleColor, null, style.cornerPx)
+                    holder.itemView.setOnClickListener { onClick(row, holder.icon) }
+                    holder.itemView.setOnLongClickListener(null)
+                    holder.itemView.isLongClickable = false
+                    return
+                }
                 val app = (row as DrawerRow.App).entry
                 val config = cellConfig()
                 val listRow = holder.itemViewType == TYPE_APP_LIST
@@ -203,5 +214,6 @@ class DrawerAdapter(
         const val TYPE_ROW = 2
         const val TYPE_APP_LIST = 3
         const val TYPE_EMPTY = 4
+        const val TYPE_SHORTCUT = 5
     }
 }

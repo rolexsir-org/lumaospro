@@ -430,22 +430,13 @@
                 </LinearLayout>
 
                 <ImageButton
-                    android:id="@+id/drawer_sort"
+                    android:id="@+id/drawer_options"
                     android:layout_width="@dimen/luma_min_touch_target"
                     android:layout_height="@dimen/luma_min_touch_target"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/drawer_sort_description"
+                    android:contentDescription="@string/drawer_options_description"
                     android:padding="@dimen/luma_space_sm"
-                    android:src="@drawable/ic_rx_sort" />
-
-                <ImageButton
-                    android:id="@+id/drawer_voice"
-                    android:layout_width="@dimen/luma_min_touch_target"
-                    android:layout_height="@dimen/luma_min_touch_target"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/voice_command_description"
-                    android:padding="@dimen/luma_space_sm"
-                    android:src="@drawable/ic_rx_voice" />
+                    android:src="@drawable/ic_rx_more" />
 
                 <ImageButton
                     android:id="@+id/drawer_close"
@@ -461,9 +452,9 @@
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="56dp"
+                android:minHeight="48dp"
                 android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="12dp"
                 android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
                 android:layout_marginBottom="8dp">
 
@@ -471,7 +462,7 @@
                     android:id="@+id/search_field"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:minHeight="56dp"
+                    android:minHeight="48dp"
                     android:autofillHints="false"
                     android:background="@drawable/bg_search_field"
                     android:drawablePadding="@dimen/luma_space_sm"
@@ -498,58 +489,6 @@
                     android:visibility="gone" />
             </FrameLayout>
 
-            <!-- One-tap overview/library navigation; category chips remain independent. -->
-            <LinearLayout
-                android:id="@+id/drawer_pages"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/drawer_overview"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:text="@string/obsidian_overview"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/drawer_library"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:text="@string/obsidian_library"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <HorizontalScrollView
-                android:id="@+id/drawer_chips_scroll"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:clipToPadding="false"
-                android:overScrollMode="never"
-                android:paddingStart="@dimen/luma_screen_margin_horizontal"
-                android:paddingEnd="@dimen/luma_screen_margin_horizontal"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/drawer_chips"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:paddingBottom="@dimen/luma_space_xs" />
-            </HorizontalScrollView>
-
             <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -563,16 +502,9 @@
                     android:overScrollMode="never"
                     android:paddingStart="@dimen/luma_screen_margin_horizontal"
                     android:paddingTop="@dimen/luma_space_xxs"
-                    android:paddingEnd="@dimen/luma_space_xxl"
+                    android:paddingEnd="@dimen/luma_screen_margin_horizontal"
                     android:paddingBottom="@dimen/luma_space_md"
                     android:scrollbars="none" />
-
-                <com.lumaos.pro.launcher.launcher.view.AlphaIndexView
-                    android:id="@+id/alpha_index"
-                    android:layout_width="@dimen/luma_min_touch_target"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="end|center_vertical"
-                    android:contentDescription="@string/drawer_alphabet_index_description" />
 
                 <TextView
                     android:id="@+id/empty_view"
