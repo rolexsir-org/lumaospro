@@ -174,7 +174,7 @@ class DrawerController(
         // Wait one layout pass when the sheet was GONE, so travel is real.
         sheet.post {
             if (!isOpen) return@post
-            val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
+            val spec = MotionTokens.DRAWER
             spring.animateTo(1f, spec, host.motion())
             if (shouldStagger) {
                 staggerCancel?.run()
@@ -193,7 +193,7 @@ class DrawerController(
         staggerCancel?.run()
         staggerCancel = null
         hideKeyboard()
-        val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
+        val spec = MotionTokens.DRAWER
         spring.animateTo(0f, spec, host.motion()) { finishClose() }
     }
 
@@ -237,7 +237,7 @@ class DrawerController(
     fun release(velocityY: Float, focusSearchWhenOpened: Boolean = false) {
         val v = -velocityY / sheetTravel()
         val target = LumaSpring.resolveBinarySnapTarget(progress, v)
-        val spec = if (!host.theme().usesBlur) MotionTokens.SNAPPY else MotionTokens.LUMA
+        val spec = MotionTokens.DRAWER
         spring.setVelocity(v)
         if (target == 1f) {
             val wasOpen = isOpen
@@ -353,6 +353,10 @@ class DrawerController(
         title.setTextColor(content)
         title.typeface = Typefaces.title(theme.typography)
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, maxOf(26f, theme.typeScale.screenTitle))
+        // The drawer header names the active theme rather than a fixed word, so
+        // it stays truthful for every LumaOS theme (Obsidian, Ivory, Signature,
+        // Atmosphere, Monolith, Luma Glass, Luma Mono) and updates on switch.
+        title.text = theme.displayName
         val architectural = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH ||
             theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO
         title.isAllCaps = architectural

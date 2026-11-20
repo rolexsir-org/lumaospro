@@ -2489,7 +2489,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun onDrawerOpened() {
         if (core.shortcuts.hasAccess()) viewModel.loadShortcuts()
-        drawerSheet.announceForAccessibility(getString(R.string.drawer_title))
+        drawerSheet.announceForAccessibility(theme.displayName)
     }
 
     override fun onDrawerClosed() = Unit

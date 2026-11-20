@@ -102,9 +102,12 @@ class HomeActivityRuntimeTest {
     }
 
     @Test
-    fun `Obsidian keeps accessible search and drawer controls in the real layout`() {
+    fun `drawer title reflects the active theme, not a hardcoded name`() {
         val activity = buildHome()
-        assertEquals(activity.getString(R.string.drawer_title), activity.findViewById<TextView>(R.id.drawer_title).text.toString())
+        val themeField = HomeActivity::class.java.getDeclaredField("theme").apply { isAccessible = true }
+        val resolved = themeField.get(activity) as com.lumaos.pro.launcher.ui.theme.ResolvedTheme
+        assertEquals(resolved.displayName, activity.findViewById<TextView>(R.id.drawer_title).text.toString())
+        assertTrue(activity.findViewById<TextView>(R.id.drawer_title).text.isNotBlank())
         val search = activity.findViewById<EditText>(R.id.search_field)
         assertEquals(activity.getString(R.string.drawer_search_hint), search.hint.toString())
         assertTrue(activity.findViewById<android.view.View>(R.id.drawer_close).contentDescription.isNotEmpty())
