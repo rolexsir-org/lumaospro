@@ -1,18 +1,12 @@
 package com.lumaos.pro.launcher.ui.glass
 
-import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.os.Build
-import android.util.AttributeSet
 import android.view.View
 import android.view.ViewOutlineProvider
-import android.widget.FrameLayout
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.effects.EffectsDecision
@@ -185,47 +179,5 @@ object GlassViews {
         view.setTag(R.id.home_root, listener)
         view.addOnLayoutChangeListener(listener)
         if (view.isLaidOut) update()
-    }
-}
-
-/**
- * Reusable View-system unified glass container (`FrameLayout` subclass).
- */
-class LumaGlassSurfaceView @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0
-) : FrameLayout(context, attrs, defStyleAttr) {
-
-    var glassDepth: Float = LumaTokens.depthHome
-    var cornerRadiusDp: Float = LumaTokens.radiusLarge
-
-    fun bindGlass(
-        spec: GlassSpec,
-        ripple: Boolean = false,
-        depth: Float = glassDepth,
-        radiusOverrideDp: Float? = null
-    ) {
-        glassDepth = depth
-        if (radiusOverrideDp != null) cornerRadiusDp = radiusOverrideDp
-        GlassViews.apply(
-            view = this,
-            spec = spec,
-            density = resources.displayMetrics.density,
-            ripple = ripple,
-            clipToOutline = !spec.topOnly,
-            depth = depth,
-            radiusOverrideDp = radiusOverrideDp
-        )
-    }
-
-    fun applyBackdropBlurTo(target: View?, blurDp: Float, enabled: Boolean) {
-        if (Build.VERSION.SDK_INT < 31 || target == null) return
-        if (!enabled || blurDp <= 0.5f) {
-            target.setRenderEffect(null)
-            return
-        }
-        val px = (blurDp * resources.displayMetrics.density).coerceAtLeast(1f)
-        target.setRenderEffect(RenderEffect.createBlurEffect(px, px, Shader.TileMode.CLAMP))
     }
 }

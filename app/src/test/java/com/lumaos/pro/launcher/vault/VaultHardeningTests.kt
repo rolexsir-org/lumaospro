@@ -1,7 +1,6 @@
 package com.lumaos.pro.launcher.vault
 
 import com.lumaos.pro.launcher.vault.core.VaultBackup
-import com.lumaos.pro.launcher.vault.core.VaultCrypto
 import com.lumaos.pro.launcher.vault.core.VaultCryptoException
 import com.lumaos.pro.launcher.vault.core.VaultIndex
 import com.lumaos.pro.launcher.vault.core.VaultItem
@@ -16,7 +15,6 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue

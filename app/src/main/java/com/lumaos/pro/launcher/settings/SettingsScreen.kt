@@ -5,9 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,15 +70,12 @@ import com.lumaos.pro.launcher.core.apps.AppEntry
 import com.lumaos.pro.launcher.core.model.ComponentKey
 import com.lumaos.pro.launcher.wallpaper.WallpaperActivity
 import com.lumaos.pro.launcher.ui.LumaIcon
-import com.lumaos.pro.launcher.ui.theme.ExperienceProfile
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.intelligence.ProfileId
 import com.lumaos.pro.launcher.launcher.model.GestureAction
-import com.lumaos.pro.launcher.ui.ThemeMode
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalTime
-import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 import androidx.compose.material3.Switch
@@ -90,8 +84,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.border
-import androidx.compose.ui.text.font.FontFamily
 import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
@@ -192,23 +184,6 @@ private fun CleanGroupTitle(resId: Int) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
-private fun CleanSection(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        content()
-    }
-}
-
-@Composable
-private fun CleanDivider() {
-    HorizontalDivider(
-        thickness = 0.6.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(start = 16.dp)
     )
 }
 

@@ -75,8 +75,7 @@ is not equivalent to the Gradle or Robolectric suite.
   `item_drawer_header.xml`, `strings.xml`, `strings_v2.xml`,
   `DrawerModelTest.kt` and `HomeActivityRuntimeTest.kt`.
 - Added: `ObsidianStyle.kt`, `ObsidianProjection.kt`,
-  `ObsidianStyleTest.kt`, `ObsidianProjectionTest.kt`, this audit, and the
-  earlier `LUMA_FLOW_AUDIT.md` retained as historical context.
+  `ObsidianStyleTest.kt`, `ObsidianProjectionTest.kt`, and this audit.
 - After implementation, 18 pure drawer/model/contrast tests passed under a
   standalone Kotlin 2.2.21 harness with a minimal JUnit shim. This is not the
   configured Gradle/JUnit suite. Android resource compilation with AAPT2 passed;

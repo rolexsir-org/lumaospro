@@ -21,7 +21,6 @@ import com.lumaos.pro.launcher.effects.EffectsDecision
 import com.lumaos.pro.launcher.launcher.home.LumaDepthStack
 import com.lumaos.pro.launcher.launcher.home.Typefaces
 import com.lumaos.pro.launcher.motion.LumaHaptics
-import com.lumaos.pro.launcher.motion.LumaSpring
 import com.lumaos.pro.launcher.motion.MotionPolicy
 import com.lumaos.pro.launcher.motion.MotionTokens
 import com.lumaos.pro.launcher.motion.SpringAnimator

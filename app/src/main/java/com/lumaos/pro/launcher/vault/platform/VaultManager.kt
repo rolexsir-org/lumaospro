@@ -2,7 +2,6 @@ package com.lumaos.pro.launcher.vault.platform
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import com.lumaos.pro.launcher.core.util.LumaLog
 import com.lumaos.pro.launcher.vault.core.VaultAutoLock

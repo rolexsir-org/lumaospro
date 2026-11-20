@@ -108,23 +108,4 @@ class VaultPlatformIntegrationTests {
         }
         assertTrue("sensitive logging: $offenders", offenders.isEmpty())
     }
-
-    private fun resolveModuleDir(): File {
-        // Gradle runs unit tests with the module as the working directory; the
-        // sandbox harness passes the repository root through an environment
-        // variable, and the walk-up below covers every other layout.
-        (System.getenv("VAULT_REPO") ?: System.getProperty("lumaos.repo"))?.let { root ->
-            val candidate = File(root, "app/src/main/AndroidManifest.xml")
-            if (candidate.isFile) return File(root, "app")
-        }
-        var directory: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (directory != null) {
-            val candidate = File(directory, "src/main/AndroidManifest.xml")
-            if (candidate.isFile) return directory
-            val nested = File(directory, "app/src/main/AndroidManifest.xml")
-            if (nested.isFile) return File(directory, "app")
-            directory = directory.parentFile
-        }
-        error("Could not locate the app module from ${System.getProperty("user.dir")}")
-    }
 }

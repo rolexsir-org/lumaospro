@@ -279,13 +279,3 @@ object LumaTypeScale {
     fun safeLineHeight(sizeSp: Float, multiplier: Float): Float =
         lineHeight(sizeSp, multiplier).coerceAtLeast(sizeSp * 1.0f)
 }
-
-/** Letter spacing presets for roles that are not theme-voiced. */
-object LumaTracking {
-    const val display = -0.03f
-    const val heading = -0.018f
-    const val title = -0.012f
-    const val body = 0f
-    const val label = 0.01f
-    const val overline = 0.14f
-}

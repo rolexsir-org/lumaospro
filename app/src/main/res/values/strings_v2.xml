@@ -15,8 +15,6 @@
     <string name="settings_advanced_show">Show advanced settings</string>
     <string name="settings_advanced_hide">Hide advanced settings</string>
     <string name="settings_advanced_summary">Profiles, notifications, gestures, privacy and backup</string>
-    <string name="section_widgets">Widgets</string>
-    <string name="pref_widgets_manage_open">On the home screen, touch and hold an empty area, then tap Widgets. Choose a widget and follow any setup prompts.</string>
 
     <!-- Home -->
     <string name="search_pill_hint">Search apps and shortcuts</string>
@@ -31,18 +29,11 @@
     <string name="drawer_suggested">For you</string>
     <string name="drawer_all_apps">All apps</string>
     <string name="drawer_eyebrow">LUMAOS PRO  /  APPS</string>
-    <string name="obsidian_overview">Overview</string>
-    <string name="obsidian_library">App library</string>
-    <string name="obsidian_overview_empty">Your favourites and recently opened apps appear here. Open the app library to explore.</string>
     <string name="drawer_search_hint">Search your apps</string>
-    <string name="drawer_sort_description">Sort apps</string>
     <string name="drawer_options_description">App drawer options</string>
     <string name="drawer_voice_option">Voice command</string>
     <string name="drawer_unified_note">Apps share one grid with their original icons. Pins and recent apps appear first; sorting applies to the remaining apps. Previous list and category preferences remain saved.</string>
     <string name="drawer_shortcut_description">%1$s, %2$s shortcut</string>
-    <string name="drawer_chip_all">All</string>
-    <string name="drawer_chip_frequent">Frequent</string>
-    <string name="drawer_chip_selected">%1$s, selected</string>
     <string name="drawer_alphabet_selected">%1$s apps</string>
     <plurals name="drawer_app_count">
         <item quantity="one">%d app</item>
@@ -52,7 +43,6 @@
         <item quantity="one">%d match</item>
         <item quantity="other">%d matches</item>
     </plurals>
-    <string name="sort_title">Sort</string>
     <string name="sort_alpha">A to Z</string>
     <string name="sort_usage">Most used</string>
     <string name="sort_newest">Recently installed</string>
@@ -145,20 +135,15 @@
     <!-- Settings tabs & Studio -->
     <string name="tab_studio">Studio</string>
     <string name="studio_preview_label">Live preview</string>
-    <string name="studio_themes">Themes</string>
-    <string name="studio_theme_signature">Signature (v3.2)</string>
     <string name="studio_theme_additional">Retained palettes</string>
-    <string name="studio_color_option_description">Color %1$s</string>
     <string name="studio_apply">Apply</string>
     <string name="studio_undo">Undo</string>
     <string name="studio_redo">Redo</string>
     <string name="studio_save_preset">Save as preset</string>
     <string name="studio_restore_preset">Restore preset</string>
     <string name="studio_preset_note">Session preset — Apply to keep it after restarting LumaOS Pro. Export a backup from Settings for a portable copy.</string>
-    <string name="studio_config_title">Current configuration</string>
     <string name="studio_config_state_saved">Applied configuration</string>
     <string name="studio_config_state_preview">Preview — not applied</string>
-    <string name="studio_reset_section">Reset section</string>
     <string name="diag_system_title">System &amp; LumaOS</string>
     <string name="diag_version">LumaOS Pro</string>
     <string name="diag_android">Android</string>
@@ -166,49 +151,30 @@
     <string name="diag_theme">Active theme</string>
     <string name="diag_display_value">%1$d × %2$d dp · %3$s× density</string>
     <string name="studio_revert">Revert</string>
-    <string name="studio_reset">Reset Studio defaults</string>
     <string name="studio_applied">Applied</string>
     <string name="studio_unsaved">Preview · unsaved changes</string>
     <string name="studio_applying">Applying…</string>
     <string name="studio_apply_failed">Changes couldn’t be saved. Your preview is still here; try Apply again.</string>
-    <string name="studio_switching">Light and dark</string>
-    <string name="studio_switch_fixed">Always this theme</string>
-    <string name="studio_switch_system">Follow system dark theme</string>
-    <string name="studio_switch_schedule">On a schedule</string>
-    <string name="studio_light_theme">Light theme</string>
-    <string name="studio_dark_theme">Dark theme</string>
-    <string name="studio_dark_from">Dark from</string>
-    <string name="studio_dark_until">until</string>
     <string name="studio_accent">Accent</string>
-    <string name="studio_background">Background</string>
     <string name="studio_theme_default">Theme default</string>
     <string name="studio_backdrop">Backdrop</string>
     <string name="studio_backdrop_wallpaper">Wallpaper</string>
     <string name="studio_backdrop_theme">LumaOS Pro atmosphere</string>
     <string name="studio_backdrop_luma">LumaOS wallpaper</string>
     <string name="studio_typography">Typography</string>
-    <string name="studio_icons">Icons</string>
     <string name="studio_icon_shape">Shape</string>
     <string name="studio_icon_style">Style</string>
-    <string name="studio_icon_pack">Icon pack</string>
     <string name="studio_icon_pack_none">App icons</string>
-    <string name="studio_icon_pack_none_installed">No icon packs installed</string>
     <string name="studio_layout">Home layout</string>
     <string name="studio_dock_style">Dock</string>
     <string name="studio_effects">Effects</string>
     <string name="studio_motion">Motion</string>
-    <string name="studio_contrast">Theme surface text contrast: %1$s:1. Other surfaces may vary.</string>
     <string name="studio_loading">Loading appearance…</string>
     <string name="studio_advanced_show">Show advanced appearance</string>
     <string name="studio_advanced_hide">Hide advanced appearance</string>
-    <string name="studio_advanced_summary">Background, typography, effects and context themes</string>
     <string name="studio_profile_themes">Context themes</string>
     <string name="studio_profile_theme_none">Use current theme</string>
-    <string name="studio_profile_theme_precedence">%1$s currently uses %2$s; this profile theme takes precedence over the global selection.</string>
     <string name="studio_effects_now">Right now: %1$s</string>
-    <string name="studio_wallpaper_hint_estimated">Wallpaper lightness is estimated on this Android version.</string>
-    <string name="studio_wallpaper_preview_note">Android provides wallpaper colors, not the image; this preview uses an approximate gradient.</string>
-    <string name="studio_no_wallpaper_colors">Wallpaper colours are not available, so Chroma uses its built-in palette.</string>
 
     <string name="shape_system">Device</string>
     <string name="shape_squircle">Squircle</string>
@@ -226,16 +192,9 @@
     <string name="type_grotesk">Void · Space Grotesk</string>
     <string name="type_serif">Editorial serif (fallback)</string>
     <string name="type_mono">Technical mono (fallback)</string>
-    <string name="studio_typography_note">One type scale. Aurora and Zen use Inter; Void uses Space Grotesk for display and headings with Inter body text. Bundled fonts: SIL Open Font License 1.1.</string>
-    <string name="studio_luma_wallpaper_note">Art-directed wallpaper bundled with this theme. Cropped, never stretched.</string>
-    <string name="studio_motion_character">Motion: %1$s</string>
-    <string name="studio_font_licenses">Bundled font licences (Inter, Space Grotesk)</string>
     <string name="about_licenses">Bundled typefaces</string>
     <string name="about_fonts_line">Inter and Space Grotesk · SIL Open Font License 1.1</string>
     <string name="about_licenses_open">View font licences</string>
-    <string name="about_licenses_close">Close</string>
-    <string name="section_context_profiles">Context profiles</string>
-    <string name="section_notifications">Notifications and focus</string>
     <string name="dock_bezel">Bezel</string>
     <string name="dock_float">Floating</string>
     <string name="dock_minimal">Minimal</string>
@@ -252,25 +211,16 @@
 
     <!-- Settings: drawer & privacy -->
     <string name="section_drawer">App drawer</string>
-    <string name="pref_drawer_presentation">Drawer layout</string>
-    <string name="drawer_presentation_list">Vertical list</string>
-    <string name="drawer_presentation_grid">Icon grid</string>
-    <string name="pref_pinned_hint">Long-press an app in the drawer to pin or unpin it. Pins are separate for each context.</string>
-    <string name="pref_drawer_categories">Category chips</string>
-    <string name="pref_drawer_categories_desc">Uses the category each app declares. Apps without one are listed under Other.</string>
     <string name="pref_suggestions">Learn from my launches</string>
     <string name="pref_suggestions_desc">Recently opened apps, suggestions, Most used sorting and smart folders use launches made through LumaOS Pro only. Stored on this device, never sent anywhere.</string>
     <string name="pref_clear_history">Clear launch history</string>
     <string name="pref_history_cleared">Launch history cleared</string>
     <string name="hidden_moved_title">Hidden Apps moved into the Vault</string>
     <string name="hidden_moved_summary">Hiding is now part of the Vault, behind your PIN. Existing hidden apps were kept; open the Vault to change them.</string>
-    <string name="hidden_open_vault">Open Hidden Apps in the Vault</string>
     <string name="vault_unavailable">The Vault could not be opened. Please try again.</string>
     <string name="screen_unavailable">That screen could not be opened. Please try again.</string>
 
     <!-- Backup -->
-    <string name="section_backup">Backup and restore</string>
-    <string name="backup_desc">Saves settings, themes, gestures, schedules, hidden lists and home layouts to a file you choose. Widgets and launch history are not included.</string>
     <string name="backup_export">Export backup</string>
     <string name="backup_import">Restore backup</string>
     <string name="backup_exported">Backup saved</string>
@@ -283,7 +233,6 @@
     <string name="backup_confirm_generic">Your current settings and home layouts, including widget placements, will be replaced. Launch history is not imported.</string>
     <string name="action_dismiss">Dismiss</string>
     <string name="backup_confirm_title">Replace current setup?</string>
-    <string name="backup_confirm_body">Your current settings and home layouts will be replaced by the backup from %1$s.</string>
     <string name="backup_confirm_restore">Restore</string>
 
     <!-- Living Icons -->

@@ -14,7 +14,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.R
-import com.lumaos.pro.launcher.context.FocusAccessConsent
 import com.lumaos.pro.launcher.context.FocusAccessUiState
 import com.lumaos.pro.launcher.core.prefs.GestureKind
 import com.lumaos.pro.launcher.onboarding.AccessibilityStep
@@ -23,7 +22,6 @@ import com.lumaos.pro.launcher.onboarding.FocusProtectionStep
 import com.lumaos.pro.launcher.onboarding.GestureBinding
 import com.lumaos.pro.launcher.onboarding.GesturesStep
 import com.lumaos.pro.launcher.onboarding.HomeRoleStep
-import com.lumaos.pro.launcher.onboarding.OnboardingFlow
 import com.lumaos.pro.launcher.onboarding.OnboardingMode
 import com.lumaos.pro.launcher.onboarding.OnboardingShell
 import com.lumaos.pro.launcher.onboarding.OnboardingState

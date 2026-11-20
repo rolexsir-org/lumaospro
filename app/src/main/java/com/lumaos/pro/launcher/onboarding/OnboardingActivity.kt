@@ -354,16 +354,7 @@ class OnboardingActivity : ComponentActivity() {
     }
 
     /** The only route to Android's accessibility screen, and only after Agree. */
-    private fun openAccessibilitySettings() {
-        val intent = FocusAccess.settingsIntent(this)
-        if (intent == null) {
-            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
-            return
-        }
-        runCatching { startActivity(intent) }.onFailure {
-            Toast.makeText(this, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
-        }
-    }
+    private fun openAccessibilitySettings() = FocusAccess.openSettings(this)
 
     // ----------------------------------------------------------- home role
 

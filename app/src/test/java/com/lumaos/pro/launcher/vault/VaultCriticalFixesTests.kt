@@ -241,16 +241,5 @@ class VaultCriticalFixesTests {
     private companion object {
         fun assertEquals(message: String, expected: Int, actual: Int) =
             org.junit.Assert.assertEquals(message, expected.toLong(), actual.toLong())
-
-        fun resolveModuleDir(): File {
-            var directory: File? = File(System.getProperty("user.dir")).absoluteFile
-            while (directory != null) {
-                if (File(directory, "src/main/AndroidManifest.xml").isFile) return directory
-                val nested = File(directory, "app/src/main/AndroidManifest.xml")
-                if (nested.isFile) return File(directory, "app")
-                directory = directory.parentFile
-            }
-            error("Could not locate the app module from " + System.getProperty("user.dir"))
-        }
     }
 }

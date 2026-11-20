@@ -8,8 +8,8 @@
 > **not** been compiled with Gradle, linked, linted, or rendered on a phone. A
 > standalone Kotlin 2.2.21 compiler on a JRE was bootstrapped locally to compile
 > the pure token/theme layer and run 242 JVM-only unit tests with a JUnit shim.
-> That was a historical run: the suite has since grown to 819 `@Test` methods
-> across 93 test sources, and the shim is not the Gradle test task and never
+> That was a historical run: the suite has since grown to 1007 `@Test` methods
+> across 124 test sources, and the shim is not the Gradle test task and never
 > covered Robolectric or UI rendering. `./build.sh test` is the real suite.
 > Static resource, XML, delimiter and contract checks are listed in
 > `QA_CHECKLIST.md`. Nothing here should be presented as device-verified until
@@ -380,8 +380,7 @@ every storage key is unchanged.
 60 original glyphs ship in `res/drawable/ic_rx_*.xml`. `ui/IconCatalog.kt`
 exposes 42 of them as the `LumaIcon` enum (39 base + 3 filled variants); the
 notification shade and quick controls reference 17 further glyphs directly, and
-`ic_rx_notifications` is packaged but currently unreferenced. All 60 parse as
-`<vector>`.
+every glyph file is referenced. All 60 parse as `<vector>`.
 
 | Property | Value |
 | --- | --- |

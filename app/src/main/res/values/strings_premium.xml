@@ -6,7 +6,6 @@
     <string name="studio_section_appearance">Appearance</string>
     <string name="studio_section_layout">Layout &amp; dock</string>
     <string name="studio_section_effects">Effects &amp; motion</string>
-    <string name="studio_section_backdrop">Backdrop</string>
     <string name="studio_section_icons">Icons</string>
     <string name="studio_section_summary">At a glance</string>
     <string name="studio_reset_short">Reset</string>
@@ -36,6 +35,4 @@
     <string name="advanced_summary_premium">Every accent, typography voice, retained palettes and context themes</string>
     <string name="settings_active_identity">Your look</string>
     <string name="studio_contrast_short">%1$s:1 contrast</string>
-    <string name="settings_theme_premium">Premium</string>
-    <string name="settings_theme_more">More</string>
 </resources>

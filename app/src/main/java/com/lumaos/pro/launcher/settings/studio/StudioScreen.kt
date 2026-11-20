@@ -1,6 +1,5 @@
 package com.lumaos.pro.launcher.settings.studio
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -41,13 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -55,7 +48,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,6 +65,8 @@ import com.lumaos.pro.launcher.settings.SettingsViewModel
 import com.lumaos.pro.launcher.settings.StudioConfiguration
 import com.lumaos.pro.launcher.settings.StudioApplyState
 import com.lumaos.pro.launcher.settings.StudioPreviewIcons
+import com.lumaos.pro.launcher.settings.CleanDivider
+import com.lumaos.pro.launcher.settings.CleanSection
 import com.lumaos.pro.launcher.ui.theme.Backdrop
 import com.lumaos.pro.launcher.ui.theme.ColorMath
 import com.lumaos.pro.launcher.ui.theme.DarkWindow
@@ -415,7 +409,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Appearance: one theme always, or a light/dark pair ---
         StudioSectionHeader(stringResource(R.string.studio_section_appearance))
-        StudioCard {
+        CleanSection {
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 SegmentedControl(
                     options = listOf(
@@ -440,7 +434,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 )
             }
             if (draft.theme.switching != ThemeSwitching.FIXED) {
-                HorizontalDividerThin()
+                CleanDivider()
                 val lightOptions = remember { ThemePresets.ALL.filter { !it.dark }.map { it.id } }
                 val darkOptions = remember { ThemePresets.ALL.filter { it.dark }.map { it.id } }
                 CompactChoiceRow(
@@ -452,7 +446,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     previewFocus = id
                     edit(draft.copy(theme = draft.theme.copy(lightThemeId = id)))
                 }
-                HorizontalDividerThin()
+                CleanDivider()
                 CompactChoiceRow(
                     label = stringResource(R.string.appearance_dark_theme),
                     selected = ThemePresets.of(draft.theme.darkThemeId).displayName,
@@ -463,7 +457,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     edit(draft.copy(theme = draft.theme.copy(darkThemeId = id)))
                 }
                 if (draft.theme.switching == ThemeSwitching.SCHEDULE) {
-                    HorizontalDividerThin()
+                    CleanDivider()
                     val windows = remember {
                         listOf(
                             DarkWindow.DEFAULT,
@@ -503,7 +497,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
         // --- Accent: curated for the theme being edited ---
         StudioSectionHeader(stringResource(R.string.studio_accent))
-        StudioCard {
+        CleanSection {
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 val accentSpec = ThemePresets.of(resolved.id)
                 Text(
@@ -528,7 +522,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     }
                 )
             }
-            HorizontalDividerThin()
+            CleanDivider()
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -594,7 +588,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             actionLabel = stringResource(R.string.studio_reset_short),
             actionEnabled = !applying
         ) { edit(draft.copy(homePreset = saved.homePreset, dockStyle = saved.dockStyle)) }
-        StudioCard {
+        CleanSection {
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_layout),
@@ -616,7 +610,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     }
                 )
             }
-            HorizontalDividerThin()
+            CleanDivider()
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_dock_style),
@@ -648,7 +642,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             actionLabel = stringResource(R.string.studio_reset_short),
             actionEnabled = !applying
         ) { edit(draft.copy(effects = saved.effects, motion = saved.motion, theme = draft.theme.copy(backdrop = saved.theme.backdrop))) }
-        StudioCard {
+        CleanSection {
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = LumaDesignTokens.SP_3.dp),
@@ -680,7 +674,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     }
                 )
             }
-            HorizontalDividerThin()
+            CleanDivider()
             Column(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                 Text(
                     text = stringResource(R.string.studio_motion),
@@ -701,7 +695,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     }
                 )
             }
-            HorizontalDividerThin()
+            CleanDivider()
             val hasLumaArt = WallpaperArt.forTheme(resolved.id) != null || activeWallpaper != null
             val backdropOptions = listOf<Backdrop?>(null, Backdrop.THEME, Backdrop.WALLPAPER) +
                 listOfNotNull(Backdrop.LUMA.takeIf { hasLumaArt })
@@ -714,7 +708,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 val updated = draft.copy(theme = draft.theme.copy(backdrop = bd))
                 edit(updated)
             }
-            HorizontalDividerThin()
+            CleanDivider()
             CompactNavRow(
                 title = stringResource(R.string.wallpaper_studio_title),
                 subtitle = activeWallpaper?.let { "${it.title} · ${it.mood}" } ?: stringResource(R.string.wallpaper_discover_caption),
@@ -730,7 +724,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
             actionLabel = stringResource(R.string.studio_reset_short),
             actionEnabled = !applying
         ) { edit(draft.copy(iconPack = saved.iconPack, livingIconsEnabled = saved.livingIconsEnabled, theme = draft.theme.copy(iconShape = saved.theme.iconShape, iconStyle = saved.theme.iconStyle))) }
-        StudioCard {
+        CleanSection {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -761,7 +755,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                     )
                 )
             }
-            HorizontalDividerThin()
+            CleanDivider()
             CompactChoiceRow(
                 label = stringResource(R.string.studio_icon_shape),
                 selected = draft.theme.iconShape?.let { shapeLabel(it) } ?: stringResource(R.string.studio_theme_default),
@@ -771,7 +765,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 val updated = draft.copy(theme = draft.theme.copy(iconShape = shape))
                 edit(updated)
             }
-            HorizontalDividerThin()
+            CleanDivider()
             CompactChoiceRow(
                 label = stringResource(R.string.studio_icon_style),
                 selected = draft.theme.iconStyle?.let { iconStyleLabel(it) } ?: stringResource(R.string.studio_theme_default),
@@ -782,7 +776,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
                 edit(updated)
             }
             if (packs.isNotEmpty() || draft.iconPack != null) {
-                HorizontalDividerThin()
+                CleanDivider()
                 val packOptions = listOf<String?>(null) + packs.map { it.packageName } +
                     listOfNotNull(draft.iconPack.takeIf { p -> p != null && packs.none { it.packageName == p } })
                 CompactChoiceRow(
@@ -827,7 +821,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
         if (advancedOpen) {
             Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.accent_all))
-            StudioCard {
+            CleanSection {
                 Box(Modifier.padding(LumaDesignTokens.SP_5.dp)) {
                     SwatchCompact(
                         colors = ThemePresets.ACCENT_SWATCHES,
@@ -846,7 +840,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
             Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_typography))
-            StudioCard {
+            CleanSection {
                 CompactChoiceRow(
                     label = stringResource(R.string.studio_typography),
                     selected = draft.theme.typography?.let { typeLabel(it) } ?: stringResource(R.string.studio_theme_default),
@@ -860,7 +854,7 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
             Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_theme_additional))
-            StudioCard {
+            CleanSection {
                 CompactThemeRow(
                     presets = ThemePresets.ADDITIONAL,
                     selectedId = draft.theme.themeId,
@@ -873,9 +867,9 @@ fun StudioRoot(viewModel: SettingsViewModel) {
 
             Spacer(Modifier.height(LumaDesignTokens.SP_6.dp))
             StudioSectionHeader(stringResource(R.string.studio_profile_themes))
-            StudioCard {
+            CleanSection {
                 ContextProfile.entries.forEachIndexed { idx, profile ->
-                    if (idx > 0) HorizontalDividerThin()
+                    if (idx > 0) CleanDivider()
                     CompactChoiceRow(
                         label = profile.title,
                         selected = draft.theme.profileThemes[profile]?.let { ThemePresets.of(it).displayName }
@@ -928,7 +922,7 @@ private fun LauncherEffectsReadoutCard(
         else -> "Precision (380 / 0.84)"
     }
 
-    StudioCard {
+    CleanSection {
         listOf(
             "COMPOSITION" to "${preset.displayName} · ${theme.clockSp.toInt()}sp",
             "DOCK SURFACE" to dockText,
@@ -937,7 +931,7 @@ private fun LauncherEffectsReadoutCard(
             "BACKDROP" to backdropText,
             "ICON PACK" to iconPackText
         ).forEachIndexed { index, (label, value) ->
-            if (index > 0) HorizontalDividerThin()
+            if (index > 0) CleanDivider()
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.labelSmall,
@@ -1003,23 +997,6 @@ private fun StudioSectionHeader(
             )
         }
     }
-}
-
-@Composable
-private fun StudioCard(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        content()
-    }
-}
-
-@Composable
-private fun HorizontalDividerThin() {
-    HorizontalDivider(
-        thickness = 0.6.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(start = 16.dp)
-    )
 }
 
 @Composable

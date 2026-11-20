@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
+import com.lumaos.pro.launcher.R
 
 /**
  * Accessibility grant behind Focus Protection's second enforcement layer.
@@ -73,6 +75,23 @@ object FocusAccess {
         // rather than offering a dead button.
         val fallback = Intent(Settings.ACTION_SETTINGS)
         return if (resolves(context, fallback)) fallback else null
+    }
+
+    /**
+     * Opens the system screen for granting or reviewing the accessibility
+     * service, or the general settings fallback [settingsIntent] chose. Shows
+     * the shared failure toast when nothing can be opened, so disclosure
+     * surfaces can hand their button straight to this helper.
+     */
+    fun openSettings(context: Context) {
+        val intent = settingsIntent(context)
+        if (intent == null) {
+            Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching { context.startActivity(intent) }.onFailure {
+            Toast.makeText(context, R.string.screen_unavailable, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun resolves(context: Context, intent: Intent): Boolean = runCatching {

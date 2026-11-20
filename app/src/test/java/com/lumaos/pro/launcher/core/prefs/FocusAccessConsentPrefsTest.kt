@@ -1,25 +1,16 @@
 package com.lumaos.pro.launcher.core.prefs
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lumaos.pro.launcher.backup.BackupCodec
 import com.lumaos.pro.launcher.context.ContextProfile
 import com.lumaos.pro.launcher.context.FocusAccessConsent
 import com.lumaos.pro.launcher.context.FocusAccessConsentRecord
 import com.lumaos.pro.launcher.context.FocusAccessConsentState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
-import java.nio.file.Files
 
 /**
  * Disclosure consent persistence, against a real DataStore file.
@@ -35,30 +26,6 @@ import java.nio.file.Files
 class FocusAccessConsentPrefsTest {
 
     private val now = 1_700_000_000_000L
-
-    private fun withDir(block: suspend (File) -> Unit) = runBlocking {
-        val dir = Files.createTempDirectory("luma-focus-consent").toFile()
-        try {
-            block(dir)
-        } finally {
-            dir.deleteRecursively()
-        }
-    }
-
-    private suspend fun <T> withStore(dir: File, block: suspend (LumaPrefs) -> T): T {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val prefs = LumaPrefs(
-                PreferenceDataStoreFactory.create(
-                    corruptionHandler = lumaosPrefsCorruptionHandler,
-                    scope = scope
-                ) { File(dir, "test.preferences_pb") }
-            )
-            return block(prefs)
-        } finally {
-            scope.coroutineContext[Job]!!.cancelAndJoin()
-        }
-    }
 
     @Test fun `first run has no answer and no consent`() = withDir { dir ->
         withStore(dir) { prefs ->

@@ -1,6 +1,5 @@
 package com.lumaos.pro.launcher.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,14 +38,11 @@ import androidx.compose.ui.window.Dialog
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.diagnostics.OptimizationEvent
 import com.lumaos.pro.launcher.diagnostics.Reading
-import com.lumaos.pro.launcher.diagnostics.StartupStats
 import com.lumaos.pro.launcher.diagnostics.describeMemory
 import com.lumaos.pro.launcher.diagnostics.formatBytes
 import com.lumaos.pro.launcher.intelligence.BatterySnapshot
 import com.lumaos.pro.launcher.intelligence.FrameStats
-import com.lumaos.pro.launcher.intelligence.IntelligenceState
 import com.lumaos.pro.launcher.intelligence.StartupTracker
-import com.lumaos.pro.launcher.optimizer.OptimizationResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

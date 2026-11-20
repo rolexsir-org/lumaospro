@@ -3,7 +3,6 @@ package com.lumaos.pro.launcher.vault.ui
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
-import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
 import android.view.Gravity
@@ -14,7 +13,6 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Space
 import com.lumaos.pro.launcher.vault.core.VaultPinPolicy
 import com.lumaos.pro.launcher.vault.core.VaultRecoveryCode
 import com.lumaos.pro.launcher.vault.platform.VaultBiometricGate

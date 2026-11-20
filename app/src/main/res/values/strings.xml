@@ -37,13 +37,9 @@
     <string name="home_remove_page">Remove empty home page</string>
     <string name="home_page_remove_empty">Move this page’s items elsewhere before removing it.</string>
     <string name="home_page_limit">You can have up to %1$d home pages.</string>
-    <string name="home_page_added">Page added</string>
-    <string name="home_page_removed">Page removed</string>
     <string name="home_move_to_page">Move to page %1$d</string>
     <string name="toast_home_page_no_space">That page does not have enough room.</string>
     <string name="drawer_close_description">Close app drawer</string>
-    <string name="drawer_alphabet_index_description">Alphabetical app index. Scroll to choose a letter.</string>
-    <string name="search_hint">Search apps</string>
     <string name="empty_no_apps">No apps found</string>
     <string name="drawer_loading_apps">Loading apps…</string>
     <string name="drawer_searching_apps">Searching apps…</string>
@@ -56,25 +52,16 @@
     <string name="action_add_to_home">Add to home</string>
     <string name="action_add_to_dock">Add to dock</string>
     <string name="action_remove_from_home">Remove from home</string>
-    <string name="action_rename_folder">Rename folder…</string>
-    <string name="action_merge_into_folder">Merge into folder with…</string>
-    <string name="action_remove_from_folder">Remove %1$s from folder</string>
     <string name="toast_added_to_dock">Added to dock</string>
     <string name="toast_added_to_home">Added to home</string>
     <string name="toast_app_unavailable">That app is no longer installed</string>
 
     <!-- Settings sections -->
     <string name="section_appearance">Appearance</string>
-    <string name="section_gestures">Gestures</string>
     <string name="section_performance">Performance</string>
     <string name="section_home_role">Default launcher</string>
     <string name="section_privacy">Privacy</string>
-    <string name="section_about">About</string>
 
-    <string name="pref_theme">Theme</string>
-    <string name="pref_theme_system">Follow system</string>
-    <string name="pref_theme_light">Light</string>
-    <string name="pref_theme_dark">Dark</string>
 
     <string name="pref_grid_columns">Home columns</string>
     <string name="pref_grid_rows">Home rows</string>
@@ -95,7 +82,6 @@
     <string name="profile_visual_desc">Richer transitions and larger caches. Uses more memory.</string>
     <string name="pref_profile_auto">Choose automatically from device capability</string>
     <string name="pref_profile_auto_detail">Automatic (currently %1$s tier: %2$d MB RAM, %3$d cores).</string>
-    <string name="profile_scope_note">Adjust LumaOS Pro’s own animation and icon-caching behavior.</string>
 
     <string name="pref_auto_optimize">Allow automatic maintenance</string>
     <string name="pref_auto_optimize_desc">Lets LumaOS Pro trim its own caches when they grow, subject to a cooldown.</string>
@@ -113,8 +99,6 @@
 
     <!-- Dashboard: card titles and labels -->
     <string name="dash_title">Diagnostics</string>
-    <string name="dash_measurements">Measurements</string>
-    <string name="dash_profile_card">Profile</string>
     <string name="dash_process_memory">LumaOS Pro process memory</string>
     <string name="dash_startup">Launcher start to populated home screen</string>
     <string name="dash_startup_none">No completed start recorded yet</string>
@@ -133,46 +117,21 @@
     <string name="dash_battery_charging_source">charging (%1$s)</string>
     <string name="dash_battery_current">%1$d mA</string>
     <string name="dash_profile">Active profile</string>
-    <string name="dash_device">Device capability</string>
     <string name="dash_device_summary">%1$s tier · %2$d MB RAM · %3$d cores</string>
-    <string name="dash_low_ram">The system classifies this as a low-RAM device.</string>
-    <string name="dash_engine">Engine</string>
-    <string name="dash_engine_active">Sampling (every %1$ds)</string>
-    <string name="dash_engine_paused">Paused — LumaOS Pro is not visible</string>
     <string name="dash_engine_note">No background work runs while LumaOS Pro is not visible.</string>
-    <string name="dash_recent_actions">Recent optimization actions</string>
     <string name="dash_history_loading">Loading recent activity…</string>
     <string name="dash_no_actions">No actions recorded yet.</string>
     <string name="dash_history_error">Couldn’t read recent activity. Tap to try again.</string>
 
     <!-- Dashboard: provenance badges -->
-    <string name="dash_measured">Measured</string>
-    <string name="dash_estimated">Estimate</string>
-    <string name="dash_unavailable">Unavailable</string>
-    <string name="dash_setting">Setting</string>
 
     <!-- Dashboard: maintenance -->
-    <string name="dash_actions_title">LumaOS Pro maintenance</string>
-    <string name="dash_actions_note">Every action below affects LumaOS Pro’s own memory, files or database. None of them stop other apps, clear other apps’ caches, or change system settings.</string>
-    <string name="dash_scope">Scope: %1$s</string>
-    <string name="dash_run_now">Run now</string>
-    <string name="opt_running">Running…</string>
     <string name="dash_took">Took %1$d ms</string>
     <string name="dash_freed"> · freed %1$s</string>
-    <string name="dash_pss_improved"> · measured reduction in PSS</string>
-    <string name="dash_pss_neutral"> · no measurable change in PSS</string>
     <string name="dash_reset_title">Reset optimizations?</string>
-    <string name="dash_reset_action">Reset</string>
-    <string name="opt_emergency_reset">Reset LumaOS Pro optimizations</string>
     <string name="opt_emergency_reset_desc">Restores the default profile and clears LumaOS Pro’s caches and optimization history. Your home layout, dock and settings are kept.</string>
 
     <!-- Dashboard: history -->
-    <string name="dash_completed">Completed</string>
-    <string name="dash_not_completed">Did not complete</string>
-    <string name="dash_triggered_by"> · triggered by %1$s</string>
-    <string name="dash_duration"> · %1$d ms</string>
-    <string name="dash_pss_lower"> · PSS %1$.1f MB lower</string>
-    <string name="dash_pss_higher"> · PSS %1$.1f MB higher</string>
 
     <!-- Home role -->
     <string name="role_status_default">LumaOS Pro is the default launcher</string>
@@ -180,15 +139,12 @@
     <string name="role_current_default">Current default: %1$s</string>
     <string name="role_set_default">Set as default launcher</string>
     <string name="role_switch_away">Switch to another launcher</string>
-    <string name="role_switch_away_desc">Opens the system launcher picker so you can hand the Home role back safely. LumaOS Pro stays installed and your settings are kept.</string>
 
     <!-- Privacy -->
     <string name="privacy_summary">LumaOS Pro reads app names and icons to build your launcher and stores preferences, home layouts, launch history and diagnostics locally. Android backup may transfer your settings and layouts; device-to-device transfer can include diagnostics history. If you use voice commands, Android hands audio to the speech-recognition app on your device, which may process it on-device or remotely under its own privacy policy. LumaOS Pro receives recognized text to carry out the command and does not retain transcripts. Wallpaper photos you choose are copied privately and excluded from backup. The optional music widget asks for notification access; Android grants access to all notifications, but Luma uses it only for media sessions and does not read or store notification contents. The optional Stronger blocking toggle asks for accessibility access; Luma observes only which app enters the foreground during a Work or Study session, with screen-content retrieval disabled, and does not read or store anything else. The widget host may cache displayed media details. LumaOS Pro has no account, analytics, advertising SDK, app server or app network permission and does not send this data itself.</string>
 
-    <string name="about_version">Version %1$s (%2$d)</string>
 
     <!-- Common -->
-    <string name="common_ok">OK</string>
     <string name="common_cancel">Cancel</string>
 
     <!-- LumaOS Vault (see app/src/main/java/com/lumaos/pro/launcher/vault) -->

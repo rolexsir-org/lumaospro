@@ -2,10 +2,8 @@ package com.lumaos.pro.launcher.vault.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.hardware.camera2.CameraCaptureSession

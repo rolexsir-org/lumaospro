@@ -13,7 +13,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.vault.core.VaultItem
 import com.lumaos.pro.launcher.vault.core.VaultSession
 import com.lumaos.pro.launcher.vault.platform.VaultLifecycleGuard
