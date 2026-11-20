@@ -430,6 +430,15 @@
                 </LinearLayout>
 
                 <ImageButton
+                    android:id="@+id/drawer_options"
+                    android:layout_width="@dimen/luma_min_touch_target"
+                    android:layout_height="@dimen/luma_min_touch_target"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/drawer_options_description"
+                    android:padding="@dimen/luma_space_sm"
+                    android:src="@drawable/ic_rx_more" />
+
+                <ImageButton
                     android:id="@+id/drawer_close"
                     android:layout_width="@dimen/luma_min_touch_target"
                     android:layout_height="@dimen/luma_min_touch_target"

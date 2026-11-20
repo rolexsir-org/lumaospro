@@ -115,3 +115,35 @@ XML parsing and `git diff --check` passed, but no build, test suite, physical
 device inspection, performance validation, or genuine screenshots can be
 claimed. Run both Gradle commands and validate the drawer on a physical device
 before release.
+
+## PR 42 correction review (2026-11-20)
+
+This supersedes the previous revision's description of discarded curated rows
+and shortcut results. Pins appear first in saved per-context order, followed by
+real recents/suggestions when learning is enabled; remaining apps follow the
+saved sort. Keys are deduplicated against the visible all-app collection, with
+Android user serial included, so personal and work copies stay distinct. Search
+keeps matching shortcuts as cells in the same grid, and the long-press app menu
+continues to expose personal-profile shortcuts. The current shortcut repository
+queries the personal Android user only; a work-profile drawer app is not offered
+a personal user's shortcut. External web/store searches, sorting and voice
+commands are available in a single drawer options menu. The home voice control
+and configurable voice gesture also remain available.
+
+The old list/category preferences and pinned/history data are left in storage;
+the drawer settings no longer offer ineffective list/category controls and
+explain the unified layout. Column, text scale and icon size settings still
+apply. The drawer intentionally uses native icons (including LauncherApps work
+badges), while icon treatments still apply to the home screen. Learning disabled
+continues to disable history-derived recency and usage scoring. Sorting applies
+after the curated leading apps. No database migration or permissions changed.
+
+Validation in this sandbox: Kotlin 2.2.21 with a small JUnit-compatible assertion
+shim ran 20 pure drawer-model/projection checks successfully. This is not the
+Gradle unit suite, a UI test, or proof of work-profile rendering on a device.
+Both requested Gradle tasks were attempted using a Java 17 runtime obtained from
+PyPI, but the wrapper could not download Gradle from services.gradle.org (TLS
+handshake blocked); Android SDK downloads from dl.google.com are also blocked.
+No adb, physical device, or emulator is attached. The Robolectric additions,
+real build, interaction checks, actual icon/badge rendering, and screenshots
+remain unvalidated and must be completed on a properly provisioned device/CI.

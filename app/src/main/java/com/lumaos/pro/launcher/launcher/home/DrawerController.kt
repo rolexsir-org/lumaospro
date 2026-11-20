@@ -15,7 +15,6 @@ import android.widget.TextView
 import android.graphics.drawable.GradientDrawable
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
-import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
 import com.lumaos.pro.launcher.launcher.model.DrawerRow
@@ -65,10 +64,8 @@ class DrawerController(
         fun onDrawerClosed()
         fun onQueryChanged(query: String)
         fun onFilterSelected(filter: DrawerFilter)
-        fun onSortSelected(sort: DrawerSort)
         fun launchFirst(rows: List<DrawerRow>): Boolean
         fun retryApps()
-        fun showSortMenu(anchor: View, current: DrawerSort)
     }
 
     /** Current shared glass recipes, refreshed on every theme/effects change. */
@@ -293,9 +290,9 @@ class DrawerController(
             }
         }
         subtitle.text = if (query.isBlank()) {
-            context.resources.getQuantityString(R.plurals.drawer_app_count, output.appCount, output.appCount)
+            context.resources.getQuantityString(R.plurals.drawer_app_count, projected.appCount, projected.appCount)
         } else {
-            context.resources.getQuantityString(R.plurals.drawer_result_count, output.appCount, output.appCount)
+            context.resources.getQuantityString(R.plurals.drawer_result_count, projected.rows.size, projected.rows.size)
         }
     }
 

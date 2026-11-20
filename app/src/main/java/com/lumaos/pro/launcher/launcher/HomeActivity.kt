@@ -960,6 +960,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         shade = LumaShade(this, homeRoot, lifecycleScope, this)
 
         findViewById<View>(R.id.drawer_close).setOnClickListener { drawer.close() }
+        findViewById<View>(R.id.drawer_options).setOnClickListener { showDrawerOptions(it) }
         findViewById<View>(R.id.home_search).setOnClickListener { drawer.open(focusSearch = true) }
         findViewById<View>(R.id.home_settings).setOnClickListener { openSettings() }
         searchPill.setOnClickListener { drawer.open(focusSearch = true) }
@@ -1705,6 +1706,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         bind(R.id.search_pill_icon, R.drawable.ic_rx_search)
         bind(R.id.search_pill_voice, R.drawable.ic_rx_voice)
         bind(R.id.edit_remove_target, R.drawable.ic_rx_remove)
+        bind(R.id.drawer_options, R.drawable.ic_rx_more)
         bind(R.id.drawer_close, R.drawable.ic_rx_close)
         bind(R.id.search_clear, R.drawable.ic_rx_close)
     }
@@ -1814,6 +1816,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val sheetColors = glass[GlassRole.SHEET].rest
         val drawerContent = if (t.isDark) ObsidianStyle.CONTENT else sheetColors.content
         val drawerMuted = if (t.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
+        findViewById<ImageButton>(R.id.drawer_options).imageTintList = ColorStateList.valueOf(drawerContent)
         findViewById<ImageButton>(R.id.drawer_close).imageTintList = ColorStateList.valueOf(drawerContent)
 
         val cellCorner = t.iconTileRadiusDp * d
@@ -2500,7 +2503,6 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun retryApps() = viewModel.refreshApps()
     override fun onQueryChanged(query: String) = viewModel.setQuery(query)
     override fun onFilterSelected(filter: DrawerFilter) = viewModel.setFilter(filter)
-    override fun onSortSelected(sort: DrawerSort) = viewModel.setSort(sort)
 
     override fun launchFirst(rows: List<DrawerRow>): Boolean {
         val first = rows.firstOrNull { it is DrawerRow.App || it is DrawerRow.Shortcut } ?: return false
@@ -2508,13 +2510,39 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         return true
     }
 
-    override fun showSortMenu(anchor: View, current: DrawerSort) {
-        val entries = listOf(
+    /** Menu entries are built from the current model, never a stale search. */
+    internal fun drawerOptions(query: String, current: DrawerSort, output: com.lumaos.pro.launcher.launcher.model.DrawerModel.Output): List<MenuEntry> {
+        val entries = mutableListOf(
             MenuEntry(DrawerSort.ALPHABETICAL.ordinal, getString(R.string.sort_alpha), if (current == DrawerSort.ALPHABETICAL) R.drawable.ic_rx_done else null),
             MenuEntry(DrawerSort.MOST_USED.ordinal, getString(R.string.sort_usage), if (current == DrawerSort.MOST_USED) R.drawable.ic_rx_done else null),
-            MenuEntry(DrawerSort.NEWEST.ordinal, getString(R.string.sort_newest), if (current == DrawerSort.NEWEST) R.drawable.ic_rx_done else null)
+            MenuEntry(DrawerSort.NEWEST.ordinal, getString(R.string.sort_newest), if (current == DrawerSort.NEWEST) R.drawable.ic_rx_done else null),
+            MenuEntry(100, getString(R.string.drawer_voice_option), R.drawable.ic_rx_voice, group = 1)
         )
-        menu().show(anchor, getString(R.string.sort_title), entries) { viewModel.setSort(DrawerSort.entries[it.id]) }
+        val actions = if (query.isNotEmpty() && output.query == query) {
+            output.rows.filterIsInstance<DrawerRow.Action>()
+        } else emptyList()
+        actions.forEach { action ->
+            val (id, label, icon) = when (action.action) {
+                DrawerAction.WEB_SEARCH -> Triple(101, getString(R.string.search_web_for, query), R.drawable.ic_rx_web)
+                DrawerAction.PLAY_STORE -> Triple(102, getString(R.string.search_store_for, query), R.drawable.ic_rx_store)
+            }
+            entries += MenuEntry(id, label, icon, group = 2)
+        }
+        return entries
+    }
+
+    private fun showDrawerOptions(anchor: View) {
+        val query = searchField.text.toString().trim()
+        val entries = drawerOptions(query, viewModel.drawerSort.value, viewModel.drawer.value)
+        drawer.hideKeyboard()
+        menu().show(anchor, getString(R.string.drawer_options_description), entries) { entry ->
+            when (entry.id) {
+                in 0 until DrawerSort.entries.size -> viewModel.setSort(DrawerSort.entries[entry.id])
+                100 -> launchVoiceCommand()
+                101 -> onDrawerRowClick(DrawerRow.Action(DrawerAction.WEB_SEARCH, query), anchor)
+                102 -> onDrawerRowClick(DrawerRow.Action(DrawerAction.PLAY_STORE, query), anchor)
+            }
+        }
     }
 
     // ---------------------------------------------------------- LumaShade.Host
@@ -2940,7 +2968,11 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     /** App menu: the app's own shortcuts (when Android allows), then LumaOS Pro actions. */
     private fun showAppMenu(key: ComponentKey, label: String, anchor: View, context: MenuContext, position: Int) {
         val entries = ArrayList<MenuEntry>()
-        val shortcuts = if (core.shortcuts.hasAccess()) core.shortcuts.shortcutsFor(key.packageName) else emptyList()
+        // ShortcutRepository currently queries only the personal Android profile;
+        // never attach those shortcuts to a work-profile drawer copy of the app.
+        val shortcuts = if ((context != MenuContext.DRAWER || key.userSerial == 0L) && core.shortcuts.hasAccess()) {
+            core.shortcuts.shortcutsFor(key.packageName)
+        } else emptyList()
         shortcuts.forEachIndexed { i, sc ->
             entries += MenuEntry(M_SHORTCUT_BASE + i, sc.label, icon = core.shortcuts.icon(sc, density), group = 0)
         }

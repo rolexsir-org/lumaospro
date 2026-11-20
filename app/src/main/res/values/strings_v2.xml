@@ -36,6 +36,10 @@
     <string name="obsidian_overview_empty">Your favourites and recently opened apps appear here. Open the app library to explore.</string>
     <string name="drawer_search_hint">Search your apps</string>
     <string name="drawer_sort_description">Sort apps</string>
+    <string name="drawer_options_description">App drawer options</string>
+    <string name="drawer_voice_option">Voice command</string>
+    <string name="drawer_unified_note">Apps share one grid with their original icons. Pins and recent apps appear first; sorting applies to the remaining apps. Previous list and category preferences remain saved.</string>
+    <string name="drawer_shortcut_description">%1$s, %2$s shortcut</string>
     <string name="drawer_chip_all">All</string>
     <string name="drawer_chip_frequent">Frequent</string>
     <string name="drawer_chip_selected">%1$s, selected</string>
@@ -255,7 +259,7 @@
     <string name="pref_drawer_categories">Category chips</string>
     <string name="pref_drawer_categories_desc">Uses the category each app declares. Apps without one are listed under Other.</string>
     <string name="pref_suggestions">Learn from my launches</string>
-    <string name="pref_suggestions_desc">Recently opened apps, suggestions, Frequent, Most used sorting and smart folders use launches made through LumaOS Pro only. Stored on this device, never sent anywhere.</string>
+    <string name="pref_suggestions_desc">Recently opened apps, suggestions, Most used sorting and smart folders use launches made through LumaOS Pro only. Stored on this device, never sent anywhere.</string>
     <string name="pref_clear_history">Clear launch history</string>
     <string name="pref_history_cleared">Launch history cleared</string>
     <string name="hidden_moved_title">Hidden Apps moved into the Vault</string>
