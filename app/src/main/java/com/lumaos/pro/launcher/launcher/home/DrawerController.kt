@@ -318,29 +318,24 @@ class DrawerController(
         val sheetColors = sheetSpec.rest
         val searchColors = searchSpec.rest
 
-        if (theme.isDark) {
-            sheet.background = ThemedDrawables.topRounded(ObsidianStyle.BACKGROUND, dp(24f).toFloat())
-            sheet.elevation = dp(12f).toFloat()
-            sheet.clipToOutline = false
-            searchField.background = ThemedDrawables.surface(ObsidianStyle.SURFACE, dp(14f).toFloat(), ObsidianStyle.EDGE, dp(1f).coerceAtLeast(1))
-            searchField.clipToOutline = false
-            searchField.elevation = 0f
-        } else {
-            GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
-            GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
-        }
+        // The sheet and search field always use the theme's glass material, so
+        // every theme - light, dark or custom - reads as intentionally designed
+        // rather than a fixed dark surface. The same material grammar the home
+        // screen uses (GlassRole.SHEET / SEARCH) drives blur, elevation and edge.
+        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
+        GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
         // Keep home screen visible and progressively blurred behind the glass drawer sheet.
-        // The theme's own scrim tone: black on dark themes, warm ink on Ivory,
-        // so a light drawer never sits over a muddy grey veil.
+        // The theme's own scrim tone (black on dark themes, warm ink on Ivory)
+        // keeps text legible over the backdrop for every theme.
         scrim.setBackgroundColor(ColorMath.withAlpha(ColorMath.opaque(c.scrim), if (theme.isDark) 0.28f else 0.16f))
         handle.background = GradientDrawable().apply {
-            setColor(if (theme.isDark) ObsidianStyle.EDGE else sheetColors.edgeTop)
+            setColor(sheetColors.edgeTop)
             cornerRadius = dp(2f).toFloat()
         }
-        val content = if (theme.isDark) ObsidianStyle.CONTENT else sheetColors.content
-        val muted = if (theme.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
-        val searchContent = if (theme.isDark) ObsidianStyle.CONTENT else searchColors.content
-        val searchMuted = if (theme.isDark) ObsidianStyle.MUTED_DARK else searchColors.muted
+        val content = sheetColors.content
+        val muted = sheetColors.muted
+        val searchContent = searchColors.content
+        val searchMuted = searchColors.muted
         searchField.setTextColor(searchContent)
         searchField.setHintTextColor(searchMuted)
         clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchMuted)
@@ -351,9 +346,9 @@ class DrawerController(
             searchField.setCompoundDrawablesRelative(d, null, null, null)
         }
         val eyebrow = sheet.findViewById<TextView>(R.id.drawer_eyebrow)
-        // A small, constant blue signature; all functional surfaces keep their
-        // theme-derived contrast and the user's chosen accent.
-        eyebrow.setTextColor(if (theme.isDark) ObsidianStyle.BLUE_DARK else ObsidianStyle.BLUE_LIGHT)
+        // The eyebrow carries the active theme's accent so it stays in step with
+        // every other themed surface instead of a fixed signature colour.
+        eyebrow.setTextColor(c.accent)
         eyebrow.typeface = Typefaces.label(theme.typography)
         title.setTextColor(content)
         title.typeface = Typefaces.title(theme.typography)
