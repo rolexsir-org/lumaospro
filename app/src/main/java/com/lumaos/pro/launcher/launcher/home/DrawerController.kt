@@ -353,6 +353,10 @@ class DrawerController(
         title.setTextColor(content)
         title.typeface = Typefaces.title(theme.typography)
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, maxOf(26f, theme.typeScale.screenTitle))
+        // The drawer header names the active theme rather than a fixed word, so
+        // it stays truthful for every LumaOS theme (Obsidian, Ivory, Signature,
+        // Atmosphere, Monolith, Luma Glass, Luma Mono) and updates on switch.
+        title.text = theme.displayName
         val architectural = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH ||
             theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO
         title.isAllCaps = architectural

@@ -41,7 +41,6 @@
     <string name="home_page_removed">Page removed</string>
     <string name="home_move_to_page">Move to page %1$d</string>
     <string name="toast_home_page_no_space">That page does not have enough room.</string>
-    <string name="drawer_title">Obsidian</string>
     <string name="drawer_close_description">Close app drawer</string>
     <string name="drawer_alphabet_index_description">Alphabetical app index. Scroll to choose a letter.</string>
     <string name="search_hint">Search apps</string>
