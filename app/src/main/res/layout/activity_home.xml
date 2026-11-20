@@ -390,7 +390,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginTop="@dimen/luma_space_xs"
+                android:layout_marginTop="16dp"
                 android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -400,6 +400,16 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/drawer_eyebrow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="4dp"
+                        android:importantForAccessibility="no"
+                        android:text="@string/drawer_eyebrow"
+                        android:textSize="10sp"
+                        android:letterSpacing="0.14" />
 
                     <TextView
                         android:id="@+id/drawer_title"
@@ -447,23 +457,25 @@
                     android:src="@drawable/ic_rx_close" />
             </LinearLayout>
 
-            <!-- Drawer search capsule: 44dp height, 16dp horizontal padding, 24dp screen margins -->
+            <!-- OBSIDIAN search field -->
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/luma_search_bar_height"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
                 android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginTop="@dimen/luma_space_xs"
+                android:layout_marginTop="20dp"
                 android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
-                android:layout_marginBottom="@dimen/luma_space_xs">
+                android:layout_marginBottom="8dp">
 
                 <EditText
                     android:id="@+id/search_field"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="56dp"
                     android:autofillHints="false"
                     android:background="@drawable/bg_search_field"
                     android:drawablePadding="@dimen/luma_space_sm"
-                    android:hint="@string/search_hint"
+                    android:hint="@string/drawer_search_hint"
                     android:imeOptions="actionGo|flagNoFullscreen"
                     android:importantForAutofill="no"
                     android:inputType="text|textNoSuggestions"
@@ -485,6 +497,40 @@
                     android:src="@drawable/ic_rx_close"
                     android:visibility="gone" />
             </FrameLayout>
+
+            <!-- One-tap overview/library navigation; category chips remain independent. -->
+            <LinearLayout
+                android:id="@+id/drawer_pages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/luma_screen_margin_horizontal"
+                android:layout_marginEnd="@dimen/luma_screen_margin_horizontal"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/drawer_overview"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:text="@string/obsidian_overview"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/drawer_library"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:text="@string/obsidian_library"
+                    android:textSize="13sp" />
+            </LinearLayout>
 
             <HorizontalScrollView
                 android:id="@+id/drawer_chips_scroll"

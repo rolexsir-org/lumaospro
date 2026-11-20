@@ -5,8 +5,8 @@
     android:layout_height="wrap_content"
     android:fontFamily="@font/inter_semibold"
     android:paddingStart="@dimen/luma_space_xxs"
-    android:paddingTop="@dimen/luma_space_md"
+    android:paddingTop="24dp"
     android:paddingEnd="@dimen/luma_space_xxs"
-    android:paddingBottom="@dimen/luma_space_xs"
+    android:paddingBottom="12dp"
     android:textAppearance="@style/TextAppearance.Luma.Label"
     android:textSize="@dimen/luma_type_section_header" />

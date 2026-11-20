@@ -96,10 +96,13 @@ object DrawerModel {
         /** Apps the current view contains (for the header count). */
         val appCount: Int,
         /** The trimmed query that produced these rows, to avoid acting on stale results. */
-        val query: String = ""
+        val query: String = "",
+        /** Filter that produced the rows, used by the presentation projection. */
+        val filter: DrawerFilter = DrawerFilter.All
     )
 
     const val SECTION_PINNED = "pinned"
+    const val SECTION_RECENT = "recent"
     const val SECTION_SUGGESTED = "suggested"
     const val SECTION_ALL = "all"
     const val SECTION_RESULTS = "results"
@@ -153,7 +156,7 @@ object DrawerModel {
                 if (input.webSearchAvailable) rows += DrawerRow.Action(DrawerAction.WEB_SEARCH, query)
                 if (input.storeAvailable) rows += DrawerRow.Action(DrawerAction.PLAY_STORE, query)
             }
-            return Output(rows, emptyList(), matches.size, query)
+            return Output(rows, emptyList(), matches.size, query, input.filter)
         }
 
         val eligible: (ComponentKey) -> Boolean = { it in visibleKeys && it in installed }
@@ -177,6 +180,14 @@ object DrawerModel {
             pinnedApps.mapTo(rows) { DrawerRow.App(it, SECTION_PINNED) }
         }
         if (input.filter == DrawerFilter.All && input.suggestionsEnabled) {
+            // Use the same opt-in, local-only history as suggestions. Pinned apps
+            // already have a prominent home here, so don't repeat them in Recent.
+            val recent = Frecency.recent(records, { eligible(it) && it !in pinnedKeys }, input.suggestionCount)
+                .mapNotNull { byKey[it] }
+            if (recent.isNotEmpty()) {
+                rows += DrawerRow.Header(SECTION_RECENT, "Recent")
+                recent.mapTo(rows) { DrawerRow.App(it, SECTION_RECENT) }
+            }
             val suggested = Frecency.suggestions(
                 records, input.nowMillis, input.hourOfDay,
                 { eligible(it) && it !in pinnedKeys }, input.suggestionCount
@@ -193,7 +204,7 @@ object DrawerModel {
         val buckets = if (input.sort == DrawerSort.ALPHABETICAL && input.filter !is DrawerFilter.Frequent) {
             AppMatcher.buckets(sorted).map { (c, i) -> c to i + firstAppRow }
         } else emptyList()
-        return Output(rows, buckets, sorted.size)
+        return Output(rows, buckets, sorted.size, filter = input.filter)
     }
 
     fun sort(apps: List<AppEntry>, sort: DrawerSort, history: Collection<LaunchRecord>, now: Long): List<AppEntry> =

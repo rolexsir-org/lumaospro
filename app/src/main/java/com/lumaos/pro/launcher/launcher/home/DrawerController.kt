@@ -23,6 +23,8 @@ import com.lumaos.pro.launcher.core.apps.DrawerSort
 import com.lumaos.pro.launcher.launcher.model.DrawerFilter
 import com.lumaos.pro.launcher.launcher.model.DrawerModel
 import com.lumaos.pro.launcher.launcher.model.DrawerRow
+import com.lumaos.pro.launcher.launcher.model.ObsidianPage
+import com.lumaos.pro.launcher.launcher.model.ObsidianProjection
 import com.lumaos.pro.launcher.launcher.view.AlphaIndexView
 import com.lumaos.pro.launcher.motion.LumaHaptics
 import com.lumaos.pro.launcher.motion.LumaSpring
@@ -96,6 +98,21 @@ class DrawerController(
     private var currentRows: List<DrawerRow> = emptyList()
     private var observedQuery = searchField.text?.toString().orEmpty()
     private var retryAvailable = false
+    private val pageBar: View = sheet.findViewById(R.id.drawer_pages)
+    private val overviewButton: TextView = sheet.findViewById(R.id.drawer_overview)
+    private val libraryButton: TextView = sheet.findViewById(R.id.drawer_library)
+    var page: ObsidianPage = ObsidianPage.OVERVIEW
+        private set
+    private var waitingForAll = false
+    private var activeFilter: DrawerFilter = DrawerFilter.All
+    // Suppress out-of-order background model emissions after a user changes filters.
+    private var expectedFilter: DrawerFilter? = null
+    private var renderGeneration = 0
+    private data class Submission(
+        val output: DrawerModel.Output, val adapter: DrawerAdapter,
+        val loading: Boolean, val query: String, val refreshFailed: Boolean
+    )
+    private var lastSubmission: Submission? = null
     var currentSort: DrawerSort = DrawerSort.ALPHABETICAL
 
     private val spring = SpringAnimator(0f, valueThreshold = 0.0015f) { p -> applyProgress(p) }
@@ -119,6 +136,7 @@ class DrawerController(
                     updateRetryAvailability(false)
                 }
                 clearButton.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
+                pageBar.visibility = if (q.isBlank()) View.VISIBLE else View.GONE
                 host.onQueryChanged(q)
                 chipsScroll.visibility = if (q.isBlank() && chips.childCount > 1) View.VISIBLE else View.GONE
             }
@@ -152,6 +170,17 @@ class DrawerController(
         emptyView.isClickable = false
         emptyView.isFocusable = false
         sortButton.setOnClickListener { host.showSortMenu(it, currentSort) }
+        listOf(overviewButton, libraryButton).forEach { button ->
+            androidx.core.view.ViewCompat.setAccessibilityDelegate(button, object : androidx.core.view.AccessibilityDelegateCompat() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = android.widget.Button::class.java.name
+                }
+            })
+        }
+        overviewButton.setOnClickListener { selectPage(ObsidianPage.OVERVIEW) }
+        libraryButton.setOnClickListener { selectPage(ObsidianPage.LIBRARY) }
+        stylePages()
     }
 
     private fun sheetTravel(): Float {
@@ -163,6 +192,13 @@ class DrawerController(
         progress = p
         val clamped = p.coerceIn(0f, 1f)
         sheet.translationY = (1f - p) * sheetTravel()
+        // A single, reversible transform follows the drag and spring. No per-row
+        // effects or extra animator are needed; reduced motion omits the scale.
+        sheet.pivotX = sheet.width / 2f
+        sheet.pivotY = sheet.height.toFloat()
+        val scale = if (host.motion().reduced) 1f else 0.985f + 0.015f * clamped
+        sheet.scaleX = scale
+        sheet.scaleY = scale
         scrim.alpha = clamped
         host.onDrawerProgress(clamped)
         if (p <= 0.0005f && !isOpen && !spring.isRunning) finishClose()
@@ -225,8 +261,17 @@ class DrawerController(
         staggerCancel?.run()
         staggerCancel = null
         container.visibility = View.GONE
+        page = ObsidianPage.OVERVIEW
+        activeFilter = DrawerFilter.All
+        expectedFilter = DrawerFilter.All
+        waitingForAll = false
+        renderGeneration++
+        stylePages()
         if (searchField.text.isNotEmpty()) searchField.setText("")
         host.onFilterSelected(DrawerFilter.All)
+        lastSubmission?.takeIf { it.output.filter == DrawerFilter.All && it.output.query.isBlank() }?.let {
+            submit(it.output, it.adapter, it.loading, it.query, it.refreshFailed)
+        }
         grid.scrollToPosition(0)
         host.onDrawerClosed()
     }
@@ -276,6 +321,54 @@ class DrawerController(
 
     // ------------------------------------------------------------- content
 
+    /** Restores only this transient presentation, never changes saved user data. */
+    fun restorePage(saved: String?) {
+        page = ObsidianPage.entries.firstOrNull { it.name == saved } ?: ObsidianPage.OVERVIEW
+        stylePages()
+    }
+
+    private fun selectPage(target: ObsidianPage) {
+        page = target
+        expectedFilter = DrawerFilter.All
+        hideKeyboard()
+        val last = lastSubmission
+        waitingForAll = last != null && last.output.filter != DrawerFilter.All
+        activeFilter = DrawerFilter.All
+        stylePages()
+        host.onFilterSelected(DrawerFilter.All)
+        grid.scrollToPosition(0)
+        if (waitingForAll) {
+            // Never display the previous collection under the library tab.
+            renderGeneration++
+            currentRows = emptyList()
+            buckets = emptyList()
+            setIndexVisible(false)
+            grid.visibility = View.INVISIBLE
+            emptyView.visibility = View.VISIBLE
+            emptyView.text = context.getString(R.string.drawer_loading_apps)
+        } else if (last != null) {
+            submit(last.output, last.adapter, last.loading, last.query, last.refreshFailed)
+        }
+    }
+
+    private fun stylePages() {
+        val dark = host.theme().isDark
+        val active = if (dark) ObsidianStyle.BLUE_DARK else ObsidianStyle.BLUE_LIGHT
+        val muted = if (dark) ObsidianStyle.MUTED_DARK else host.theme().colors.onSurfaceMuted
+        listOf(overviewButton to ObsidianPage.OVERVIEW, libraryButton to ObsidianPage.LIBRARY).forEach { (view, item) ->
+            val chosen = item == page && !waitingForAll && activeFilter == DrawerFilter.All
+            view.isSelected = chosen
+            view.typeface = if (chosen) Typefaces.title(host.theme().typography) else Typefaces.label(host.theme().typography)
+            view.setTextColor(if (chosen) active else muted)
+            view.background = ThemedDrawables.ripple(
+                ColorMath.withAlpha(active, 0.16f),
+                if (chosen) ThemedDrawables.surface(ColorMath.withAlpha(active, 0.10f), dp(10f).toFloat()) else null,
+                dp(10f).toFloat()
+            )
+            view.contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, view.text) else view.text
+        }
+    }
+
     fun submit(
         output: DrawerModel.Output,
         adapter: DrawerAdapter,
@@ -283,23 +376,29 @@ class DrawerController(
         query: String,
         refreshFailed: Boolean = false
     ) {
-        // combine() can briefly pair a new query with the previous model. Wait
-        // for matching results and for the adapter's diff to actually commit.
-        if (output.query != query.trim()) return
-        adapter.submitList(output.rows) {
-            if (searchField.text.toString().trim() != output.query) return@submitList
-            currentRows = output.rows
-            buckets = output.buckets
-            alphaIndex.letters = output.buckets.map { it.first }
-            setIndexVisible(output.buckets.size > 3 && query.isBlank())
+        if (output.query != query.trim() || searchField.text.toString().trim() != output.query) return
+        if (expectedFilter != null && output.filter != expectedFilter) return
+        if (waitingForAll && output.filter != DrawerFilter.All) return
+        if (waitingForAll) { waitingForAll = false; stylePages() }
+        lastSubmission = Submission(output, adapter, loading, query, refreshFailed)
+        val projected = ObsidianProjection.project(output, page)
+        val generation = ++renderGeneration
+        adapter.submitList(projected.rows) {
+            if (generation != renderGeneration || searchField.text.toString().trim() != output.query) return@submitList
+            currentRows = projected.rows
+            buckets = projected.buckets
+            alphaIndex.letters = projected.buckets.map { it.first }
+            setIndexVisible(projected.buckets.size > 3 && query.isBlank())
             grid.visibility = View.VISIBLE
-            val empty = output.rows.isEmpty()
+            val empty = projected.rows.isEmpty()
             emptyView.visibility = if (empty) View.VISIBLE else View.GONE
             updateRetryAvailability(empty && !loading && refreshFailed)
             emptyView.text = when {
                 loading -> context.getString(R.string.drawer_loading_apps)
                 refreshFailed -> context.getString(R.string.drawer_retry_apps)
                 query.isNotBlank() -> context.getString(R.string.empty_no_results, query)
+                output.filter == DrawerFilter.All && page == ObsidianPage.OVERVIEW && output.appCount > 0 ->
+                    context.getString(R.string.obsidian_overview_empty)
                 else -> context.getString(R.string.empty_no_apps)
             }
         }
@@ -324,7 +423,14 @@ class DrawerController(
     fun bindChips(categories: List<DrawerCategory>, selected: DrawerFilter, showFrequent: Boolean, enabled: Boolean) {
         chips.removeAllViews()
         val visibleFilter = DrawerModel.availableFilter(selected, categories, enabled, showFrequent)
-        if (visibleFilter != selected) host.onFilterSelected(visibleFilter)
+        if (visibleFilter != selected) {
+            expectedFilter = visibleFilter
+            activeFilter = visibleFilter
+            host.onFilterSelected(visibleFilter)
+        } else if (expectedFilter == null || expectedFilter == selected) {
+            activeFilter = selected
+        }
+        stylePages()
 
         // The setting controls category chips only. Keep All and Frequent
         // available so hiding categories never strands the user in a filtered view.
@@ -333,7 +439,6 @@ class DrawerController(
         if (showFrequent) entries += context.getString(R.string.drawer_chip_frequent) to DrawerFilter.Frequent
         if (enabled) categories.forEach { entries += it.title to DrawerFilter.Category(it) }
         val theme = host.theme()
-        val c = theme.colors
         for ((label, filter) in entries) {
             val chosen = filter == visibleFilter
             chips.addView(TextView(context).apply {
@@ -352,12 +457,38 @@ class DrawerController(
                     theme.typography.label.family == com.lumaos.pro.launcher.ui.theme.FontFamilyId.SYSTEM_MONO
                 // One chip grammar across the launcher: quiet pill at rest,
                 // accent-filled when selected (see GlassViews.chip).
-                setTextColor(GlassViews.chipText(theme, chosen))
-                background = GlassViews.chip(theme, chosen, density)
+                setTextColor(if (theme.isDark) {
+                    if (chosen) ObsidianStyle.BLUE_DARK else ObsidianStyle.MUTED_DARK
+                } else GlassViews.chipText(theme, chosen))
+                background = if (theme.isDark) {
+                    val fill = if (chosen) 0xFF20314A.toInt() else ObsidianStyle.SURFACE
+                    android.graphics.drawable.InsetDrawable(
+                        ThemedDrawables.ripple(0x3386BAFF, ThemedDrawables.surface(fill, dp(10f).toFloat()), dp(10f).toFloat()),
+                        0, dp(7f), 0, dp(7f)
+                    )
+                } else GlassViews.chip(theme, chosen, density)
                 if (chosen) typeface = Typefaces.title(theme.typography)
                 isSelected = chosen
                 contentDescription = if (chosen) context.getString(R.string.drawer_chip_selected, label) else label
-                setOnClickListener { host.onFilterSelected(filter) }
+                setOnClickListener {
+                    activeFilter = filter
+                    expectedFilter = filter
+                    waitingForAll = false
+                    stylePages()
+                    val previous = lastSubmission
+                    if (previous?.output?.filter == filter && previous.query == searchField.text.toString().trim()) {
+                        submit(previous.output, previous.adapter, previous.loading, previous.query, previous.refreshFailed)
+                    } else {
+                        renderGeneration++
+                        currentRows = emptyList()
+                        buckets = emptyList()
+                        setIndexVisible(false)
+                        grid.visibility = View.INVISIBLE
+                        emptyView.visibility = View.VISIBLE
+                        emptyView.text = context.getString(R.string.drawer_loading_apps)
+                    }
+                    host.onFilterSelected(filter)
+                }
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48f)).apply {
                     marginEnd = dp(8f)
                 }
@@ -388,39 +519,58 @@ class DrawerController(
         val sheetColors = sheetSpec.rest
         val searchColors = searchSpec.rest
 
-        GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
-        GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
+        if (theme.isDark) {
+            sheet.background = ThemedDrawables.topRounded(ObsidianStyle.BACKGROUND, dp(24f).toFloat())
+            sheet.elevation = dp(12f).toFloat()
+            sheet.clipToOutline = false
+            searchField.background = ThemedDrawables.surface(ObsidianStyle.SURFACE, dp(14f).toFloat(), ObsidianStyle.EDGE, dp(1f).coerceAtLeast(1))
+            searchField.clipToOutline = false
+            searchField.elevation = 0f
+        } else {
+            GlassViews.apply(sheet, sheetSpec, density, ripple = false, clipToOutline = false, depth = LumaTokens.depthDrawer)
+            GlassViews.apply(searchField, searchSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthDrawer)
+        }
         // Keep home screen visible and progressively blurred behind the glass drawer sheet.
         // The theme's own scrim tone: black on dark themes, warm ink on Ivory,
         // so a light drawer never sits over a muddy grey veil.
         scrim.setBackgroundColor(ColorMath.withAlpha(ColorMath.opaque(c.scrim), if (theme.isDark) 0.28f else 0.16f))
         handle.background = GradientDrawable().apply {
-            setColor(sheetColors.edgeTop)
+            setColor(if (theme.isDark) ObsidianStyle.EDGE else sheetColors.edgeTop)
             cornerRadius = dp(2f).toFloat()
         }
-        searchField.setTextColor(searchColors.content)
-        searchField.setHintTextColor(searchColors.muted)
-        clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchColors.muted)
+        val content = if (theme.isDark) ObsidianStyle.CONTENT else sheetColors.content
+        val muted = if (theme.isDark) ObsidianStyle.MUTED_DARK else sheetColors.muted
+        val searchContent = if (theme.isDark) ObsidianStyle.CONTENT else searchColors.content
+        val searchMuted = if (theme.isDark) ObsidianStyle.MUTED_DARK else searchColors.muted
+        searchField.setTextColor(searchContent)
+        searchField.setHintTextColor(searchMuted)
+        clearButton.imageTintList = android.content.res.ColorStateList.valueOf(searchMuted)
         searchField.typeface = Typefaces.body(theme.typography)
         ThemedUiIcons.drawable(context, R.drawable.ic_rx_search, theme.id)?.let { d ->
-            d.setTint(searchColors.muted)
+            d.setTint(searchMuted)
             d.setBounds(0, 0, dp(LumaTokens.iconInline), dp(LumaTokens.iconInline))
             searchField.setCompoundDrawablesRelative(d, null, null, null)
         }
-        title.setTextColor(sheetColors.content)
+        val eyebrow = sheet.findViewById<TextView>(R.id.drawer_eyebrow)
+        // A small, constant blue signature; all functional surfaces keep their
+        // theme-derived contrast and the user's chosen accent.
+        eyebrow.setTextColor(if (theme.isDark) ObsidianStyle.BLUE_DARK else ObsidianStyle.BLUE_LIGHT)
+        eyebrow.typeface = Typefaces.label(theme.typography)
+        title.setTextColor(content)
         title.typeface = Typefaces.title(theme.typography)
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, theme.typeScale.screenTitle)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, maxOf(26f, theme.typeScale.screenTitle))
         val architectural = theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.MONOLITH ||
             theme.id == com.lumaos.pro.launcher.ui.theme.ThemeId.LUMA_MONO
         title.isAllCaps = architectural
         title.letterSpacing = if (architectural) 0.06f else -0.02f
         subtitle.typeface = Typefaces.body(theme.typography)
-        subtitle.setTextColor(sheetColors.muted)
-        emptyView.setTextColor(sheetColors.muted)
+        subtitle.setTextColor(muted)
+        emptyView.setTextColor(muted)
         emptyView.typeface = Typefaces.body(theme.typography)
         emptyView.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTypeScale.bodyMediumSp)
         updateRetryAvailability(retryAvailable, forceStyle = true)
-        alphaIndex.setAccentColor(sheetColors.focusRing)
+        alphaIndex.setAccentColor(if (theme.isDark) ObsidianStyle.BLUE_DARK else sheetColors.focusRing)
+        stylePages()
     }
 
     /** Body voice for the search field, kept in step with the theme's typography. */
