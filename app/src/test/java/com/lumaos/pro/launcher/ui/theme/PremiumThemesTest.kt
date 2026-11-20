@@ -20,6 +20,10 @@ class PremiumThemesTest {
     private fun resolve(id: ThemeId, settings: ThemeSettings = ThemeSettings(), env: ThemeEnvironment = envDark) =
         ThemeEngine.resolve(settings.copy(backdrop = null).pinned(id), env)
 
+    /** Like [resolve] but keeps an explicit backdrop instead of the theme default. */
+    private fun resolveOn(id: ThemeId, backdrop: Backdrop, env: ThemeEnvironment = envDark) =
+        ThemeEngine.resolve(ThemeSettings(backdrop = backdrop).pinned(id), env)
+
     private fun ratio(a: Int, b: Int) = ColorMath.contrast(ColorMath.opaque(a), ColorMath.opaque(b))
 
     @Test fun `the premium trio is offered first, in order, under stable keys`() {
@@ -78,10 +82,33 @@ class PremiumThemesTest {
     }
 
     @Test fun `obsidian is true black for OLED and its field carries no glow`() {
-        val t = resolve(ThemeId.OBSIDIAN)
+        val t = resolveOn(ThemeId.OBSIDIAN, Backdrop.THEME)
+        assertEquals(Backdrop.THEME, t.backdrop)
         assertEquals(ColorMath.BLACK, t.colors.background)
         assertEquals(ColorMath.BLACK, t.colors.surface0)
         assertEquals(listOf(AtmosphereLayer.Solid(ColorMath.BLACK)), AtmospherePlan.layers(t, 0.4f, true))
+    }
+
+    @Test fun `premium themes default to their approved Phase 2 artwork`() {
+        val expected = mapOf(
+            ThemeId.OBSIDIAN to WallpaperArt.OBSIDIAN_ONYX,
+            ThemeId.IVORY to WallpaperArt.IVORY_PORCELAIN,
+            ThemeId.AURORA to WallpaperArt.AURORA_NIGHT
+        )
+        for ((id, art) in expected) for (env in listOf(envDark, envLight)) {
+            val t = resolve(id, env = env)
+            assertEquals("$id backdrop", Backdrop.LUMA, t.backdrop)
+            assertEquals("$id art", art, t.lumaArt)
+        }
+    }
+
+    @Test fun `obsidian over its onyx art keeps ember off the field`() {
+        val t = resolve(ThemeId.OBSIDIAN)
+        assertEquals(Backdrop.LUMA, t.backdrop)
+        assertEquals(ColorMath.BLACK, t.colors.background)
+        val layers = AtmospherePlan.layers(t, 0.4f, true)
+        assertTrue("no glow on Onyx & Ember", layers.none { it is AtmosphereLayer.Glow })
+        assertTrue("legibility scrims only", layers.all { it is AtmosphereLayer.VerticalFade })
     }
 
     @Test fun `ivory uses ink, not white, for interaction layers`() {
@@ -93,7 +120,8 @@ class PremiumThemesTest {
     }
 
     @Test fun `aurora paints a real multi-colour gradient that drifts`() {
-        val t = resolve(ThemeId.AURORA)
+        // The synthetic field is what Aurora draws on its THEME backdrop.
+        val t = resolveOn(ThemeId.AURORA, Backdrop.THEME)
         val a = AtmospherePlan.layers(t, 0f, true)
         val b = AtmospherePlan.layers(t, 0.25f, true)
         val glows = a.filterIsInstance<AtmosphereLayer.Glow>()
@@ -101,6 +129,18 @@ class PremiumThemesTest {
         assertTrue(glows.map { ColorMath.opaque(it.color) }.toSet().size >= 3)
         assertTrue(a.filterIsInstance<AtmosphereLayer.VerticalFade>().size >= 2)
         assertTrue(a != b)
+    }
+
+    @Test fun `aurora over its borealis art draws the art, not synthetic glows`() {
+        val t = resolve(ThemeId.AURORA)
+        assertEquals(Backdrop.LUMA, t.backdrop)
+        assertEquals(WallpaperArt.AURORA_NIGHT.seeds, t.wallpaperSeeds)
+        val layers = AtmospherePlan.layers(t, 0f, true)
+        assertTrue(layers.none { it is AtmosphereLayer.Solid })
+        // Two legibility scrims plus one accent whisper; the ribbons are in the art.
+        assertEquals(2, layers.filterIsInstance<AtmosphereLayer.VerticalFade>().size)
+        assertEquals(1, layers.filterIsInstance<AtmosphereLayer.Glow>().size)
+        assertEquals(layers, AtmospherePlan.layers(t, 0.25f, true))
     }
 
     @Test fun `all premium themes hold the contrast contract in both modes`() {

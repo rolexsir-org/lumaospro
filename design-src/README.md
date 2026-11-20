@@ -28,8 +28,8 @@ packaged files live in `app/src/main/res/drawable-nodpi` and
 
 | Source | Packaged |
 | --- | --- |
-| `aurora-portrait.webp` | `drawable-nodpi/luma_wall_aurora.webp` |
-| `aurora-landscape.webp` | `drawable-land-nodpi/luma_wall_aurora.webp` |
+| `aurora-portrait.webp` | *(retired: Aurora now ships Borealis, see below)* |
+| `aurora-landscape.webp` | *(retired: Aurora now ships Borealis, see below)* |
 | `zen-portrait.webp` | `drawable-nodpi/luma_wall_zen.webp` |
 | `zen-landscape.webp` | `drawable-land-nodpi/luma_wall_zen.webp` |
 | — *(source removed)* | `drawable-nodpi/luma_wall_void.webp` |
@@ -41,6 +41,18 @@ source is no longer in the repository. The packaged asset it produced,
 `WallpaperArt.VOID_FLUX` resolves to it through `WallpaperArtResources` — so the
 app is unaffected, but that one packaged file can no longer be re-exported or
 re-cropped from source. Void's landscape source is still here.
+
+### Phase 2 theme wallpapers (approved 2026-11-19)
+
+`wallpapers/theme/` holds the SVG sources for the seven approved theme designs:
+Mono Paper & Ink / Darkroom, Glass Prism, Monolith Basalt & Signal, Atmosphere
+Canopy / First Light, Aurora Borealis, Ivory Porcelain and Obsidian Onyx & Ember.
+Each source is the wallpaper layer of its approved home-screen proof, with no UI,
+text or status bar. `render.cjs` renders them with resvg to
+`drawable-nodpi/theme_wall_<name>.png` (1080 × 2400, portrait only). They are
+centre-cropped at the focal point declared in `WallpaperArt`. The old
+`luma_wall_aurora.webp` (portrait and landscape) was removed, and `WallpaperArt.AURORA_NIGHT` keeps
+its `aurora_night` storage key but now resolves to `theme_wall_aurora_borealis`.
 
 The 30 Wallpaper Studio compositions (`luma_wall_01_*` … `luma_wall_30_*`,
 mapped by `WallpaperArtResources.resForKey()` and catalogued in

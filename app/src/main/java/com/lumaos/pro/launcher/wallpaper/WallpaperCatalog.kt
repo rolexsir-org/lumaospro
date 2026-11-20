@@ -565,39 +565,18 @@ object WallpaperCatalog {
         )
     )
 
+    /**
+     * Theme wallpapers, addressable as `art:<storageKey>`. They carry their own
+     * measured seeds, so applying one from the gallery never needs a decode pass.
+     */
     private val LEGACY: List<WallpaperEntry> = WallpaperArt.entries.map { art ->
-        val seeds = when (art) {
-            WallpaperArt.AURORA_NIGHT -> WallpaperSeeds(
-                primary = 0xFF050E16.toInt(),
-                secondary = 0xFF1D6B68.toInt(),
-                supportsDarkText = false,
-                accent = 0xFF4AD2C0.toInt(),
-                topLuminance = 0.03f,
-                bottomLuminance = 0.05f
-            )
-            WallpaperArt.ZEN_MORNING -> WallpaperSeeds(
-                primary = 0xFFE8ECE8.toInt(),
-                secondary = 0xFFC5CFC5.toInt(),
-                supportsDarkText = true,
-                accent = 0xFF5F8068.toInt(),
-                topLuminance = 0.64f,
-                bottomLuminance = 0.56f
-            )
-            WallpaperArt.VOID_FLUX -> WallpaperSeeds(
-                primary = 0xFF07050D.toInt(),
-                secondary = 0xFF281C44.toInt(),
-                supportsDarkText = false,
-                accent = 0xFF8A72E8.toInt(),
-                topLuminance = 0.02f,
-                bottomLuminance = 0.03f
-            )
-        }
+        val seeds = art.seeds
         WallpaperEntry(
             id = "art:${art.storageKey}",
             title = art.displayName,
             description = art.character,
             art = art,
-            mood = "Signature Classic",
+            mood = if (art.ordinal <= WallpaperArt.VOID_FLUX.ordinal) "Signature Classic" else "Theme Original",
             focalX = art.focalX,
             focalY = art.focalY,
             precomputedSeeds = seeds

@@ -120,7 +120,7 @@ class AmbientBackdropView @JvmOverloads constructor(
         if (w <= 0 || h <= 0) return
         if (fallbackSolid) {
             paint.shader = null
-            paint.color = theme?.colors?.background ?: ColorMath.BLACK
+            paint.color = theme?.backdropFallbackColor ?: ColorMath.BLACK
             canvas.drawRect(0f, 0f, w, h, paint)
         }
         val now = SystemClock.uptimeMillis()

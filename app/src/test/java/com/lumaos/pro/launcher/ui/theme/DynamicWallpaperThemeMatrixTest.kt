@@ -196,8 +196,9 @@ class DynamicWallpaperThemeMatrixTest {
 
     @Test
     fun `selected studio wallpaper enables Backdrop LUMA on any theme`() {
+        // Graphite ships no artwork of its own, so LUMA needs a Studio selection.
         val settings = ThemeSettings(
-            themeId = ThemeId.OBSIDIAN,
+            themeId = ThemeId.GRAPHITE,
             switching = ThemeSwitching.FIXED,
             backdrop = Backdrop.LUMA
         )
@@ -208,5 +209,12 @@ class DynamicWallpaperThemeMatrixTest {
         )
         assertEquals(Backdrop.THEME, withoutSelection.backdrop)
         assertEquals(Backdrop.LUMA, withSelection.backdrop)
+
+        // Themes with approved art resolve LUMA on their own, and a Studio
+        // selection takes over the seeds from the theme art.
+        val obsidian = settings.copy(themeId = ThemeId.OBSIDIAN)
+        val ownArt = ThemeEngine.resolve(obsidian, ThemeEnvironment(systemDark = true, minuteOfDay = 0))
+        assertEquals(Backdrop.LUMA, ownArt.backdrop)
+        assertEquals(WallpaperArt.OBSIDIAN_ONYX.seeds, ownArt.wallpaperSeeds)
     }
 }

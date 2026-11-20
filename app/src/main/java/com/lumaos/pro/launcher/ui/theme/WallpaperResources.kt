@@ -8,7 +8,9 @@ import com.lumaos.pro.launcher.wallpaper.WallpaperEntry
 /**
  * Maps [WallpaperArt] and curated [WallpaperEntry] keys to their packaged resources.
  *
- * Theme-linked legacy artwork exists in `drawable-nodpi` and `drawable-land-nodpi`;
+ * Theme wallpapers live in `drawable-nodpi` (Zen and Void also ship a
+ * `drawable-land-nodpi` variant; the Phase 2 `theme_wall_*` art is portrait-only and
+ * focal-cropped);
  * the 30 Wallpaper Studio compositions live in `drawable-nodpi` at native aspect ratio
  * and are focal-point cropped by [com.lumaos.pro.launcher.launcher.home.WallpaperArtView]
  * and the Studio preview without distortion. A missing asset is reported cleanly
@@ -18,9 +20,17 @@ object WallpaperArtResources {
 
     @DrawableRes
     fun res(art: WallpaperArt): Int = when (art) {
-        WallpaperArt.AURORA_NIGHT -> R.drawable.luma_wall_aurora
+        WallpaperArt.AURORA_NIGHT -> R.drawable.theme_wall_aurora_borealis
         WallpaperArt.ZEN_MORNING -> R.drawable.luma_wall_zen
         WallpaperArt.VOID_FLUX -> R.drawable.luma_wall_void
+        WallpaperArt.MONO_DARKROOM -> R.drawable.theme_wall_mono_darkroom
+        WallpaperArt.MONO_PAPER -> R.drawable.theme_wall_mono_paper
+        WallpaperArt.GLASS_PRISM -> R.drawable.theme_wall_glass_prism
+        WallpaperArt.MONOLITH_BASALT -> R.drawable.theme_wall_monolith_basalt
+        WallpaperArt.ATMOSPHERE_CANOPY -> R.drawable.theme_wall_atmosphere_canopy
+        WallpaperArt.ATMOSPHERE_FIRST_LIGHT -> R.drawable.theme_wall_atmosphere_first_light
+        WallpaperArt.IVORY_PORCELAIN -> R.drawable.theme_wall_ivory_porcelain
+        WallpaperArt.OBSIDIAN_ONYX -> R.drawable.theme_wall_obsidian_onyx
     }
 
     @DrawableRes
@@ -55,10 +65,7 @@ object WallpaperArtResources {
         "28_dusk_flight" -> R.drawable.luma_wall_28_dusk_flight
         "29_midnight_motorcycle" -> R.drawable.luma_wall_29_midnight_motorcycle
         "30_milky_way_alpine_lake" -> R.drawable.luma_wall_30_milky_way_alpine_lake
-        WallpaperArt.AURORA_NIGHT.storageKey -> R.drawable.luma_wall_aurora
-        WallpaperArt.ZEN_MORNING.storageKey -> R.drawable.luma_wall_zen
-        WallpaperArt.VOID_FLUX.storageKey -> R.drawable.luma_wall_void
-        else -> null
+        else -> WallpaperArt.fromStorageKey(resourceKey)?.let { res(it) }
     }
 
     @DrawableRes

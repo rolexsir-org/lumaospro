@@ -32,7 +32,6 @@ import com.lumaos.pro.launcher.ui.theme.GlassGeometry
 import com.lumaos.pro.launcher.ui.theme.GlassMaterials
 import com.lumaos.pro.launcher.ui.theme.GlassRole
 import com.lumaos.pro.launcher.ui.theme.ResolvedTheme
-import com.lumaos.pro.launcher.ui.theme.WallpaperArt
 import com.lumaos.pro.launcher.ui.theme.WallpaperSeeds
 import kotlin.math.max
 import kotlin.math.min
@@ -94,7 +93,7 @@ fun HomePreview(
             val gutter = unit * (GlassGeometry.GUTTER_DP / 3.6f)
             val clockPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = c.homeForeground
-                typeface = Typefaces.clock(theme.typography)
+                typeface = Typefaces.clock(theme)
                 letterSpacing = theme.typography.clockTracking
                 textAlign = if (centered) android.graphics.Paint.Align.CENTER else android.graphics.Paint.Align.LEFT
                 if (theme.backdrop.usesArtwork && theme.usesBlur) {
@@ -351,7 +350,7 @@ private fun DrawScope.drawBackdrop(
     val h = size.height
     if (artwork != null && (theme.backdrop == Backdrop.LUMA || theme.backdrop == Backdrop.WALLPAPER)) {
         // Centre-crop with the artwork's focal point, matching WallpaperArtView.
-        val art = WallpaperArt.forTheme(theme.id)
+        val art = theme.lumaArt
         val fx = (focalX ?: art?.focalX ?: 0.5f).coerceIn(0f, 1f)
         val fy = (focalY ?: art?.focalY ?: 0.5f).coerceIn(0f, 1f)
         val iw = artwork.width.toFloat()
@@ -381,6 +380,10 @@ private fun DrawScope.drawBackdrop(
             .ifEmpty { listOf(theme.colors.surface2, theme.colors.background) }
             .map { Color(it) }
         drawRect(Brush.linearGradient(if (colors.size == 1) colors + colors else colors, Offset.Zero, Offset(w, h)))
+    } else if (theme.backdrop == Backdrop.LUMA) {
+        // Artwork still decoding (or unavailable): the same solid the home screen
+        // paints, i.e. the art's own dominant colour the home text was chosen for.
+        drawRect(Color(theme.backdropFallbackColor))
     }
     drawAtmosphere(theme, 0.18f)
     val scrim = GlassBackdrop.scrim(theme)

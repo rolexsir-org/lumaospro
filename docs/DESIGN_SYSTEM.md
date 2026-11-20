@@ -125,7 +125,7 @@ holds either way — including for a hand-edited token file.
   v3.2 identities and the premium trio.
 * **Defaults.** A fresh install follows the system: **Signature** in dark mode and
   **Ivory** in light mode (`ThemePresets.DEFAULT_DARK` / `DEFAULT_LIGHT`). Ivory is
-  an authored light identity — warm paper `#F6F3EC` with a sapphire ink accent —
+  an authored light identity — warm ivory `#F6F3EC` with a sapphire `#3A5F8A` accent —
   so the light default no longer has to borrow a retained palette. An *upgrade* is
   different from a fresh install: a stored pre-3.2 `THEME_MODE=light` preference
   with no explicit theme id still maps to Zen (`ThemeId.PORCELAIN`) in
@@ -182,7 +182,7 @@ retained palettes before v3.2 and remain accurate for them.
 | --- | --- |
 | Quiet luxury, not decoration | No gradients on text, no heavy shadows, no outlines that only decorate. Every stroke exists to separate two materials. |
 | One hierarchy, three voices | The type scale is identical everywhere. Themes change family, weight, tracking and motion — never the ladder. |
-| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument), and the reference identities theirs (Luma Glass navy liquid glass, Luma Mono one peach ink on solid plates). Each theme's radii, borders, elevation and blur follow its material — Monolith's and Luma Mono's zero blur is a token, not an exception. |
+| Material honesty | Signature is midnight glass, Atmosphere is lit water, Monolith is cut stone; the retained palettes keep their own materials (Aurora glass, Zen paper, Void a machined instrument), and the reference identities theirs (Luma Glass clear glass over deep water, Luma Mono one achromatic chalk ink on solid carbon plates). Each theme's radii, borders, elevation and blur follow its material — Monolith's and Luma Mono's zero blur is a token, not an exception. |
 | Legibility is a guarantee | Text roles are contrast-checked by the theme engine, not chosen by eye. |
 | Motion is feedback, not theatre | Every animation is interruptible, honours the system animation scale, and vanishes under reduced motion. |
 | Identity is preserved | App icons are never recoloured. Bundled glyphs are used only for the interface; app artwork is passed through untouched. |
@@ -200,17 +200,17 @@ Twelve identities ship, in four groups. `ThemePresets.ALL` is
 | Theme | Storage key | Group | Character | Material | Type voice | Motion |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Signature** | `signature` | v3.2 | Midnight ramp, indigo-violet `#7C86FF` | Translucent, blur 26, sat 135 % | Inter, refined | Subtle |
-| **Atmosphere** | `atmosphere` | v3.2 | Wallpaper-led, aurora mint `#46E0B0` | Glass, blur 34, sat 165 % | Inter, airy | Cinematic |
-| **Monolith** | `monolith` | v3.2 | Stone neutrals, vermilion rules `#FF5A2B` | Solid, **no blur** | Space Grotesk + mono | Exact |
-| **Obsidian** | `obsidian` | premium | True black for OLED, champagne light `#D9BC8C` | Flat black, no glow, AMOLED | Inter, precision | Subtle |
-| **Ivory** | `ivory` | premium | Warm paper `#F6F3EC`, sapphire ink `#2E5AAC`, bronze detail | Translucent, halo atmosphere | Inter, precision | Subtle |
-| **Aurora** | `aurora` | premium | Midnight ribbon light | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
+| **Atmosphere** | `atmosphere` | v3.2 | Canopy (night) / First Light (day) art, aurora mint `#46E0B0` | Glass, blur 34, sat 165 % | Inter, airy | Cinematic |
+| **Monolith** | `monolith` | v3.2 | Basalt & Signal concrete art, stone neutrals, vermilion rules `#FF5A2B` | Solid, **no blur** | Space Grotesk + mono | Exact |
+| **Obsidian** | `obsidian` | premium | Onyx & Ember: true black for OLED, steel `#C9CDD6` glyphs, ember `#E8A33D` only on live marks | Flat black, no glow, AMOLED | Inter, precision; weight-200 clock numerals | Subtle |
+| **Ivory** | `ivory` | premium | Porcelain: warm ivory `#F6F3EC`, porcelain tiles `#FDFBF5`→`#EFE9DC`, ink `#2B2620`, sapphire `#3A5F8A` | Translucent, halo atmosphere | Inter, precision; serif clock numerals | Subtle |
+| **Aurora** | `aurora` | premium | Borealis: deep-space indigo, violet `#8A5AF0`, teal `#3AD8C8`, magenta `#D85AF0` | Translucent glass, 1 px hairline, 6 dp elevation ceiling | Inter, quiet luxury | Subtle |
 | Zen | `porcelain` | retained | Quiet paper and mist | Solid paper, almost no elevation, soft radii | Inter, modern serenity | Quiet |
 | Void | `vector` | retained | Indigo depth, cyan signal | Layered panels, sharper corners, accent halo | Space Grotesk + Inter | Expressive |
 | Graphite | `graphite` | retained | Machined grey, amber instrument | Matte panels, 3 dp | Inter | Subtle |
 | Chroma | `chroma` | retained | Built from the wallpaper | Same as current backdrop | Inter | Subtle |
-| **Luma Glass** | `luma_glass` | reference (2026-11) | Deep navy `#050D1F`, sky accent `#5FB8FF`, wallpaper backdrop | Glass, corner scale 1.125 | Inter, ambient | Cinematic |
-| **Luma Mono** | `luma_mono` | reference (2026-11) | Charcoal-brown `#161110`, one peach ink `#F0BE9A` | Solid, **no blur**, tinted icons, corner scale 0.875 | Monospace, monograph | Exact |
+| **Luma Glass** | `luma_glass` | reference (2026-11) | Prism: clear glass over deep water `#0B161E`, sky accent `#7FC4FF` | Glass, corner scale 1.125 | Inter, ambient | Cinematic |
+| **Luma Mono** | `luma_mono` | reference (2026-11) | Paper & Ink (day) / Darkroom (night): achromatic carbon `#0B0B0D`, one chalk ink `#F2F2EE` | Solid, **no blur**, tinted icons, corner scale 0.875 | Monospace, monograph | Exact |
 
 Obsidian and Aurora began as pre-3.2 palettes and graduated into the premium
 collection **under their original storage keys**, so a user who had either
@@ -218,6 +218,33 @@ selected is upgraded in place rather than reset. Ivory, Luma Glass and Luma Mono
 were added after v3.2. Studio and Settings present `FEATURED`
 (premium + v3.2 + the two reference identities) first, then the retained
 palettes.
+
+### 2.1a Theme wallpapers (Phase 2, approved 2026-11-19)
+
+Every approved Phase 2 identity ships its own wallpaper as its default
+backdrop (`Backdrop.LUMA`, via its `ThemeLauncherPackage` and `ThemeSpec.defaultBackdrop`).
+The art lives in `drawable-nodpi/theme_wall_*.png` (1080 × 2400, portrait,
+centre-cropped at the declared focal point) and is described by `WallpaperArt`.
+
+| Theme | Art (storage key) | Day / night | Home text |
+| --- | --- | --- | --- |
+| Luma Mono | Darkroom (`mono_darkroom`) / Paper & Ink (`mono_paper`) | night / day | light / dark |
+| Luma Glass | Prism (`glass_prism`) | — | light |
+| Monolith | Basalt & Signal (`monolith_basalt`) | — | dark |
+| Atmosphere | Canopy (`atmosphere_canopy`) / First Light (`atmosphere_first_light`) | night / day | light / dark |
+| Aurora | Borealis (`aurora_night`, the historic key) | — | light |
+| Ivory | Porcelain (`ivory_porcelain`) | — | dark |
+| Obsidian | Onyx & Ember (`obsidian_onyx`) | — | light |
+
+* Day/night pairs follow the system mode (`WallpaperArt.forTheme(id, systemDark)`).
+* Each art carries measured `seeds`. While the theme art is the backdrop, the engine uses
+  them in place of the hidden system wallpaper for adaptive colour and legibility scrims.
+  An explicit Wallpaper Studio selection always takes precedence.
+* Signature keeps its authored backdrop, and Graphite and Chroma keep theirs. Zen and Void keep
+  their pre-3.2 artwork. The previous Aurora "Nightfall" image was replaced by Borealis
+  under the same `aurora_night` key, so favourites and backups still resolve.
+* A bare `ThemeSettings()` still defaults to `Backdrop.WALLPAPER`. The theme art applies
+  when a theme is chosen in Studio or Settings, or when the backdrop is left unset.
 
 Every legacy storage key — including 0.1's `aurora`, `porcelain`, `vector` — and the
 old light/dark switch are preserved. No saved preference or exported backup is

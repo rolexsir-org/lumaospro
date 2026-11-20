@@ -162,10 +162,10 @@ data class ThemeLauncherPackage(
 
         val ATMOSPHERE = ThemeLauncherPackage(
             themeId = ThemeId.ATMOSPHERE,
-            subtitle = "Luminous Adaptive",
+            subtitle = "Canopy · First Light",
             preset = HomePreset.HORIZON,
             dock = DockStyle.FLOAT,
-            backdrop = Backdrop.WALLPAPER,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.FULL,
             motion = MotionPreference.FULL,
             iconShape = IconShape.CIRCLE,
@@ -173,15 +173,15 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = true,
             livingIcons = true,
-            effectsSummary = "34dp Adaptive Glass · Aurora Drift · Horizon"
+            effectsSummary = "34dp Adaptive Glass · Canopy Light · Horizon"
         )
 
         val MONOLITH = ThemeLauncherPackage(
             themeId = ThemeId.MONOLITH,
-            subtitle = "Editorial Stone",
+            subtitle = "Basalt & Signal",
             preset = HomePreset.GRID,
             dock = DockStyle.BEZEL,
-            backdrop = Backdrop.THEME,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.MINIMAL,
             motion = MotionPreference.FULL,
             iconShape = IconShape.ROUNDED,
@@ -189,15 +189,15 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = false,
-            effectsSummary = "Zero-Blur Stone · Edge Bezel · Monograph 84sp"
+            effectsSummary = "Board-Formed Concrete · Edge Bezel · Monograph 84sp"
         )
 
         val LUMA_GLASS = ThemeLauncherPackage(
             themeId = ThemeId.LUMA_GLASS,
-            subtitle = "Deep Navy Liquid Glass",
+            subtitle = "Prism",
             preset = HomePreset.HORIZON,
             dock = DockStyle.FLOAT,
-            backdrop = Backdrop.WALLPAPER,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.FULL,
             motion = MotionPreference.FULL,
             iconShape = IconShape.SQUIRCLE,
@@ -205,15 +205,15 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = true,
-            effectsSummary = "28dp Liquid Glass · Floating Dock · Glossy Icons"
+            effectsSummary = "28dp Clear Glass · Deep Water · Backlit Glyphs"
         )
 
         val LUMA_MONO = ThemeLauncherPackage(
             themeId = ThemeId.LUMA_MONO,
-            subtitle = "Peach Duotone Charcoal",
+            subtitle = "Paper & Ink · Darkroom",
             preset = HomePreset.GRID,
             dock = DockStyle.BEZEL,
-            backdrop = Backdrop.THEME,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.MINIMAL,
             motion = MotionPreference.FULL,
             iconShape = IconShape.ROUNDED,
@@ -221,16 +221,16 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = false,
-            effectsSummary = "Zero-Blur Duotone · Bezel Dock · Monograph"
+            effectsSummary = "Zero-Blur Monochrome · Bezel Dock · Monograph"
         )
 
-        /** Premium dark: pure-black field, graphite glass, real app icons. */
+        /** Premium dark: true-black onyx field, steel glyphs, one ember accent. */
         val OBSIDIAN = ThemeLauncherPackage(
             themeId = ThemeId.OBSIDIAN,
-            subtitle = "Premium OLED Dark",
+            subtitle = "Onyx & Ember",
             preset = HomePreset.HORIZON,
             dock = DockStyle.FLOAT,
-            backdrop = Backdrop.THEME,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.AUTO,
             motion = MotionPreference.FULL,
             iconShape = IconShape.SQUIRCLE,
@@ -238,16 +238,16 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = true,
-            effectsSummary = "Pure Black · Graphite Glass · Champagne"
+            effectsSummary = "True Black · Onyx Glass · Ember"
         )
 
-        /** Premium light: warm paper, white glass cards, soft shadows. */
+        /** Premium light: warm ivory daylight, porcelain tiles, soft shadows. */
         val IVORY = ThemeLauncherPackage(
             themeId = ThemeId.IVORY,
-            subtitle = "Elegant Light",
+            subtitle = "Porcelain",
             preset = HomePreset.HORIZON,
             dock = DockStyle.FLOAT,
-            backdrop = Backdrop.THEME,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.AUTO,
             motion = MotionPreference.FULL,
             iconShape = IconShape.SQUIRCLE,
@@ -255,16 +255,16 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = true,
-            effectsSummary = "Warm Paper · White Glass · Sapphire Ink"
+            effectsSummary = "Ivory Daylight · Porcelain · Sapphire Mark"
         )
 
-        /** Expressive gradient: indigo night, drifting aurora, deep glass. */
+        /** Expressive gradient: deep-space indigo, aurora light fields, deep glass. */
         val AURORA = ThemeLauncherPackage(
             themeId = ThemeId.AURORA,
-            subtitle = "Expressive Gradient",
+            subtitle = "Borealis",
             preset = HomePreset.HORIZON,
             dock = DockStyle.FLOAT,
-            backdrop = Backdrop.THEME,
+            backdrop = Backdrop.LUMA,
             effects = EffectsPreference.AUTO,
             motion = MotionPreference.FULL,
             iconShape = IconShape.SQUIRCLE,
@@ -272,7 +272,7 @@ data class ThemeLauncherPackage(
             typography = null,
             dynamicWallpaperColors = false,
             livingIcons = true,
-            effectsSummary = "Aurora Gradient · 32dp Glass · Cinematic"
+            effectsSummary = "Borealis Light · 32dp Glass · Cinematic"
         )
 
         fun forTheme(id: ThemeId): ThemeLauncherPackage = when (id) {
