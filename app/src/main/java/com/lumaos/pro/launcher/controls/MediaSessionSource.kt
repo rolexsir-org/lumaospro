@@ -180,11 +180,19 @@ class MediaSessionSource(context: Context) {
             title = title?.takeIf { it.isNotBlank() },
             artist = artist?.takeIf { it.isNotBlank() },
             playing = playing,
-            canPlayPause = MusicLogic.supports(MusicCommand.PLAY, actions) ||
-                MusicLogic.supports(MusicCommand.PAUSE, actions),
+            canPlayPause = MusicLogic.supports(if (playing) MusicCommand.PAUSE else MusicCommand.PLAY, actions),
             canSkipNext = MusicLogic.supports(MusicCommand.NEXT, actions),
             canSkipPrevious = MusicLogic.supports(MusicCommand.PREVIOUS, actions),
-            hasArtwork = artwork != null
+            hasArtwork = artwork != null,
+            positionMs = state?.position?.takeIf { it >= 0L },
+            durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L },
+            positionUpdatedAtMs = state?.lastPositionUpdateTime ?: 0L,
+            playbackSpeed = state?.playbackSpeed ?: 0f,
+            remotePlayback = when (runCatching { controller.playbackInfo?.playbackType }.getOrNull()) {
+                MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE -> true
+                MediaController.PlaybackInfo.PLAYBACK_TYPE_LOCAL -> false
+                else -> null
+            }
         )
     }
 

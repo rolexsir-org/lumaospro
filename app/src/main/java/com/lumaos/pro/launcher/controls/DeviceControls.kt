@@ -1,17 +1,19 @@
 package com.lumaos.pro.launcher.controls
 
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.ContentObserver
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import android.location.LocationManager
+import android.os.PowerManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
@@ -75,8 +77,6 @@ class DeviceControls(private val context: Context) {
         get() = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private val wifiManager: WifiManager?
         get() = appContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-    private val connectivityManager: ConnectivityManager?
-        get() = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private val cameraManager: CameraManager?
         get() = appContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
 
@@ -105,6 +105,10 @@ class DeviceControls(private val context: Context) {
     }
 
     private var torchCallbackRegistered = false
+    private var settingsObserverRegistered = false
+    private val settingsObserver = object : ContentObserver(main) {
+        override fun onChange(selfChange: Boolean) = notifyChanged()
+    }
 
     /**
      * Capability probe. Runs once per panel open: the camera list does not change
@@ -162,6 +166,10 @@ class DeviceControls(private val context: Context) {
         media = if (mediaActive) media else null,
         castAvailable = isResolvable(castIntent()),
         cameraAvailable = isResolvable(cameraIntent()),
+        powerSave = powerSaveState(),
+        location = locationState(),
+        powerSettingsAvailable = isResolvable(powerSaveIntent()),
+        locationSettingsAvailable = isResolvable(locationIntent()),
         canWriteSystemSettings = canWriteSystemSettings(),
         hasNotificationPolicyAccess = hasNotificationPolicyAccess()
     )
@@ -177,16 +185,27 @@ class DeviceControls(private val context: Context) {
         }
     }
 
-    @Suppress("MissingPermission")
     private fun mobileDataState(): SwitchState {
-        val cm = connectivityManager
-        val on = runCatching {
-            val network = cm?.activeNetwork ?: return@runCatching null
-            cm.getNetworkCapabilities(network)
-                ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        // The default network may be Wi-Fi even while mobile data is enabled;
+        // transport alone cannot establish the user's mobile-data switch state.
+        return SwitchState.systemRoute(null)
+    }
+
+    private fun powerSaveState(): SwitchState {
+        val power = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val enabled = runCatching { power?.isPowerSaveMode }.getOrNull()
+        return SwitchState.systemRoute(enabled)
+    }
+
+    private fun locationState(): SwitchState {
+        val manager = appContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return SwitchState.systemRoute(null)
+        val enabled = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) manager.isLocationEnabled
+            else manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         }.getOrNull()
-        // Only the system can switch the radio; the panel reports what is live.
-        return SwitchState.systemRoute(on)
+        return SwitchState.systemRoute(enabled)
     }
 
     private fun bluetoothState(): SwitchState {
@@ -270,11 +289,13 @@ class DeviceControls(private val context: Context) {
         )
     }
 
-    private fun volumeState(): SliderState {
+    internal fun volumeState(): SliderState {
         val manager = audioManager ?: return SliderState.UNAVAILABLE
         val max = runCatching { manager.getStreamMaxVolume(MUSIC_STREAM) }.getOrNull()
             ?: return SliderState.UNAVAILABLE
-        val current = runCatching { manager.getStreamVolume(MUSIC_STREAM) }.getOrNull() ?: 0
+        if (max <= 0) return SliderState.UNAVAILABLE
+        val current = runCatching { manager.getStreamVolume(MUSIC_STREAM) }.getOrNull()
+            ?: return SliderState.UNAVAILABLE
         return SliderState(
             value = current.coerceIn(0, max),
             min = 0,
@@ -294,8 +315,9 @@ class DeviceControls(private val context: Context) {
                 sticky.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             )
             val status = sticky.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val plugged = sticky.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
             val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
+                (status == BatteryManager.BATTERY_STATUS_FULL && plugged)
             if (percent != null) return BatteryReading(percent, charging)
         }
         // Fallback for OEM builds that do not hand out the sticky broadcast.
@@ -406,6 +428,8 @@ class DeviceControls(private val context: Context) {
         TileId.FOCUS -> toggleFocus()
         TileId.CAST -> openRoute(castIntent(), R.string.qc_route_cast, displayFallbackIntent())
         TileId.CAMERA -> openRoute(cameraIntent(), R.string.qc_unavailable_camera)
+        TileId.POWER_SAVE -> openRoute(powerSaveIntent(), R.string.qc_no_system_page)
+        TileId.LOCATION -> openRoute(locationIntent(), R.string.qc_no_system_page)
     }
 
     private fun toggleWifi(): TileTapOutcome {
@@ -494,6 +518,9 @@ class DeviceControls(private val context: Context) {
     fun bluetoothIntent(): Intent? = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
 
     fun airplaneIntent(): Intent? = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)
+
+    fun powerSaveIntent(): Intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+    fun locationIntent(): Intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
 
     /**
      * Android's cast screen. Some builds do not ship one, so the caller passes
@@ -587,15 +614,28 @@ class DeviceControls(private val context: Context) {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
             addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-            }
+            addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            addAction(LocationManager.MODE_CHANGED_ACTION)
+            addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
         }
         runCatching {
             ContextCompat.registerReceiver(appContext, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         }.onFailure { LumaLog.w("Quick Controls observation could not start") }
+        runCatching {
+            val resolver = appContext.contentResolver
+            listOf(Settings.System.SCREEN_BRIGHTNESS, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.ACCELEROMETER_ROTATION).forEach { key ->
+                resolver.registerContentObserver(Settings.System.getUriFor(key), false, settingsObserver)
+            }
+            settingsObserverRegistered = true
+        }.onFailure {
+            // Registration may have failed after one URI was registered.
+            runCatching { appContext.contentResolver.unregisterContentObserver(settingsObserver) }
+            LumaLog.w("Quick Controls settings observation could not start")
+        }
         if (torchCapable() && !torchCallbackRegistered) {
             runCatching { cameraManager?.registerTorchCallback(torchCallback, main) }
                 .onSuccess { torchCallbackRegistered = true }
@@ -610,6 +650,11 @@ class DeviceControls(private val context: Context) {
         observing = false
         runCatching { appContext.unregisterReceiver(receiver) }
             .onFailure { LumaLog.w("Quick Controls observation could not stop") }
+        if (settingsObserverRegistered) {
+            runCatching { appContext.contentResolver.unregisterContentObserver(settingsObserver) }
+                .onFailure { LumaLog.w("Quick Controls settings observation could not stop") }
+            settingsObserverRegistered = false
+        }
         if (torchCallbackRegistered) {
             runCatching { cameraManager?.unregisterTorchCallback(torchCallback) }
             torchCallbackRegistered = false

@@ -15,6 +15,12 @@ import org.junit.Test
  * JVM tests over the model - no framework objects, no Robolectric.
  */
 class NotificationPolicyTest {
+    @Test fun `clear all retains ongoing and non-clearable notifications`() {
+        assertTrue(NotificationPolicy.canClear(clearable = true, ongoing = false))
+        assertFalse(NotificationPolicy.canClear(clearable = true, ongoing = true))
+        assertFalse(NotificationPolicy.canClear(clearable = false, ongoing = false))
+    }
+
 
     private fun action(
         index: Int,
@@ -136,11 +142,11 @@ class NotificationPolicyTest {
 
     @Test
     fun `a long conversation keeps the last lines instead of the first`() {
-        val lines = (1..8).map { MessageLine("Sam", "message $it") }
+        val lines = (1..20).map { MessageLine("Sam", "message $it") }
         val body = NotificationPolicy.displayBody(raw(messages = lines)).orEmpty()
         assertEquals(NotificationPolicy.MAX_BODY_LINES, body.lines().size)
-        assertTrue(body.endsWith("message 8"))
-        assertFalse(body.contains("message 1"))
+        assertTrue(body.endsWith("message 20"))
+        assertFalse(body.lines().contains("Sam: message 1"))
     }
 
     @Test
@@ -191,6 +197,47 @@ class NotificationPolicyTest {
         // own a lone summary would report nothing invented either.
         assertEquals(listOf("c1"), NotificationPolicy.visibleCards(listOf(child, summary)).map { it.key })
         assertEquals(0, NotificationPolicy.visibleCards(listOf(summary)).single().collapsedCount)
+    }
+
+    @Test
+    fun `real groups collapse and expand without losing the underlying cards`() {
+        val cards = NotificationPolicy.visibleCards(listOf(
+            raw(key = "first", groupKey = "g", postedAtMillis = 30),
+            raw(key = "other", groupKey = null, postedAtMillis = 20),
+            raw(key = "second", groupKey = "g", postedAtMillis = 10)
+        ))
+        val id = NotificationPolicy.groupId(cards.first())!!
+        val collapsed = NotificationPolicy.displayRows(cards, emptySet())
+        assertEquals(listOf("first", "other"), collapsed.map { it.card.key })
+        assertEquals(2, collapsed.first().groupSize)
+        assertFalse(collapsed.first().groupExpanded)
+        val expanded = NotificationPolicy.displayRows(cards, setOf(id))
+        assertEquals(listOf("first", "second", "other"), expanded.map { it.card.key })
+        assertTrue(expanded.first().groupExpanded)
+        assertEquals(3, cards.size)
+        // Dismissing a leader leaves the real remaining child as a normal card.
+        val afterDismiss = NotificationPolicy.displayRows(cards.filter { it.key != "first" }, setOf(id))
+        assertEquals(listOf("other", "second"), afterDismiss.map { it.card.key })
+        assertNull(afterDismiss.last().group)
+    }
+
+    @Test
+    fun `a summary is not hidden by another package using the same group name`() {
+        val child = raw(key = "child", packageName = "one", groupKey = "g")
+        val summary = raw(key = "summary", packageName = "two", groupKey = "g", isGroupSummary = true)
+        assertEquals(setOf("child", "summary"), NotificationPolicy.visibleCards(listOf(child, summary)).map { it.key }.toSet())
+    }
+
+    @Test
+    fun `unrelated groups and standalone notifications never merge`() {
+        val cards = NotificationPolicy.visibleCards(listOf(
+            raw(key = "one", packageName = "a", groupKey = "g"),
+            raw(key = "two", packageName = "b", groupKey = "g"),
+            raw(key = "three", packageName = "a", groupKey = null),
+            raw(key = "four", packageName = "a", groupKey = null)
+        ))
+        assertEquals(4, NotificationPolicy.displayRows(cards, emptySet()).size)
+        assertTrue(NotificationPolicy.displayRows(cards, emptySet()).all { it.group == null })
     }
 
     // ── Ordering and limits ────────────────────────────────────────────────

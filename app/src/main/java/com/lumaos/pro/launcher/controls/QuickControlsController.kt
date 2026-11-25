@@ -22,8 +22,9 @@ import java.util.concurrent.Executors
  * partial ones, and a slow binder call can never block a drag. Writes are
  * throttled during a slider drag and always committed on release.
  *
- * Everything is started by [start] and torn down by [stop]; there is no periodic
- * timer and no work while the shade is closed.
+ * Everything is started by [start] and torn down by [stop]. A lightweight volume
+ * read while open catches hardware-key changes that lack a public volume broadcast;
+ * no polling or observation continues while the shade is closed.
  */
 class QuickControlsController(context: Context) {
 
@@ -59,7 +60,27 @@ class QuickControlsController(context: Context) {
             val snapshot = read()
             // Only the newest pass may publish; an older result would undo a newer
             // state the user has already seen.
-            if (stamp == generation) main.post { _state.value = snapshot }
+            if (stamp == generation) main.post {
+                if (running && stamp == generation) _state.value = snapshot
+            }
+        }
+    }
+
+    // Android exposes no public, reliable stream-volume-changed broadcast. Read
+    // only the music stream while visible; don't re-read all radios or media art.
+    private val volumePoll = object : Runnable {
+        override fun run() {
+            if (!running) return
+            val stamp = generation
+            worker.execute {
+                val volume = devices.volumeState()
+                main.post {
+                    if (running && stamp == generation && _state.value.volume != volume) {
+                        _state.value = _state.value.copy(volume = volume)
+                    }
+                }
+            }
+            main.postDelayed(this, VOLUME_POLL_MS)
         }
     }
 
@@ -82,6 +103,7 @@ class QuickControlsController(context: Context) {
         devices.startObserving { coalesce() }
         media.start { coalesce() }
         coalesce()
+        main.postDelayed(volumePoll, VOLUME_POLL_MS)
     }
 
     fun stop() {
@@ -90,6 +112,7 @@ class QuickControlsController(context: Context) {
         devices.stopObserving()
         media.stop()
         main.removeCallbacks(refreshPass)
+        main.removeCallbacks(volumePoll)
         // Invalidates any read already in flight: its generation no longer matches.
         generation++
     }
@@ -137,6 +160,8 @@ class QuickControlsController(context: Context) {
         TileId.HOTSPOT -> devices.hotspotIntent()
         TileId.CAST -> devices.castIntent()
         TileId.CAMERA -> devices.cameraIntent()
+        TileId.POWER_SAVE -> devices.powerSaveIntent()
+        TileId.LOCATION -> devices.locationIntent()
         TileId.TORCH -> null
         TileId.ROTATION_LOCK -> if (devices.canWriteSystemSettings()) null else devices.writeSettingsGrantIntent()
         TileId.FOCUS -> if (devices.hasNotificationPolicyAccess()) null else devices.notificationPolicyIntent()
@@ -205,6 +230,7 @@ class QuickControlsController(context: Context) {
     companion object {
         /** Enough to merge a burst of broadcasts, short enough to feel immediate. */
         private const val COALESCE_MS = 90L
+        private const val VOLUME_POLL_MS = 2_000L
 
         /** Slider writes during a drag; the release always writes. */
         private const val WRITE_THROTTLE_MS = 70L

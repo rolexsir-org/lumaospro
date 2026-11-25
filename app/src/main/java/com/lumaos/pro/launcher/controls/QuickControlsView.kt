@@ -2,6 +2,9 @@ package com.lumaos.pro.launcher.controls
 
 import android.content.Context
 import android.graphics.drawable.Drawable
+import android.content.res.ColorStateList
+import android.os.SystemClock
+import android.text.format.DateUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -10,6 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import com.lumaos.pro.launcher.R
 import com.lumaos.pro.launcher.launcher.home.ThemedDrawables
@@ -79,21 +83,42 @@ class QuickControlsView(
     private val density = host.density()
     private fun dp(value: Float): Int = (value * density).toInt()
 
+    private val connectivityGroup = LinearLayout(context)
     private val tileGrid = LinearLayout(context)
+    private var connectivityExpand: TextView? = null
     private val brightnessRow = SliderRow(context, host, R.string.qc_brightness, R.drawable.ic_rx_brightness, bright = true)
     private val volumeRow = SliderRow(context, host, R.string.qc_volume, R.drawable.ic_rx_volume, bright = false)
     private val mediaCard = LinearLayout(context)
     private val tiles = LinkedHashMap<TileId, TileView>()
 
     private var renderedTiles: List<TileId> = emptyList()
+    private var renderedColumns = 0
     private var snapshot: QuickControlsSnapshot = QuickControlsSnapshot.EMPTY
+    private var connectivityExpanded = false
+    private var mediaExpanded = false
+    private var progressUpdate: Runnable? = null
+    private val sectionLabels = mutableListOf<TextView>()
 
     init {
         orientation = VERTICAL
-        addView(tileGrid, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        addView(brightnessRow, rowParams(LumaTokens.spaceSM))
-        addView(volumeRow, rowParams(LumaTokens.spaceXS))
+        connectivityGroup.orientation = VERTICAL
+        connectivityGroup.setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
+        addView(sectionLabel(R.string.qc_connectivity))
+        addView(connectivityGroup, rowParams(LumaTokens.spaceXXS))
         addView(mediaCard, rowParams(LumaTokens.spaceSM))
+        addView(sectionLabel(R.string.qc_levels), rowParams(LumaTokens.spaceMD))
+        addView(brightnessRow, rowParams(LumaTokens.spaceXXS))
+        addView(volumeRow, rowParams(LumaTokens.spaceXS))
+        addView(sectionLabel(R.string.qc_system_controls), rowParams(LumaTokens.spaceMD))
+        addView(tileGrid, rowParams(LumaTokens.spaceXXS))
+    }
+
+    private fun sectionLabel(res: Int): TextView = TextView(context).apply {
+        setText(res)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
+        includeFontPadding = false
+        setPadding(dp(LumaTokens.spaceXXS), 0, 0, 0)
+        sectionLabels.add(this)
     }
 
     private fun rowParams(top: Float) =
@@ -107,6 +132,14 @@ class QuickControlsView(
         buildTiles(QuickControlsPolicy.tilesFor(state, torchCapable))
         applyMaterial()
         bind(state)
+    }
+
+    /** Rebuild only when the device's available controls or column count change. */
+    fun update(state: QuickControlsSnapshot, torchCapable: Boolean) {
+        val ids = QuickControlsPolicy.tilesFor(state, torchCapable)
+        val columns = QuickControlsPolicy.tileColumnsFor(host.availableWidthDp()).coerceAtLeast(1)
+        if (ids != renderedTiles || columns != renderedColumns) rebuild(state, torchCapable)
+        else bind(state)
     }
 
     /** Updates values only; the view tree stays, so nothing re-measures mid-gesture. */
@@ -127,19 +160,71 @@ class QuickControlsView(
         TileId.TORCH -> state.torch
         TileId.ROTATION_LOCK -> state.rotationLock
         TileId.FOCUS -> state.focus
+        TileId.POWER_SAVE -> state.powerSave
+        TileId.LOCATION -> state.location
         // Casting and the camera are destinations, not switches: they never claim
         // an on/off state they cannot know.
         TileId.CAST, TileId.CAMERA -> SwitchState(on = null, capability = Capability.SYSTEM_ROUTE)
     }
 
     private fun buildTiles(ids: List<TileId>) {
-        if (ids == renderedTiles && tileGrid.childCount > 0) return
-        renderedTiles = ids
-        tiles.clear()
-        tileGrid.removeAllViews()
         val columns = QuickControlsPolicy.tileColumnsFor(host.availableWidthDp()).coerceAtLeast(1)
+        if (ids == renderedTiles && renderedColumns == columns && tileGrid.childCount > 0) return
+        renderedTiles = ids
+        renderedColumns = columns
+        tiles.clear()
+        connectivityGroup.removeAllViews()
+        tileGrid.removeAllViews()
+        // Two compact rows give all four radios equal space, even on phones.
+        ids.take(4).chunked(2).forEachIndexed { rowIndex, group ->
+            val radioRow = LinearLayout(context).apply { orientation = HORIZONTAL }
+            connectivityGroup.addView(radioRow, LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { if (rowIndex > 0) topMargin = dp(LumaTokens.spaceXXS) })
+            group.forEachIndexed { index, id ->
+                val tile = TileView(context, host, id, compact = true)
+                tiles[id] = tile
+                radioRow.addView(tile, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (index > 0) marginStart = dp(LumaTokens.spaceXXS)
+                })
+            }
+        }
+        val extra = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            visibility = if (connectivityExpanded) View.VISIBLE else View.GONE
+        }
+        ids.drop(4).take(1).forEach { id ->
+            val tile = TileView(context, host, id, compact = true)
+            tiles[id] = tile
+            extra.addView(tile, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            extra.addView(View(context), LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(LumaTokens.spaceXXS)
+            })
+        }
+        connectivityGroup.addView(extra, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(LumaTokens.spaceXXS)
+        })
+        val expand = TextView(context).apply {
+            setText(if (connectivityExpanded) R.string.qc_connectivity_less else R.string.qc_connectivity_more)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+            setTextColor(host.glassPalette()[GlassRole.SECONDARY].rest.muted)
+            typeface = Typefaces.label(host.theme().typography)
+            gravity = Gravity.CENTER
+            minHeight = dp(LumaTokens.minTouchTarget)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                connectivityExpanded = !connectivityExpanded
+                extra.visibility = if (connectivityExpanded) View.VISIBLE else View.GONE
+                setText(if (connectivityExpanded) R.string.qc_connectivity_less else R.string.qc_connectivity_more)
+                LumaHaptics.tap(this)
+            }
+        }
+        connectivityExpand = expand
+        connectivityGroup.addView(expand, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val remaining = ids.drop(5)
         var row: LinearLayout? = null
-        ids.forEachIndexed { index, id ->
+        remaining.forEachIndexed { index, id ->
             if (index % columns == 0) {
                 val nextRow = LinearLayout(context).apply {
                     orientation = HORIZONTAL
@@ -163,7 +248,7 @@ class QuickControlsView(
             )
         }
         // A partial last row keeps the column rhythm instead of stretching tiles.
-        val remainder = ids.size % columns
+        val remainder = remaining.size % columns
         if (remainder != 0) {
             repeat(columns - remainder) {
                 row?.addView(
@@ -179,6 +264,16 @@ class QuickControlsView(
     private fun applyMaterial() {
         val theme = host.theme()
         val palette = host.glassPalette()
+        GlassViews.apply(connectivityGroup, palette[GlassRole.SECONDARY], density, ripple = false,
+            radiusOverrideDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.EXTRA_LARGE), wallpaperUnderlay = false)
+        connectivityExpand?.let {
+            it.setTextColor(palette[GlassRole.SECONDARY].rest.muted)
+            it.typeface = Typefaces.label(theme.typography)
+        }
+        sectionLabels.forEach {
+            it.setTextColor(palette[GlassRole.PRIMARY].rest.muted)
+            it.typeface = Typefaces.label(theme.typography)
+        }
         tiles.values.forEach { it.applyMaterial(theme, palette) }
         brightnessRow.applyMaterial(theme, palette)
         volumeRow.applyMaterial(theme, palette)
@@ -187,10 +282,11 @@ class QuickControlsView(
             dp(LumaTokens.cardPadding), dp(LumaTokens.spaceSM),
             dp(LumaTokens.cardPadding), dp(LumaTokens.spaceSM)
         )
-        GlassViews.apply(mediaCard, palette[GlassRole.SECONDARY], density, ripple = false, depth = LumaTokens.depthShade)
+        GlassViews.apply(mediaCard, palette[GlassRole.SECONDARY], density, ripple = false, depth = LumaTokens.depthShade, wallpaperUnderlay = false)
     }
 
     private fun bindMedia(state: QuickControlsSnapshot) {
+        stopProgressUpdates()
         val theme = host.theme()
         val palette = host.glassPalette()
         val colors = palette[GlassRole.SECONDARY].rest
@@ -256,6 +352,17 @@ class QuickControlsView(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
             typeface = Typefaces.body(theme.typography)
         })
+        if (media.remotePlayback == true) {
+            textColumn.addView(TextView(context).apply {
+                setText(R.string.qc_media_remote_playback)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                includeFontPadding = false
+                setTextColor(colors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+                typeface = Typefaces.label(theme.typography)
+            })
+        }
         row.addView(
             textColumn,
             LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -284,6 +391,64 @@ class QuickControlsView(
         mediaCard.contentDescription = context.getString(
             R.string.qc_media_description, media.title.orEmpty(), media.artist.orEmpty()
         )
+        if (MediaProgress.position(media, SystemClock.elapsedRealtime()) == null) return
+        val details = TextView(context).apply {
+            setText(if (mediaExpanded) R.string.qc_media_collapse else R.string.qc_media_expand)
+            setTextColor(colors.muted)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+            typeface = Typefaces.label(theme.typography)
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dp(LumaTokens.minTouchTarget)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                mediaExpanded = !mediaExpanded
+                LumaHaptics.tap(this)
+                bindMedia(snapshot)
+            }
+        }
+        mediaCard.addView(details)
+        if (mediaExpanded) {
+            val bar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = 1000
+                progressTintList = ColorStateList.valueOf(colors.content)
+                progressBackgroundTintList = ColorStateList.valueOf(ColorMath.withAlpha(colors.content, 0.18f))
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            mediaCard.addView(bar, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6f)))
+            val time = TextView(context).apply {
+                setTextColor(colors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+                typeface = Typefaces.label(theme.typography)
+                setPadding(0, dp(LumaTokens.spaceXXS), 0, 0)
+            }
+            mediaCard.addView(time)
+            val update = object : Runnable {
+                override fun run() {
+                    val pos = MediaProgress.position(media, SystemClock.elapsedRealtime()) ?: return
+                    val duration = media.durationMs ?: return
+                    bar.progress = (pos.toDouble() / duration * 1000).toInt().coerceIn(0, 1000)
+                    val elapsedText = DateUtils.formatElapsedTime(pos / 1000)
+                    val totalText = DateUtils.formatElapsedTime(duration / 1000)
+                    time.text = context.getString(R.string.qc_media_progress, elapsedText, totalText)
+                    if (isShown && media.playing && media.playbackSpeed == 1f && media.positionUpdatedAtMs > 0L && pos < duration) {
+                        postDelayed(this, 1000L)
+                    }
+                }
+            }
+            progressUpdate = update
+            update.run()
+        }
+    }
+
+    private fun stopProgressUpdates() {
+        progressUpdate?.let { removeCallbacks(it) }
+        progressUpdate = null
+    }
+
+    override fun onDetachedFromWindow() {
+        stopProgressUpdates()
+        super.onDetachedFromWindow()
     }
 
     private fun mediaButton(
@@ -321,13 +486,15 @@ class QuickControlsView(
     inner class TileView(
         context: Context,
         private val host: QuickControlsHost,
-        private val id: TileId
+        private val id: TileId,
+        private val compact: Boolean = false
     ) : FrameLayout(context) {
 
         private val activeFill = View(context)
         private val content = LinearLayout(context)
         private val icon = ImageView(context)
         private val label = TextView(context)
+        private val secondary = TextView(context)
         private val marker = ImageView(context)
         private var state: SwitchState = SwitchState.UNKNOWN
         private var radiusPx = 0f
@@ -337,18 +504,13 @@ class QuickControlsView(
             isClickable = true
             isFocusable = true
 
-            content.orientation = LinearLayout.VERTICAL
-            content.gravity = Gravity.CENTER
-            content.setPadding(
-                dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceXS),
-                dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceXS)
-            )
+            content.orientation = if (compact) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            content.gravity = Gravity.CENTER_VERTICAL or (if (compact) Gravity.START else Gravity.CENTER_HORIZONTAL)
+            content.setPadding(dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXS),
+                dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXS))
             content.minimumHeight = dp(LumaTokens.quickTileHeight)
             content.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
 
-            // Glyph sits in a circular badge, so a tile reads as "control +
-            // label" at a glance (on: a soft onAccent disc over the accent fill;
-            // off: a whisper of the content colour).
             icon.layoutParams = LinearLayout.LayoutParams(dp(BADGE_DP), dp(BADGE_DP))
             icon.scaleType = ImageView.ScaleType.FIT_CENTER
             val badgeInset = dp((BADGE_DP - LumaTokens.iconAction) / 2f)
@@ -356,28 +518,47 @@ class QuickControlsView(
             icon.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             content.addView(icon)
 
-            label.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(LumaTokens.spaceXXS) }
-            label.gravity = Gravity.CENTER
             label.maxLines = 1
             label.ellipsize = android.text.TextUtils.TruncateAt.END
             label.includeFontPadding = false
-            content.addView(label)
-
-            marker.layoutParams = LinearLayout.LayoutParams(dp(MARKER_DP), dp(MARKER_DP)).apply {
-                topMargin = dp(2f)
-            }
             marker.scaleType = ImageView.ScaleType.FIT_CENTER
             marker.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             marker.visibility = View.GONE
-            content.addView(marker)
+            if (compact) {
+                val textColumn = LinearLayout(context).apply { orientation = VERTICAL }
+                label.gravity = Gravity.START
+                textColumn.addView(label, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                secondary.maxLines = 1
+                secondary.ellipsize = android.text.TextUtils.TruncateAt.END
+                secondary.includeFontPadding = false
+                textColumn.addView(secondary)
+                content.addView(textColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = dp(LumaTokens.spaceXS)
+                })
+                content.addView(marker, LinearLayout.LayoutParams(dp(MARKER_DP), dp(MARKER_DP)))
+            } else {
+                label.gravity = Gravity.CENTER
+                content.addView(label, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(LumaTokens.spaceXXS) })
+                content.addView(marker, LinearLayout.LayoutParams(dp(MARKER_DP), dp(MARKER_DP)).apply {
+                    topMargin = dp(2f)
+                })
+            }
 
-            activeFill.layoutParams = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            // This is decoration, not content. MATCH_PARENT under WRAP_CONTENT
+            // can consume the entire AT_MOST height during FrameLayout's first pass.
+            activeFill.layoutParams = LayoutParams(0, 0)
             activeFill.alpha = 0f
             activeFill.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(activeFill)
             addView(content, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            activeFill.layout(0, 0, right - left, bottom - top)
         }
 
         fun applyMaterial(theme: ResolvedTheme, palette: GlassPalette) {
@@ -385,10 +566,12 @@ class QuickControlsView(
             // The theme's authored LARGE corner, so tiles match every other card.
             val radiusDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.LARGE)
             radiusPx = radiusDp * density
-            GlassViews.apply(this, spec, density, ripple = true, radiusOverrideDp = radiusDp)
+            GlassViews.apply(this, spec, density, ripple = true, radiusOverrideDp = radiusDp, wallpaperUnderlay = false)
             label.text = context.getString(labelRes(id))
             label.typeface = Typefaces.label(theme.typography)
             label.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+            secondary.typeface = Typefaces.body(theme.typography)
+            secondary.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             bind(state)
         }
 
@@ -420,6 +603,15 @@ class QuickControlsView(
             }
             icon.alpha = if (unavailable) DISABLED_ALPHA else 1f
             label.setTextColor(contentColor)
+            if (compact) {
+                secondary.text = context.getString(when {
+                    unavailable -> R.string.qc_state_unavailable
+                    next.on == true -> R.string.qc_state_on
+                    next.on == false -> R.string.qc_state_off
+                    else -> R.string.qc_state_system_managed
+                })
+                secondary.setTextColor(ColorMath.withAlpha(contentColor, 0.72f))
+            }
             label.alpha = when {
                 unavailable -> DISABLED_ALPHA
                 next.on == null -> LumaTokens.typeMicroAlpha + 0.2f
@@ -482,6 +674,7 @@ class QuickControlsView(
         private val icon = ImageView(context)
         val slider = GlassSlider(context)
         private val caption = TextView(context)
+        private val value = TextView(context)
 
         init {
             orientation = VERTICAL
@@ -501,6 +694,10 @@ class QuickControlsView(
                     marginStart = dp(LumaTokens.spaceSM)
                 }
             )
+            value.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            value.includeFontPadding = false
+            value.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            row.addView(value, LinearLayout.LayoutParams(dp(44f), ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(row, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
             caption.visibility = View.GONE
@@ -513,12 +710,15 @@ class QuickControlsView(
 
         fun applyMaterial(theme: ResolvedTheme, palette: GlassPalette) {
             val spec = palette[GlassRole.SECONDARY]
-            GlassViews.apply(this, spec, density, ripple = false, depth = LumaTokens.depthShade)
+            GlassViews.apply(this, spec, density, ripple = false, depth = LumaTokens.depthShade, wallpaperUnderlay = false)
             setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
             icon.setImageDrawable(tinted(iconRes, spec.rest.content))
             slider.contentDescription = context.getString(labelRes)
             val material = GlassSlider.material(spec.rest.content, theme.colors.accent, theme.isDark)
             slider.setMaterial(material.track, material.fill, material.rim, material.thumb, material.thumbRim)
+            value.setTextColor(spec.rest.content)
+            value.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+            value.typeface = Typefaces.label(theme.typography)
             caption.setTextColor(spec.rest.muted)
             caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             caption.typeface = Typefaces.label(theme.typography)
@@ -542,6 +742,8 @@ class QuickControlsView(
                 slider.setOnClickListener { onRestricted?.invoke() }
             }
             slider.setValueSilently(state.fraction)
+            if (state.max > state.min) showValue(slider.value())
+            else value.setText(R.string.qc_value_unknown)
 
             val captionText = when {
                 state.capability == Capability.NEEDS_GRANT -> context.getString(
@@ -555,7 +757,12 @@ class QuickControlsView(
             captionText?.let { caption.text = it }
         }
 
+        private fun showValue(fraction: Float) {
+            value.text = context.getString(R.string.qc_value_percent, (fraction * 100).toInt())
+        }
+
         private fun emit(fraction: Float, commit: Boolean) {
+            showValue(fraction)
             if (bright) host.onBrightnessChanged(fraction, commit) else host.onVolumeChanged(fraction, commit)
         }
     }
@@ -577,6 +784,8 @@ class QuickControlsView(
             TileId.FOCUS -> R.string.qc_tile_focus
             TileId.CAST -> R.string.qc_tile_cast
             TileId.CAMERA -> R.string.qc_tile_camera
+            TileId.POWER_SAVE -> R.string.qc_tile_power_save
+            TileId.LOCATION -> R.string.qc_tile_location
         }
 
         fun iconRes(id: TileId): Int = when (id) {
@@ -590,6 +799,8 @@ class QuickControlsView(
             TileId.FOCUS -> R.drawable.ic_rx_focus
             TileId.CAST -> R.drawable.ic_rx_cast
             TileId.CAMERA -> R.drawable.ic_rx_camera
+            TileId.POWER_SAVE -> R.drawable.ic_rx_battery_save
+            TileId.LOCATION -> R.drawable.ic_rx_location
         }
     }
 }

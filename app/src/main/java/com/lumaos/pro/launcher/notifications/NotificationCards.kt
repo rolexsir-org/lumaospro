@@ -62,45 +62,73 @@ class NotificationCardAdapter(
 ) : RecyclerView.Adapter<NotificationCardAdapter.CardHolder>() {
 
     private var cards: List<NotificationCardModel> = emptyList()
+    private var rows: List<NotificationPolicy.DisplayRow> = emptyList()
+    private val expandedGroups = HashSet<NotificationPolicy.GroupId>()
     private var awaiting: Set<String> = emptySet()
     /** Keys whose reply field the user has opened; survives a rebind. */
     private val expanded = HashSet<String>()
+    private val expandedContent = HashSet<String>()
     /** Draft text per key, kept only while the shade is open. */
     private val drafts = HashMap<String, String>()
 
     fun submit(next: List<NotificationCardModel>, awaitingReply: Set<String>) {
-        val previous = cards
-        val previousAwaitingSnapshot = awaiting
+        val previousAwaiting = awaiting
         cards = next
         awaiting = awaitingReply
-        expanded.retainAll(next.mapTo(HashSet()) { it.key })
+        val keys = next.mapTo(HashSet()) { it.key }
+        expanded.retainAll(keys)
+        expandedContent.retainAll(keys)
         drafts.keys.retainAll(expanded)
+        expandedGroups.retainAll(next.mapNotNullTo(HashSet()) { NotificationPolicy.groupId(it) })
+        updateRows(previousAwaiting)
+    }
+
+    private fun updateRows(previousAwaiting: Set<String> = awaiting) {
+        val previous = rows
+        val next = NotificationPolicy.displayRows(cards, expandedGroups)
+        rows = next
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = previous.size
             override fun getNewListSize() = next.size
-            override fun areItemsTheSame(o: Int, n: Int) = previous[o].key == next[n].key
+            override fun areItemsTheSame(o: Int, n: Int) = previous[o].card.key == next[n].card.key
             override fun areContentsTheSame(o: Int, n: Int) =
                 previous[o] == next[n] &&
-                    previousAwaitingSnapshot.contains(previous[o].key) == awaitingReply.contains(next[n].key)
+                    previousAwaiting.contains(previous[o].card.key) == awaiting.contains(next[n].card.key)
         })
         diff.dispatchUpdatesTo(this)
     }
 
-    override fun getItemCount(): Int = cards.size
+    override fun getItemCount(): Int = rows.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CardHolder =
         CardHolder(CardView(context, host))
 
     override fun onBindViewHolder(holder: CardHolder, position: Int) {
-        val card = cards[position]
+        val row = rows[position]
+        val card = row.card
         holder.view.bind(
             card = card,
             replySent = awaiting.contains(card.key),
             expanded = expanded.contains(card.key),
+            contentExpanded = expandedContent.contains(card.key),
+            groupSize = row.groupSize,
+            groupExpanded = row.groupExpanded,
+            onToggleGroup = {
+                row.group?.let { group ->
+                    if (!expandedGroups.add(group)) expandedGroups.remove(group)
+                    updateRows()
+                }
+            },
             draft = drafts[card.key].orEmpty(),
             onToggleReply = { key, open ->
                 if (open) expanded += key else expanded -= key
-                notifyItemChanged(holder.bindingAdapterPosition)
+                val position = holder.bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) notifyItemChanged(position)
+            },
+            onToggleContent = { key, open ->
+                if (open) expandedContent += key else expandedContent -= key
+                val position = holder.bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) notifyItemChanged(position)
             },
             onDraft = { key, text -> drafts[key] = text }
         )
@@ -130,6 +158,8 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
     private val appLabel = TextView(context)
     private val age = TextView(context)
     private val dismiss = ImageButton(context)
+    private val expandContent = ImageButton(context)
+    private val groupToggle = TextView(context)
     private val title = TextView(context)
     private val body = TextView(context)
     private val actionsRow = LinearLayout(context)
@@ -154,6 +184,7 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         )
         buildHeader()
         buildBody()
+        buildGroupToggle()
         buildActions()
         buildReply()
     }
@@ -183,7 +214,14 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         age.includeFontPadding = false
         header.addView(age)
 
-        dismiss.layoutParams = LayoutParams(dp(LumaTokens.minTouchTarget * 0.75f), dp(LumaTokens.minTouchTarget * 0.75f))
+        expandContent.layoutParams = LayoutParams(dp(LumaTokens.minTouchTarget), dp(LumaTokens.minTouchTarget))
+        expandContent.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        expandContent.setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceSM))
+        expandContent.background = ThemedDrawables.ripple(0x22FFFFFF, null, dp(LumaTokens.radiusSmall).toFloat())
+        expandContent.visibility = View.GONE
+        header.addView(expandContent)
+
+        dismiss.layoutParams = LayoutParams(dp(LumaTokens.minTouchTarget), dp(LumaTokens.minTouchTarget))
         dismiss.scaleType = ImageView.ScaleType.CENTER_INSIDE
         dismiss.setPadding(dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXS))
         dismiss.background = ThemedDrawables.ripple(0x22FFFFFF, null, dp(LumaTokens.radiusSmall).toFloat())
@@ -212,6 +250,16 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         body.includeFontPadding = false
         body.setLineSpacing(0f, 1.12f)
         addView(body)
+    }
+
+    private fun buildGroupToggle() {
+        groupToggle.minHeight = dp(LumaTokens.minTouchTarget)
+        groupToggle.gravity = Gravity.CENTER_VERTICAL
+        groupToggle.setPadding(dp(LumaTokens.spaceXS), 0, dp(LumaTokens.spaceXS), 0)
+        groupToggle.isFocusable = true
+        groupToggle.background = ThemedDrawables.ripple(0x22FFFFFF, null, dp(LumaTokens.radiusSmall).toFloat())
+        groupToggle.visibility = View.GONE
+        addView(groupToggle, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     private fun buildActions() {
@@ -279,8 +327,13 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         card: NotificationCardModel,
         replySent: Boolean,
         expanded: Boolean,
+        contentExpanded: Boolean,
+        groupSize: Int,
+        groupExpanded: Boolean,
+        onToggleGroup: () -> Unit,
         draft: String,
         onToggleReply: (String, Boolean) -> Unit,
+        onToggleContent: (String, Boolean) -> Unit,
         onDraft: (String, String) -> Unit
     ) {
         bound = card
@@ -289,7 +342,7 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         val palette = host.glassPalette()
         val spec = palette[GlassRole.SECONDARY]
         val colors = spec.rest
-        GlassViews.apply(this, spec, density, ripple = true, depth = LumaTokens.depthShade)
+        GlassViews.apply(this, spec, density, ripple = true, depth = LumaTokens.depthShade, wallpaperUnderlay = false)
 
         val icon = host.appIcon(card.packageName) ?: NotificationHub.fallbackIcon(card.key)
         appIcon.setImageDrawable(icon)
@@ -306,7 +359,30 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         age.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
         age.typeface = Typefaces.label(theme.typography)
 
-        val dismissible = card.clearable && !card.ongoing
+        val expandable = !card.contentHidden && !card.body.isNullOrBlank()
+        expandContent.visibility = if (expandable) View.VISIBLE else View.GONE
+        ThemedUiIcons.bind(expandContent, R.drawable.ic_rx_chevron_right)
+        expandContent.rotation = if (contentExpanded) 270f else 90f
+        expandContent.imageTintList = android.content.res.ColorStateList.valueOf(colors.muted)
+        expandContent.contentDescription = context.getString(
+            if (contentExpanded) R.string.notification_collapse else R.string.notification_expand
+        )
+        expandContent.setOnClickListener { onToggleContent(card.key, !contentExpanded) }
+        body.maxLines = if (contentExpanded) NotificationPolicy.MAX_BODY_LINES else 2
+
+        groupToggle.visibility = if (groupSize > 1) View.VISIBLE else View.GONE
+        if (groupSize > 1) {
+            groupToggle.text = context.resources.getQuantityString(
+                if (groupExpanded) R.plurals.notification_group_collapse else R.plurals.notification_group_expand,
+                groupSize, groupSize
+            )
+            groupToggle.setTextColor(colors.muted)
+            groupToggle.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
+            groupToggle.typeface = Typefaces.label(theme.typography)
+            groupToggle.setOnClickListener { LumaHaptics.tap(this); onToggleGroup() }
+        } else groupToggle.setOnClickListener(null)
+
+        val dismissible = NotificationPolicy.canClear(card.clearable, card.ongoing)
         dismiss.visibility = if (dismissible) View.VISIBLE else View.GONE
         ThemedUiIcons.bind(dismiss, R.drawable.ic_rx_close)
         dismiss.imageTintList = android.content.res.ColorStateList.valueOf(colors.muted)
@@ -446,7 +522,7 @@ class CardView(context: Context, private val host: NotificationCardHost) : Linea
         replySend.visibility = if (open) View.VISIBLE else View.GONE
 
         replyField.background = GlassViews.drawable(
-            host.glassPalette()[GlassRole.SEARCH], density, ripple = false, depth = LumaTokens.depthShade
+            host.glassPalette()[GlassRole.SEARCH], density, ripple = false, depth = LumaTokens.depthShade, wallpaperUnderlay = false
         )
         replyField.setTextColor(colors.content)
         replyField.setHintTextColor(ColorMath.withAlpha(colors.muted, 0.8f))

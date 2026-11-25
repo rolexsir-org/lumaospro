@@ -93,7 +93,9 @@ data class NotificationCardModel(
     val contentHidden: Boolean,
     val actions: List<NotificationActionModel>,
     val reply: NotificationActionModel?,
-    val conversation: Boolean
+    val conversation: Boolean,
+    /** Android's real group identity, scoped by package when rendered. */
+    val groupKey: String? = null
 )
 
 /**
@@ -108,11 +110,14 @@ object NotificationPolicy {
     /** Cards beyond this are reachable in the originating app, not in a launcher. */
     const val MAX_CARDS = 24
 
+    /** Ongoing and non-clearable cards must survive a local clear-all. */
+    fun canClear(clearable: Boolean, ongoing: Boolean): Boolean = clearable && !ongoing
+
     /** Actions shown inline; the rest stay with the app that posted them. */
     const val MAX_INLINE_ACTIONS = 3
 
-    /** Body lines before ellipsis; long messages stay readable, never clipped mid-glyph. */
-    const val MAX_BODY_LINES = 4
+    /** Maximum real lines retained for an expanded card. */
+    const val MAX_BODY_LINES = 12
 
     /**
      * The action that genuinely accepts a typed reply, or null.
@@ -183,17 +188,17 @@ object NotificationPolicy {
         if (raws.isEmpty()) return emptyList()
         val childrenByGroup = raws
             .filter { !it.isGroupSummary && !it.groupKey.isNullOrBlank() }
-            .groupBy { it.groupKey }
+            .groupBy { GroupId(it.packageName, it.groupKey!!) }
             .mapValues { (_, items) -> items.size }
 
         val cards = ArrayList<NotificationCardModel>(raws.size)
         for (raw in raws) {
             if (raw.isGroupSummary) {
-                val siblings = childrenByGroup[raw.groupKey] ?: 0
+                val siblings = raw.groupKey?.let { childrenByGroup[GroupId(raw.packageName, it)] } ?: 0
                 // A summary with live children is chrome, not content.
                 if (siblings > 0) continue
             }
-            cards += card(raw, collapsedCount = childrenByGroup[raw.groupKey] ?: 0)
+            cards += card(raw, collapsedCount = raw.groupKey?.let { childrenByGroup[GroupId(raw.packageName, it)] } ?: 0)
         }
         return cards
             .sortedWith(compareByDescending<NotificationCardModel> { it.ongoing }.thenByDescending { it.postedAtMillis })
@@ -217,8 +222,43 @@ object NotificationPolicy {
             contentHidden = hidden,
             actions = inlineActions(raw.actions),
             reply = reply,
-            conversation = raw.isConversational
+            conversation = raw.isConversational,
+            groupKey = raw.groupKey?.takeUnless { raw.isGroupSummary || it.isBlank() }
         )
+    }
+
+    /** Stable group identity; Android supplies a key, never group by app alone. */
+    data class GroupId(val packageName: String, val groupKey: String)
+
+    data class DisplayRow(
+        val card: NotificationCardModel,
+        /** Present only on the first card of a real multi-notification group. */
+        val group: GroupId? = null,
+        val groupSize: Int = 1,
+        val groupExpanded: Boolean = false
+    )
+
+    fun groupId(card: NotificationCardModel): GroupId? =
+        card.groupKey?.takeIf { it.isNotBlank() }?.let { GroupId(card.packageName, it) }
+
+    /** Preserve the existing ranked order, with group children beside their leader. */
+    fun displayRows(cards: List<NotificationCardModel>, expanded: Set<GroupId>): List<DisplayRow> {
+        val groups = cards.mapNotNull { card -> groupId(card)?.let { it to card } }
+            .groupBy({ it.first }, { it.second })
+        val seen = HashSet<GroupId>()
+        val rows = ArrayList<DisplayRow>(cards.size)
+        cards.forEach { card ->
+            val id = groupId(card)
+            val members = groups[id]
+            if (id == null || members == null || members.size < 2) {
+                rows += DisplayRow(card)
+            } else if (seen.add(id)) {
+                val isExpanded = id in expanded
+                rows += DisplayRow(card, id, members.size, isExpanded)
+                if (isExpanded) members.drop(1).forEach { rows += DisplayRow(it) }
+            }
+        }
+        return rows
     }
 
     /** True when the shade has anything real to show. */

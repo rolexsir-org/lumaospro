@@ -482,6 +482,7 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         core.themeManager.refreshFromSystemWallpaper()
         core.effects.refresh()
         readouts.refresh()
+        if (shade?.isOpen == true) shade?.controls?.refresh()
         maybeLaunchOnboarding()
         if (returningFromApp) {
             returningFromApp = false
@@ -2542,6 +2543,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
 
     override fun topInsetPx(): Int = safeInsets.top
     override fun bottomInsetPx(): Int = safeInsets.bottom
+    override fun leftInsetPx(): Int = safeInsets.left
+    override fun rightInsetPx(): Int = safeInsets.right
 
     /**
      * The width the panel's tile grid really has, in dp: the window minus the
@@ -2555,7 +2558,8 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
         val chrome = 2 * dp(LumaTokens.screenMarginHorizontal.roundToInt()) +
             2 * dp(LumaTokens.spaceSM.roundToInt())
         val widthPx = if (homeRoot.width > 0) homeRoot.width else resources.displayMetrics.widthPixels
-        return ((widthPx - chrome) / d).toInt().coerceAtLeast(1)
+        val available = widthPx - safeInsets.left - safeInsets.right - chrome
+        return (minOf(available, dp(520) - 2 * dp(LumaTokens.spaceSM.roundToInt())) / d).toInt().coerceAtLeast(1)
     }
 
     override fun onDepthProgress(progress: Float) {
@@ -2566,6 +2570,25 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
     override fun onOpenSettings() {
         shade?.dismiss()
         openSettings()
+    }
+
+    override fun onOpenStudio() {
+        shade?.dismissImmediately()
+        openStudio()
+    }
+
+    override fun onOpenVault() {
+        shade?.dismissImmediately()
+        runCatching { startActivity(com.lumaos.pro.launcher.vault.ui.VaultLockActivity.intent(this)) }
+            .onFailure { toast(getString(R.string.vault_unavailable)) }
+    }
+
+    override fun onOpenFocusProtection() {
+        shade?.dismissImmediately()
+        runCatching {
+            startActivity(Intent(this, SettingsActivity::class.java)
+                .putExtra(SettingsActivity.EXTRA_FOCUS_PROTECTION, true))
+        }.onFailure { toast(getString(R.string.screen_unavailable)) }
     }
 
     override fun showMessage(message: String) = toast(message)

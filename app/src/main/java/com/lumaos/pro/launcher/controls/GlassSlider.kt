@@ -79,7 +79,7 @@ class GlassSlider(context: Context) : View(context) {
     /** Sets the position from the device's real value without notifying listeners. */
     fun setValueSilently(value: Float) {
         val next = value.coerceIn(0f, 1f)
-        if (next == fraction) return
+        if (dragging || next == fraction) return
         fraction = next
         invalidate()
     }
@@ -117,7 +117,9 @@ class GlassSlider(context: Context) : View(context) {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!interactive) return false
+        // Restricted sliders still need to dispatch their click to the grant
+        // route installed by SliderRow; they must not adjust the value.
+        if (!interactive) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 dragging = true
@@ -190,9 +192,10 @@ class GlassSlider(context: Context) : View(context) {
             100f,
             fraction * 100f
         )
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
-        if (!interactive) info.isImportantForAccessibility = true
+        if (interactive) {
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+        }
     }
 
     override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {

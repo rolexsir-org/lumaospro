@@ -93,10 +93,30 @@ data class MediaSnapshot(
     val canSkipNext: Boolean,
     val canSkipPrevious: Boolean,
     /** True when the platform supplied artwork for this session. */
-    val hasArtwork: Boolean
+    val hasArtwork: Boolean,
+    /** Null when the session has not supplied a usable position or duration. */
+    val positionMs: Long? = null,
+    val durationMs: Long? = null,
+    val positionUpdatedAtMs: Long = 0L,
+    val playbackSpeed: Float = 0f,
+    /** Android reports local/remote session routing, not necessarily a device name. */
+    val remotePlayback: Boolean? = null
 ) {
     companion object {
         val EMPTY = MediaSnapshot(null, null, false, false, false, false, false)
+    }
+}
+
+/** Extrapolate only real session data, using Android's monotonic clock. */
+object MediaProgress {
+    fun position(media: MediaSnapshot, elapsedRealtimeMs: Long): Long? {
+        return com.lumaos.pro.launcher.widgets.music.MusicLogic.position(
+            position = media.positionMs ?: return null,
+            duration = media.durationMs ?: return null,
+            updateTime = media.positionUpdatedAtMs,
+            now = elapsedRealtimeMs,
+            playingAtNormalSpeed = media.playing && media.playbackSpeed == 1f
+        )
     }
 }
 
@@ -117,6 +137,10 @@ data class QuickControlsSnapshot(
     val media: MediaSnapshot? = null,
     val castAvailable: Boolean = false,
     val cameraAvailable: Boolean = false,
+    val powerSave: SwitchState = SwitchState.UNKNOWN,
+    val location: SwitchState = SwitchState.UNKNOWN,
+    val powerSettingsAvailable: Boolean = false,
+    val locationSettingsAvailable: Boolean = false,
     /** True while the WRITE_SETTINGS app-op is granted to LumaOS Pro. */
     val canWriteSystemSettings: Boolean = false,
     /** True while Android allows changing the interruption filter. */
@@ -129,7 +153,8 @@ data class QuickControlsSnapshot(
 
 /** The tiles the panel renders, in order, and what each one does when tapped. */
 enum class TileId {
-    WIFI, MOBILE_DATA, BLUETOOTH, AIRPLANE, HOTSPOT, TORCH, ROTATION_LOCK, FOCUS, CAST, CAMERA
+    WIFI, MOBILE_DATA, BLUETOOTH, AIRPLANE, HOTSPOT, TORCH, ROTATION_LOCK, FOCUS, CAST, CAMERA,
+    POWER_SAVE, LOCATION
 }
 
 /**
@@ -179,6 +204,8 @@ object QuickControlsPolicy {
         // Android 11+ package-visibility filtering.
         if (snapshot.castAvailable) tiles += TileId.CAST
         if (snapshot.cameraAvailable) tiles += TileId.CAMERA
+        if (snapshot.powerSettingsAvailable) tiles += TileId.POWER_SAVE
+        if (snapshot.locationSettingsAvailable) tiles += TileId.LOCATION
         return tiles
     }
 
@@ -193,7 +220,7 @@ object QuickControlsPolicy {
         TileId.ROTATION_LOCK -> snapshot.rotationLock.capability != Capability.DIRECT
         TileId.FOCUS -> snapshot.focus.capability != Capability.DIRECT
         TileId.CAST -> true
-        TileId.CAMERA -> true
+        TileId.CAMERA, TileId.POWER_SAVE, TileId.LOCATION -> true
     }
 
     /**
