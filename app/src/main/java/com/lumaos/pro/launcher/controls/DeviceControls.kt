@@ -1,18 +1,24 @@
 package com.lumaos.pro.launcher.controls
 
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.ContentObserver
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
+import android.nfc.NfcAdapter
+import android.location.LocationManager
+import android.os.PowerManager
+import android.os.Vibrator
+import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
@@ -54,13 +60,13 @@ sealed interface TileTapOutcome {
  *  - every platform call is guarded, because OEM builds routinely throw on
  *    settings reads that AOSP documents as safe;
  *  - observation is event-driven (broadcasts, torch callbacks, media-session
- *    callbacks) and only while the panel is open. There is no polling loop.
+ *    callbacks) and only while the panel is open. Volume polling is owned by the controller.
  *
  * Permissions: `ACCESS_WIFI_STATE` and `ACCESS_NETWORK_STATE` are install-time
  * (normal) and only read state. `WRITE_SETTINGS` is an app-op the user grants on
  * an Android screen; it powers brightness and rotation lock and is never assumed.
  * Notification policy access (Focus) is granted on its own Android screen.
- * No Bluetooth runtime permission is requested: on Android 13+ reading the
+ * No Bluetooth runtime permission is requested: on Android 12+ reading the
  * adapter state needs `BLUETOOTH_CONNECT`, so the tile reports "unknown" and
  * opens Android's Bluetooth page instead of prompting for a radio permission.
  */
@@ -75,8 +81,6 @@ class DeviceControls(private val context: Context) {
         get() = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private val wifiManager: WifiManager?
         get() = appContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-    private val connectivityManager: ConnectivityManager?
-        get() = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private val cameraManager: CameraManager?
         get() = appContext.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
 
@@ -105,6 +109,10 @@ class DeviceControls(private val context: Context) {
     }
 
     private var torchCallbackRegistered = false
+    private var settingsObserverRegistered = false
+    private val settingsObserver = object : ContentObserver(main) {
+        override fun onChange(selfChange: Boolean) = notifyChanged()
+    }
 
     /**
      * Capability probe. Runs once per panel open: the camera list does not change
@@ -158,10 +166,20 @@ class DeviceControls(private val context: Context) {
         focusFilter = focusFilter(),
         brightness = brightnessState(),
         volume = volumeState(),
+        ringVolume = volumeState(AudioStream.RING),
+        notificationVolume = volumeState(AudioStream.NOTIFICATION),
+        alarmVolume = volumeState(AudioStream.ALARM),
+        ringerMode = ringerMode(),
         battery = batteryReading(),
         media = if (mediaActive) media else null,
         castAvailable = isResolvable(castIntent()),
         cameraAvailable = isResolvable(cameraIntent()),
+        powerSave = powerSaveState(),
+        location = locationState(),
+        nfc = nfcState(),
+        nfcAvailable = nfcAdapter() != null && isResolvable(nfcIntent()),
+        powerSettingsAvailable = isResolvable(powerSaveIntent()),
+        locationSettingsAvailable = isResolvable(locationIntent()),
         canWriteSystemSettings = canWriteSystemSettings(),
         hasNotificationPolicyAccess = hasNotificationPolicyAccess()
     )
@@ -170,23 +188,52 @@ class DeviceControls(private val context: Context) {
         val enabled = runCatching { wifiManager?.isWifiEnabled }.getOrNull() ?: return SwitchState.unavailable()
         // Android 10 removed the third-party Wi-Fi write; the system panel is the
         // supported route and it does toggle Wi-Fi for real.
+        val detail = activeTransportDetail(NetworkCapabilities.TRANSPORT_WIFI, R.string.qc_wifi_connected)
         return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            SwitchState.direct(enabled)
+            SwitchState.direct(enabled, detail)
         } else {
-            SwitchState.systemRoute(enabled)
+            SwitchState.systemRoute(enabled, detail)
         }
     }
 
-    @Suppress("MissingPermission")
+    private fun activeTransportDetail(transport: Int, label: Int): String? = runCatching {
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return@runCatching null
+        val network = connectivity.activeNetwork ?: return@runCatching null
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return@runCatching null
+        if (capabilities.hasTransport(transport)) appContext.getString(label) else null
+    }.getOrNull()
+
     private fun mobileDataState(): SwitchState {
-        val cm = connectivityManager
-        val on = runCatching {
-            val network = cm?.activeNetwork ?: return@runCatching null
-            cm.getNetworkCapabilities(network)
-                ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        // The default network may be Wi-Fi even while mobile data is enabled;
+        // transport alone cannot establish the user's mobile-data switch state.
+        return SwitchState.systemRoute(null, activeTransportDetail(
+            NetworkCapabilities.TRANSPORT_CELLULAR, R.string.qc_mobile_connected))
+    }
+
+    private fun powerSaveState(): SwitchState {
+        val power = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val enabled = runCatching { power?.isPowerSaveMode }.getOrNull()
+        return SwitchState.systemRoute(enabled)
+    }
+
+    private fun locationState(): SwitchState {
+        val manager = appContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return SwitchState.systemRoute(null)
+        val enabled = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) manager.isLocationEnabled
+            else manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         }.getOrNull()
-        // Only the system can switch the radio; the panel reports what is live.
-        return SwitchState.systemRoute(on)
+        return SwitchState.systemRoute(enabled)
+    }
+
+    private fun nfcAdapter(): NfcAdapter? =
+        runCatching { NfcAdapter.getDefaultAdapter(appContext) }.getOrNull()
+
+    private fun nfcState(): SwitchState {
+        val adapter = nfcAdapter() ?: return SwitchState.unavailable()
+        return SwitchState.systemRoute(runCatching { adapter.isEnabled }.getOrNull())
     }
 
     private fun bluetoothState(): SwitchState {
@@ -195,7 +242,7 @@ class DeviceControls(private val context: Context) {
         }.getOrNull() ?: return SwitchState.systemRoute(null)
         val enabled = runCatching { adapter.isEnabled }.getOrNull()
         // null means Android refused the read (a missing BLUETOOTH_CONNECT on
-        // API 33+); the tile then shows "system-managed", not "off".
+        // API 31+); the tile then shows "system-managed", not "off".
         return SwitchState.systemRoute(enabled)
     }
 
@@ -270,18 +317,32 @@ class DeviceControls(private val context: Context) {
         )
     }
 
-    private fun volumeState(): SliderState {
+    private fun platformStream(stream: AudioStream): Int = when (stream) {
+        AudioStream.MEDIA -> AudioManager.STREAM_MUSIC
+        AudioStream.RING -> AudioManager.STREAM_RING
+        AudioStream.NOTIFICATION -> AudioManager.STREAM_NOTIFICATION
+        AudioStream.ALARM -> AudioManager.STREAM_ALARM
+    }
+
+    internal fun volumeState(stream: AudioStream = AudioStream.MEDIA): SliderState {
         val manager = audioManager ?: return SliderState.UNAVAILABLE
-        val max = runCatching { manager.getStreamMaxVolume(MUSIC_STREAM) }.getOrNull()
-            ?: return SliderState.UNAVAILABLE
-        val current = runCatching { manager.getStreamVolume(MUSIC_STREAM) }.getOrNull() ?: 0
-        return SliderState(
-            value = current.coerceIn(0, max),
-            min = 0,
-            max = max.coerceAtLeast(0),
-            // setStreamVolume on STREAM_MUSIC needs no permission.
-            capability = Capability.DIRECT
-        )
+        val id = platformStream(stream)
+        val max = runCatching { manager.getStreamMaxVolume(id) }.getOrNull() ?: return SliderState.UNAVAILABLE
+        val min = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            runCatching { manager.getStreamMinVolume(id) }.getOrDefault(0)
+        } else 0
+        if (max <= min) return SliderState.UNAVAILABLE
+        val current = runCatching { manager.getStreamVolume(id) }.getOrNull() ?: return SliderState.UNAVAILABLE
+        val fixed = runCatching { manager.isVolumeFixed }.getOrDefault(true)
+        return SliderState(current.coerceIn(min, max), min, max,
+            if (fixed) Capability.SYSTEM_ROUTE else Capability.DIRECT)
+    }
+
+    internal fun ringerMode(): RingerMode? = when (runCatching { audioManager?.ringerMode }.getOrNull()) {
+        AudioManager.RINGER_MODE_NORMAL -> RingerMode.NORMAL
+        AudioManager.RINGER_MODE_VIBRATE -> RingerMode.VIBRATE
+        AudioManager.RINGER_MODE_SILENT -> RingerMode.SILENT
+        else -> null
     }
 
     private fun batteryReading(): BatteryReading {
@@ -294,8 +355,9 @@ class DeviceControls(private val context: Context) {
                 sticky.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             )
             val status = sticky.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val plugged = sticky.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
             val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
+                (status == BatteryManager.BATTERY_STATUS_FULL && plugged)
             if (percent != null) return BatteryReading(percent, charging)
         }
         // Fallback for OEM builds that do not hand out the sticky broadcast.
@@ -344,16 +406,46 @@ class DeviceControls(private val context: Context) {
         ) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
     }.getOrDefault(false)
 
-    fun applyVolume(fraction: Float): Boolean {
+    fun applyVolume(fraction: Float, stream: AudioStream = AudioStream.MEDIA): Boolean {
         val manager = audioManager ?: return false
-        val max = runCatching { manager.getStreamMaxVolume(MUSIC_STREAM) }.getOrNull() ?: return false
-        // Mute is a real intent for media volume, so zero is allowed here.
-        val level = QuickControlsPolicy.sliderToLevel(fraction, 0, max, allowZero = true)
-        return runCatching { manager.setStreamVolume(MUSIC_STREAM, level, 0); true }
+        val state = volumeState(stream)
+        if (state.capability != Capability.DIRECT) return false
+        val level = QuickControlsPolicy.sliderToLevel(fraction, state.min, state.max, allowZero = true)
+        return runCatching { manager.setStreamVolume(platformStream(stream), level, 0); true }
             .getOrElse {
-                LumaLog.w("Media stream volume could not be set")
+                // In particular, Android can reject changes affecting DND.
+                LumaLog.w("Audio stream volume could not be set")
                 false
             }
+    }
+
+    /** Cycle the public ringer modes; Android may require DND policy access. */
+    fun cycleRingerMode(): TileTapOutcome {
+        val manager = audioManager ?: return TileTapOutcome.Unavailable(R.string.qc_sound_mode_failed)
+        val current = ringerMode() ?: return TileTapOutcome.Unavailable(R.string.qc_sound_mode_failed)
+        @Suppress("DEPRECATION")
+        val hasVibrator = runCatching {
+            (appContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.hasVibrator() == true
+        }.getOrDefault(false)
+        val next = RingerModePolicy.next(current, hasVibrator)
+        val target = when (next) {
+            RingerMode.NORMAL -> AudioManager.RINGER_MODE_NORMAL
+            RingerMode.VIBRATE -> AudioManager.RINGER_MODE_VIBRATE
+            RingerMode.SILENT -> AudioManager.RINGER_MODE_SILENT
+        }
+        if (RingerModePolicy.needsPolicyAccess(current, next, hasNotificationPolicyAccess())) {
+            return TileTapOutcome.NeedsGrant(R.string.qc_grant_notification_policy)
+        }
+        return try {
+            manager.ringerMode = target
+            if (manager.ringerMode == target) TileTapOutcome.Toggled(target == AudioManager.RINGER_MODE_NORMAL)
+            else TileTapOutcome.Unavailable(R.string.qc_sound_mode_failed)
+        } catch (_: SecurityException) {
+            if (!hasNotificationPolicyAccess()) TileTapOutcome.NeedsGrant(R.string.qc_grant_notification_policy)
+            else TileTapOutcome.Unavailable(R.string.qc_sound_mode_failed)
+        } catch (_: Exception) {
+            TileTapOutcome.Unavailable(R.string.qc_sound_mode_failed)
+        }
     }
 
     fun applyRotationLock(lock: Boolean): Boolean {
@@ -406,6 +498,9 @@ class DeviceControls(private val context: Context) {
         TileId.FOCUS -> toggleFocus()
         TileId.CAST -> openRoute(castIntent(), R.string.qc_route_cast, displayFallbackIntent())
         TileId.CAMERA -> openRoute(cameraIntent(), R.string.qc_unavailable_camera)
+        TileId.POWER_SAVE -> openRoute(powerSaveIntent(), R.string.qc_no_system_page)
+        TileId.LOCATION -> openRoute(locationIntent(), R.string.qc_no_system_page)
+        TileId.NFC -> openRoute(nfcIntent(), R.string.qc_no_system_page)
     }
 
     private fun toggleWifi(): TileTapOutcome {
@@ -494,6 +589,10 @@ class DeviceControls(private val context: Context) {
     fun bluetoothIntent(): Intent? = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
 
     fun airplaneIntent(): Intent? = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)
+
+    fun powerSaveIntent(): Intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+    fun locationIntent(): Intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+    fun nfcIntent(): Intent = Intent(Settings.ACTION_NFC_SETTINGS)
 
     /**
      * Android's cast screen. Some builds do not ship one, so the caller passes
@@ -587,15 +686,31 @@ class DeviceControls(private val context: Context) {
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+            @Suppress("DEPRECATION")
+            addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
             addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-            }
+            addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            addAction(LocationManager.MODE_CHANGED_ACTION)
+            addAction(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED)
+            addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
         }
         runCatching {
             ContextCompat.registerReceiver(appContext, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         }.onFailure { LumaLog.w("Quick Controls observation could not start") }
+        runCatching {
+            val resolver = appContext.contentResolver
+            listOf(Settings.System.SCREEN_BRIGHTNESS, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.ACCELEROMETER_ROTATION).forEach { key ->
+                resolver.registerContentObserver(Settings.System.getUriFor(key), false, settingsObserver)
+            }
+            settingsObserverRegistered = true
+        }.onFailure {
+            // Registration may have failed after one URI was registered.
+            runCatching { appContext.contentResolver.unregisterContentObserver(settingsObserver) }
+            LumaLog.w("Quick Controls settings observation could not start")
+        }
         if (torchCapable() && !torchCallbackRegistered) {
             runCatching { cameraManager?.registerTorchCallback(torchCallback, main) }
                 .onSuccess { torchCallbackRegistered = true }
@@ -610,6 +725,11 @@ class DeviceControls(private val context: Context) {
         observing = false
         runCatching { appContext.unregisterReceiver(receiver) }
             .onFailure { LumaLog.w("Quick Controls observation could not stop") }
+        if (settingsObserverRegistered) {
+            runCatching { appContext.contentResolver.unregisterContentObserver(settingsObserver) }
+                .onFailure { LumaLog.w("Quick Controls settings observation could not stop") }
+            settingsObserverRegistered = false
+        }
         if (torchCallbackRegistered) {
             runCatching { cameraManager?.unregisterTorchCallback(torchCallback) }
             torchCallbackRegistered = false

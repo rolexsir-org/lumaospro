@@ -40,6 +40,12 @@ class MediaSessionSource(context: Context) {
     @Volatile
     private var controllers: List<MediaController> = emptyList()
     private val callbacks = LinkedHashMap<android.media.session.MediaSession.Token, Pair<MediaController, MediaController.Callback>>()
+    private val sessionIds = LinkedHashMap<android.media.session.MediaSession.Token, Long>()
+    private var nextSessionId = 0L
+    private fun sessionId(token: android.media.session.MediaSession.Token): Long = synchronized(sessionIds) {
+        sessionIds.getOrPut(token) { ++nextSessionId }
+    }
+
     private var registered = false
     private var onChanged: (() -> Unit)? = null
 
@@ -104,6 +110,7 @@ class MediaSessionSource(context: Context) {
     private fun attach(incoming: List<MediaController>) {
         val next = incoming.take(MAX_SESSIONS).distinctBy { it.sessionToken }
         val wanted = next.mapTo(HashSet()) { it.sessionToken }
+        synchronized(sessionIds) { sessionIds.keys.retainAll(wanted) }
         callbacks.keys.filter { it !in wanted }.toList().forEach { token ->
             callbacks.remove(token)?.let { (controller, callback) ->
                 runCatching { controller.unregisterCallback(callback) }
@@ -130,6 +137,7 @@ class MediaSessionSource(context: Context) {
         }
         callbacks.clear()
         controllers = emptyList()
+        synchronized(sessionIds) { sessionIds.clear() }
     }
 
     /** Releases every platform handle. Called when the shade closes. */
@@ -180,11 +188,26 @@ class MediaSessionSource(context: Context) {
             title = title?.takeIf { it.isNotBlank() },
             artist = artist?.takeIf { it.isNotBlank() },
             playing = playing,
-            canPlayPause = MusicLogic.supports(MusicCommand.PLAY, actions) ||
-                MusicLogic.supports(MusicCommand.PAUSE, actions),
+            canPlayPause = MusicLogic.supports(if (playing) MusicCommand.PAUSE else MusicCommand.PLAY, actions),
             canSkipNext = MusicLogic.supports(MusicCommand.NEXT, actions),
             canSkipPrevious = MusicLogic.supports(MusicCommand.PREVIOUS, actions),
-            hasArtwork = artwork != null
+            hasArtwork = artwork != null,
+            positionMs = state?.position?.takeIf { it >= 0L },
+            durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L },
+            positionUpdatedAtMs = state?.lastPositionUpdateTime ?: 0L,
+            playbackSpeed = state?.playbackSpeed ?: 0f,
+            remotePlayback = when (runCatching { controller.playbackInfo?.playbackType }.getOrNull()) {
+                MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE -> true
+                MediaController.PlaybackInfo.PLAYBACK_TYPE_LOCAL -> false
+                else -> null
+            },
+            packageName = controller.packageName,
+            appLabel = runCatching {
+                val pm = appContext.packageManager
+                pm.getApplicationLabel(pm.getApplicationInfo(controller.packageName, 0)).toString()
+            }.getOrNull(),
+            sessionId = sessionId(controller.sessionToken),
+            canSeek = actions and PlaybackState.ACTION_SEEK_TO != 0L
         )
     }
 
@@ -233,6 +256,20 @@ class MediaSessionSource(context: Context) {
             LumaLog.w("Media transport command was refused")
             false
         }
+    }
+
+    /** Seek only a currently selected player that still advertises seeking. */
+    fun seekTo(positionMs: Long, expectedSessionId: Long?): Boolean {
+        val controller = selected() ?: return false
+        if (expectedSessionId == null || sessionId(controller.sessionToken) != expectedSessionId) return false
+        val actions = runCatching { controller.playbackState?.actions ?: 0L }.getOrDefault(0L)
+        if (actions and PlaybackState.ACTION_SEEK_TO == 0L) return false
+        val duration = runCatching { controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) }
+            .getOrNull()?.takeIf { it > 0L } ?: return false
+        return runCatching {
+            controller.transportControls.seekTo(positionMs.coerceIn(0L, duration))
+            true
+        }.getOrDefault(false)
     }
 
     companion object {

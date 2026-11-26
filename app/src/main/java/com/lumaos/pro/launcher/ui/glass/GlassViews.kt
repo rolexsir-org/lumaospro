@@ -46,9 +46,10 @@ object GlassViews {
         spec: GlassSpec,
         density: Float,
         ripple: Boolean = false,
-        depth: Float = GlassDrawable.defaultDepthForRole(spec.role)
+        depth: Float = GlassDrawable.defaultDepthForRole(spec.role),
+        wallpaperUnderlay: Boolean = true
     ): Drawable {
-        val glass = GlassDrawable(spec, density, depth)
+        val glass = GlassDrawable(spec, density, depth, wallpaperUnderlay)
         if (!ripple) return glass
         return RippleDrawable(
             ColorStateList.valueOf(spec.rest.ripple),
@@ -64,10 +65,11 @@ object GlassViews {
         ripple: Boolean = false,
         clipToOutline: Boolean = !spec.topOnly,
         depth: Float = GlassDrawable.defaultDepthForRole(spec.role),
-        radiusOverrideDp: Float? = null
+        radiusOverrideDp: Float? = null,
+        wallpaperUnderlay: Boolean = true
     ) {
         val effectiveSpec = if (radiusOverrideDp != null) spec.copy(radiusDp = radiusOverrideDp) else spec
-        val bg = drawable(effectiveSpec, density, ripple, depth)
+        val bg = drawable(effectiveSpec, density, ripple, depth, wallpaperUnderlay)
         view.background = bg
         view.elevation = effectiveSpec.elevationDp * density
         view.outlineProvider = ViewOutlineProvider.BACKGROUND

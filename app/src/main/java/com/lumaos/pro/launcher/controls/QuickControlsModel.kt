@@ -54,6 +54,22 @@ data class SwitchState(
 /** Android's interruption filter, mirrored without the platform constants. */
 enum class FocusFilter { ALL, PRIORITY, ALARMS_ONLY, TOTAL_SILENCE, UNKNOWN }
 
+/** The audio streams exposed by the shade, independent of platform constants. */
+enum class AudioStream { MEDIA, RING, NOTIFICATION, ALARM }
+enum class RingerMode { NORMAL, VIBRATE, SILENT }
+
+/** Ringer changes that cross silent mode can alter Android's interruption policy. */
+object RingerModePolicy {
+    fun next(current: RingerMode, hasVibrator: Boolean): RingerMode = when (current) {
+        RingerMode.NORMAL -> if (hasVibrator) RingerMode.VIBRATE else RingerMode.SILENT
+        RingerMode.VIBRATE -> RingerMode.SILENT
+        RingerMode.SILENT -> RingerMode.NORMAL
+    }
+
+    fun needsPolicyAccess(current: RingerMode, target: RingerMode, granted: Boolean): Boolean =
+        !granted && (current == RingerMode.SILENT || target == RingerMode.SILENT)
+}
+
 /** A bounded slider: brightness or one audio stream. */
 data class SliderState(
     val value: Int,
@@ -93,10 +109,36 @@ data class MediaSnapshot(
     val canSkipNext: Boolean,
     val canSkipPrevious: Boolean,
     /** True when the platform supplied artwork for this session. */
-    val hasArtwork: Boolean
+    val hasArtwork: Boolean,
+    /** Null when the session has not supplied a usable position or duration. */
+    val positionMs: Long? = null,
+    val durationMs: Long? = null,
+    val positionUpdatedAtMs: Long = 0L,
+    val playbackSpeed: Float = 0f,
+    /** Android reports local/remote session routing, not necessarily a device name. */
+    val remotePlayback: Boolean? = null,
+    /** The real session owner; null when Android cannot provide it. */
+    val packageName: String? = null,
+    val appLabel: String? = null,
+    /** Identity of the displayed live session, not its package or metadata. */
+    val sessionId: Long? = null,
+    val canSeek: Boolean = false
 ) {
     companion object {
         val EMPTY = MediaSnapshot(null, null, false, false, false, false, false)
+    }
+}
+
+/** Extrapolate only real session data, using Android's monotonic clock. */
+object MediaProgress {
+    fun position(media: MediaSnapshot, elapsedRealtimeMs: Long): Long? {
+        return com.lumaos.pro.launcher.widgets.music.MusicLogic.position(
+            position = media.positionMs ?: return null,
+            duration = media.durationMs ?: return null,
+            updateTime = media.positionUpdatedAtMs,
+            now = elapsedRealtimeMs,
+            playingAtNormalSpeed = media.playing && media.playbackSpeed == 1f
+        )
     }
 }
 
@@ -113,10 +155,21 @@ data class QuickControlsSnapshot(
     val focusFilter: FocusFilter = FocusFilter.UNKNOWN,
     val brightness: SliderState = SliderState.UNAVAILABLE,
     val volume: SliderState = SliderState.UNAVAILABLE,
+    val ringVolume: SliderState = SliderState.UNAVAILABLE,
+    val notificationVolume: SliderState = SliderState.UNAVAILABLE,
+    val alarmVolume: SliderState = SliderState.UNAVAILABLE,
+    /** Ringer mode supplied by AudioManager; null means it could not be read. */
+    val ringerMode: RingerMode? = null,
     val battery: BatteryReading = BatteryReading.UNKNOWN,
     val media: MediaSnapshot? = null,
     val castAvailable: Boolean = false,
     val cameraAvailable: Boolean = false,
+    val powerSave: SwitchState = SwitchState.UNKNOWN,
+    val location: SwitchState = SwitchState.UNKNOWN,
+    val nfc: SwitchState = SwitchState.UNKNOWN,
+    val nfcAvailable: Boolean = false,
+    val powerSettingsAvailable: Boolean = false,
+    val locationSettingsAvailable: Boolean = false,
     /** True while the WRITE_SETTINGS app-op is granted to LumaOS Pro. */
     val canWriteSystemSettings: Boolean = false,
     /** True while Android allows changing the interruption filter. */
@@ -129,7 +182,8 @@ data class QuickControlsSnapshot(
 
 /** The tiles the panel renders, in order, and what each one does when tapped. */
 enum class TileId {
-    WIFI, MOBILE_DATA, BLUETOOTH, AIRPLANE, HOTSPOT, TORCH, ROTATION_LOCK, FOCUS, CAST, CAMERA
+    WIFI, MOBILE_DATA, BLUETOOTH, AIRPLANE, HOTSPOT, TORCH, ROTATION_LOCK, FOCUS, CAST, CAMERA,
+    POWER_SAVE, LOCATION, NFC
 }
 
 /**
@@ -179,6 +233,9 @@ object QuickControlsPolicy {
         // Android 11+ package-visibility filtering.
         if (snapshot.castAvailable) tiles += TileId.CAST
         if (snapshot.cameraAvailable) tiles += TileId.CAMERA
+        if (snapshot.powerSettingsAvailable) tiles += TileId.POWER_SAVE
+        if (snapshot.locationSettingsAvailable) tiles += TileId.LOCATION
+        if (snapshot.nfcAvailable) tiles += TileId.NFC
         return tiles
     }
 
@@ -193,7 +250,7 @@ object QuickControlsPolicy {
         TileId.ROTATION_LOCK -> snapshot.rotationLock.capability != Capability.DIRECT
         TileId.FOCUS -> snapshot.focus.capability != Capability.DIRECT
         TileId.CAST -> true
-        TileId.CAMERA -> true
+        TileId.CAMERA, TileId.POWER_SAVE, TileId.LOCATION, TileId.NFC -> true
     }
 
     /**

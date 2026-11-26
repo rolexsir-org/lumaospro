@@ -378,13 +378,27 @@ Opening and closing:
 - [ ] Rotation and process recreation while open: no crash, no stale activity
       reference; the shade is either rebuilt or closed cleanly.
 
+Presentation and shortcuts (device required):
+- [ ] Check time, locale date, 12/24-hour mode, battery and charging state.
+- [ ] Test scrolling and insets in landscape, on a narrow screen, and with large
+      fonts; wallpaper and desktop stay visible outside translucent surfaces.
+- [ ] Expand and collapse connectivity; hotspot remains reachable.
+- [ ] Open Vault, Focus Protection profile settings and Customize; verify Vault
+      authentication and Work/Study restrictions still behave as before.
+- [ ] Check the shade on API 29–30: cached wallpaper must not cover the real
+      desktop beneath its translucent material.
+
 Notifications:
+- [ ] Expand and collapse a long card without losing its click-through or reply;
+      clear-all retains ongoing and non-clearable notifications.
 - [ ] A notification with a `RemoteInput` reply shows a reply field; sending it
       lands in the originating app (verify inside that app, not by the animation).
 - [ ] A notification without one shows no reply field, and only the app's own
       actions, capped at three.
-- [ ] Grouped notifications: children listed once, summary suppressed; dismiss the
-      last child and the summary appears with its own count.
+- [ ] Grouped notifications: summary suppressed while children exist, first card
+      shows the real count; expand/collapse the group and interact with each child.
+      Dismiss the leader, then the remaining children and verify the surviving
+      summary appears with its own count; replies and drafts survive updates.
 - [ ] Dismiss from a card and dismiss-all both remove the notifications in Android
       too.
 - [ ] Tapping a card opens the app's content intent and closes the shade.
@@ -398,18 +412,23 @@ Notifications:
 Quick controls:
 - [ ] Wi-Fi, airplane mode, rotation lock, brightness, volume, torch: the state
       shown matches Android's, and a tap either changes it or opens the real
-      system page — never both claimed and refused.
+      system page — never both claimed and refused. Change media volume with
+      hardware keys while the panel is open and check the slider updates.
 - [ ] Mobile data, Bluetooth, hotspot, cast: the tile opens the system route;
       Bluetooth on API 33+ without `BLUETOOTH_CONNECT` reads as system-managed,
       not as "off".
 - [ ] Brightness without `WRITE_SETTINGS` shows the grant explanation and the
       route; after granting, the slider moves the real screen brightness and never
       reaches a level that blanks it.
-- [ ] Focus with and without Notification Policy Access; with a context profile
-      active, switch Focus off by hand and confirm the automation stops restoring
-      a filter it no longer owns.
-- [ ] Media playing shows real metadata and only advertised actions; nothing
-      playing shows the empty state and no invented track.
+- [ ] Do Not Disturb with and without Notification Policy Access; with a context
+      profile active, switch Do Not Disturb off by hand and confirm automation
+      stops restoring a filter it no longer owns.
+- [ ] Media playing shows real metadata and only advertised actions; expand
+      details and compare position with the player. Unknown position/duration
+      shows no fabricated progress; nothing playing shows the empty state. Check
+      remote playback is labelled only when the media session reports it.
+- [ ] Battery saver and location reflect readable system state and open real
+      settings pages; check unavailable pages are not offered.
 - [ ] Battery matches Android's reading; a device that reports none shows unknown.
 - [ ] Torch on a device with no flash, and while a camera app holds the camera:
       the tile is absent or explains itself — never a switch that cannot move.

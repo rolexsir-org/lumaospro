@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +92,7 @@ import com.lumaos.pro.launcher.ui.theme.ThemeId
 import com.lumaos.pro.launcher.ui.theme.ThemeLauncherPackage
 import com.lumaos.pro.launcher.ui.theme.ThemePresets
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingsRoot(
     viewModel: SettingsViewModel,
@@ -98,7 +103,8 @@ fun SettingsRoot(
     onImportBackup: () -> Unit,
     onOpenStudio: () -> Unit,
     onOpenWallpaper: () -> Unit,
-    onOpenOnboarding: () -> Unit
+    onOpenOnboarding: () -> Unit,
+    openFocusProtection: Boolean = false
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -150,7 +156,8 @@ fun SettingsRoot(
             Spacer(Modifier.height(32.dp))
 
             CleanGroupTitle(R.string.settings_group_advanced)
-            var advancedOpen by rememberSaveable { mutableStateOf(false) }
+            var advancedOpen by rememberSaveable { mutableStateOf(openFocusProtection) }
+            val focusRequester = remember { BringIntoViewRequester() }
             CleanSection {
                 CleanNavigationRow(
                     title = stringResource(if (advancedOpen) R.string.settings_advanced_hide else R.string.settings_advanced_show),
@@ -160,7 +167,10 @@ fun SettingsRoot(
             }
             if (advancedOpen) {
                 Spacer(Modifier.height(12.dp))
-                CleanSection { ContextSection(viewModel, onRequestNotifications) }
+                CleanSection { ContextSection(viewModel, onRequestNotifications, openFocusProtection, focusRequester) }
+                LaunchedEffect(openFocusProtection) {
+                    if (openFocusProtection) focusRequester.bringIntoView()
+                }
                 Spacer(Modifier.height(12.dp))
                 CleanSection { GestureSection(viewModel) }
                 Spacer(Modifier.height(12.dp))
@@ -857,7 +867,13 @@ private fun PerformanceSection(viewModel: SettingsViewModel) {
 // ---------- Context + Gestures + Privacy etc ----------
 
 @Composable
-private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun ContextSection(
+    viewModel: SettingsViewModel,
+    onRequestNotifications: () -> Unit,
+    openFocusProtection: Boolean = false,
+    focusRequester: BringIntoViewRequester? = null
+) {
     val active by viewModel.prefs.activeContextProfile.collectAsState(ContextProfile.PERSONAL)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -866,7 +882,9 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
     // configuring a context must not require switching to it first. Plain
     // remember (enums are not saveable); following the active context on
     // switch is the desired behaviour anyway.
-    var target by remember(active) { mutableStateOf(active) }
+    var target by remember(active, openFocusProtection) {
+        mutableStateOf(if (openFocusProtection && active !in ContextEngine.FOCUS_PROFILES) ContextProfile.WORK else active)
+    }
     val schedule by viewModel.prefs.profileSchedule(target).collectAsState(ProfileSchedule.defaults(target))
     val storedOverride by viewModel.manualOverride.collectAsState()
     val liveOverride = storedOverride?.takeIf { it.isActive(System.currentTimeMillis()) }
@@ -992,12 +1010,14 @@ private fun ContextSection(viewModel: SettingsViewModel, onRequestNotifications:
         )
         CleanDivider()
         if (target in ContextEngine.FOCUS_PROFILES) {
-            CompactSwitchRow(
-                title = "Focus Protection",
-                subtitle = "Restrict chosen apps while ${target.title} is active",
-                checked = focusOn,
-                onCheckedChange = { viewModel.setFocusEnabled(target, it) }
-            )
+            Box(if (focusRequester != null) Modifier.bringIntoViewRequester(focusRequester) else Modifier) {
+                CompactSwitchRow(
+                    title = "Focus Protection",
+                    subtitle = "Restrict chosen apps while ${target.title} is active",
+                    checked = focusOn,
+                    onCheckedChange = { viewModel.setFocusEnabled(target, it) }
+                )
+            }
             CleanDivider()
             CleanRow(
                 title = "Restricted apps",

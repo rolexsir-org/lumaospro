@@ -39,7 +39,8 @@ import kotlin.math.roundToInt
 class GlassDrawable(
     val spec: GlassSpec,
     private val density: Float,
-    private val depth: Float = defaultDepthForRole(spec.role)
+    private val depth: Float = defaultDepthForRole(spec.role),
+    private val wallpaperUnderlay: Boolean = true
 ) : Drawable() {
 
     private var colors: GlassColors = spec.states.rest
@@ -217,7 +218,7 @@ class GlassDrawable(
         if (b.isEmpty) return
 
         // Layer 1 (API 29–30): Pre-rendered blurred wallpaper underlay aligned to window bounds.
-        if (Build.VERSION.SDK_INT in 29..30 && !isOpaqueFallback && screenWidth > 0 && screenHeight > 0) {
+        if (wallpaperUnderlay && Build.VERSION.SDK_INT in 29..30 && !isOpaqueFallback && screenWidth > 0 && screenHeight > 0) {
             val blurred: Bitmap? = LumaWallpaperBlurCache.current()
             if (blurred != null && !blurred.isRecycled) {
                 val save = canvas.save()
