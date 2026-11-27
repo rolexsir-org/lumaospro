@@ -333,15 +333,18 @@ The device checks that remain for wallpaper and widgets are
 ### Notifications and quick controls
 
 The launcher's own shade (`LumaShade`) lists the notifications Android reports to
-a `NotificationListenerService` and a Quick Controls panel beneath them. It is
+a `NotificationListenerService` beneath a Quick Controls panel. It is
 reachable only through the gesture the user binds (see **Gestures**), opens over
 the home screen at the modal depth the widget picker already uses, and closes on
-Back, on a tap of the scrim, or on an upward drag from the scrim.
+Back, on a tap of the scrim, or on an upward drag from the scrim. It remains an
+in-launcher layer, not an overlay above other apps or Android Quick Settings. The
+panel scrolls when needed and includes the time, date, battery, real device
+controls, media, launcher shortcuts and notifications.
 
 - **Cards show what the app posted** — icon, app name, title, body, time, group
   count and the app's own actions — and nothing else. A group summary is never
-  listed alongside the children it summarises, and content an app marked secret
-  stays hidden.
+  listed alongside the children it summarises. Real grouped children can be
+  expanded or collapsed, and content an app marked secret stays hidden.
 - **Inline reply is the app's reply.** A reply field appears only when the
   posting app exposed a `RemoteInput` on one of its actions; sending it re-uses
   that action's own `PendingIntent`, so the message goes through the app exactly
@@ -352,15 +355,22 @@ Back, on a tap of the scrim, or on an upward drag from the scrim.
   through Android's own panels (`Settings.Panel`, Bluetooth/Airplane settings)
   wherever a third-party write is reserved to the system — a tile never claims a
   change it could not make. Brightness and rotation lock need the
-  `WRITE_SETTINGS` app-op, Focus needs Notification Policy Access, and both are
+  `WRITE_SETTINGS` app-op, Do Not Disturb needs Notification Policy Access, and both are
   requested through the real system screens with an explanation, never silently.
   Torch is offered only when the device has a flash unit that is not held by a
   camera app; battery comes from Android's sticky broadcast; media comes from the
-  active `MediaSession` and shows an empty state when nothing is playing.
-- **No new permission is requested.** The shade reuses the optional
-  notification-access grant the Luma Glass Music widget already asks for, and
-  four `<queries>` intents so the camera and cast destinations can be resolved on
-  Android 11+.
+  active `MediaSession`, shows an empty state when nothing is playing, and shows
+  playback position only when the session supplies a position and duration;
+  remote playback is labelled when the session reports it, without guessing a
+  device name. Battery saver and location open their system settings where those pages are available.
+- **Launcher shortcuts reuse existing screens.** Vault opens its normal lock flow;
+  Focus Protection opens the Work/Study profile settings (it is distinct from Do
+  Not Disturb); Customize opens the Studio.
+- The shade reuses the optional notification-access grant the Luma Glass Music
+  widget already asks for. Wi-Fi state uses a normal permission; brightness and
+  rotation require the user-approved Modify system settings access, and Do Not
+  Disturb requires notification policy access. The camera and cast destinations use
+  `<queries>` intents so they can be resolved on Android 11+.
 
 The per-control device checks — which tiles must move, which must route to a
 system page, and which cannot be verified without hardware — are

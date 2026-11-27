@@ -230,7 +230,11 @@ object NotificationHub {
         val service = listener ?: return false
         val ok = runCatching { service.cancelAllNotifications() }.isSuccess
         if (ok) {
-            synchronized(entries) { entries.clear() }
+            // Android retains ongoing/non-clearable notifications. Do not make
+            // them disappear locally while they remain present on the device.
+            synchronized(entries) {
+                entries.entries.removeAll { (_, value) -> NotificationPolicy.canClear(value.raw.isClearable, value.raw.isOngoing) }
+            }
             publish()
         } else {
             LumaLog.w("Notifications could not be dismissed")

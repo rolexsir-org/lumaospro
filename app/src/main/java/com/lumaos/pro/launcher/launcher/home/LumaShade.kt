@@ -8,12 +8,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.TextClock
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.LinearLayout.LayoutParams
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.lumaos.pro.launcher.R
+import com.lumaos.pro.launcher.controls.AudioStream
 import com.lumaos.pro.launcher.controls.QuickControlsController
 import com.lumaos.pro.launcher.controls.QuickControlsHost
 import com.lumaos.pro.launcher.controls.QuickControlsSnapshot
@@ -30,6 +34,7 @@ import com.lumaos.pro.launcher.notifications.NotificationCardAdapter
 import com.lumaos.pro.launcher.notifications.NotificationCardHost
 import com.lumaos.pro.launcher.notifications.NotificationCardModel
 import com.lumaos.pro.launcher.notifications.NotificationHub
+import com.lumaos.pro.launcher.notifications.NotificationPolicy
 import com.lumaos.pro.launcher.ui.ThemedUiIcons
 import com.lumaos.pro.launcher.ui.glass.GlassViews
 import com.lumaos.pro.launcher.ui.theme.ColorMath
@@ -57,7 +62,7 @@ import kotlinx.coroutines.launch
  *    `GestureAction.OpenQuickControls`;
  *  - closed by releasing below the halfway point, by tapping the scrim, by Back,
  *    by the close button, or by opening a notification;
- *  - the overlay is removed from the window when closed, so it can never leave an
+ *  - the home-window layer is hidden when closed, so it cannot leave an
  *    invisible touch-blocking layer over the desktop;
  *  - observation starts on open and stops on close: nothing polls while the shade
  *    is hidden.
@@ -83,10 +88,15 @@ class LumaShade(
         fun topInsetPx(): Int
         /** Navigation-bar inset in px, so the panel ends above it. */
         fun bottomInsetPx(): Int
+        fun leftInsetPx(): Int
+        fun rightInsetPx(): Int
         /** Usable panel width in dp, after the panel's own margins. */
         fun availableWidthDp(): Int
         fun onDepthProgress(progress: Float)
         fun onOpenSettings()
+        fun onOpenStudio()
+        fun onOpenVault()
+        fun onOpenFocusProtection()
         fun showMessage(message: String)
         fun appLabel(packageName: String): String?
         fun appIcon(packageName: String): Drawable?
@@ -107,7 +117,12 @@ class LumaShade(
     private var overlay: FrameLayout? = null
     private var scrim: View? = null
     private var sheet: LinearLayout? = null
+    private var sheetScroll: ScrollView? = null
     private var headerTitle: TextView? = null
+    private var headerDate: TextView? = null
+    private var shortcutsTitle: TextView? = null
+    private val shortcutViews = mutableListOf<Triple<LinearLayout, ImageView, TextView>>()
+    private var rootLayoutListener: View.OnLayoutChangeListener? = null
     private var batteryPill: TextView? = null
     private var notificationHeader: TextView? = null
     private var clearAll: TextView? = null
@@ -121,7 +136,6 @@ class LumaShade(
     private var openState = false
     private var observeJob: Job? = null
     private var built = false
-    private var listHeightSet = -1
 
     private var lastControls: QuickControlsSnapshot = QuickControlsSnapshot.EMPTY
 
@@ -162,6 +176,7 @@ class LumaShade(
         if (openState) return
         stopObserving()
         overlay?.visibility = View.GONE
+        sheetScroll?.scrollTo(0, 0)
         // The keyboard must not survive the panel that summoned it.
         hideKeyboard()
         host.onDepthProgress(0f)
@@ -226,7 +241,7 @@ class LumaShade(
      * container gesture for the same stream.
      */
     fun ownsDismissDrag(rawX: Float, rawY: Float): Boolean {
-        val panel = sheet ?: return false
+        val panel = sheetScroll ?: return false
         if (panel.visibility != View.VISIBLE || panel.height <= 0) return true
         val location = IntArray(2)
         panel.getLocationOnScreen(location)
@@ -236,7 +251,7 @@ class LumaShade(
     }
 
     private fun travelPx(): Float {
-        val measured = sheet?.height?.toFloat() ?: 0f
+        val measured = sheetScroll?.height?.toFloat() ?: 0f
         if (measured > 0f) return measured
         return dp(DEFAULT_TRAVEL_DP).toFloat()
     }
@@ -244,7 +259,7 @@ class LumaShade(
     private fun applyProgress(value: Float) {
         val p = value.coerceIn(0f, 1f)
         val ov = overlay ?: return
-        val sh = sheet
+        val sh = sheetScroll
         val sc = scrim
         if (sh != null) {
             val travel = if (sh.height > 0) sh.height.toFloat() else dp(DEFAULT_TRAVEL_DP).toFloat()
@@ -294,23 +309,37 @@ class LumaShade(
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP)
         )
 
+        // The entire composition scrolls when the controls alone exceed the
+        // available height (landscape, large fonts, small screens). Capping only
+        // the notification list cannot solve that case.
+        val scroll = object : ScrollView(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val limit = maxSheetHeightPx()
+                val mode = View.MeasureSpec.getMode(heightMeasureSpec)
+                val available = View.MeasureSpec.getSize(heightMeasureSpec)
+                val bounded = if (limit > 0) {
+                    val height = if (mode == View.MeasureSpec.UNSPECIFIED) limit else minOf(limit, available)
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST)
+                } else heightMeasureSpec
+                super.onMeasure(widthMeasureSpec, bounded)
+            }
+        }.apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        sheetScroll = scroll
+        container.addView(scroll, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        ))
         val sheetView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             isClickable = true
             isFocusable = true
         }
         sheet = sheetView
-        container.addView(
-            sheetView,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP
-            ).apply {
-                marginStart = dp(LumaTokens.screenMarginHorizontal)
-                marginEnd = dp(LumaTokens.screenMarginHorizontal)
-            }
-        )
+        scroll.addView(sheetView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
         sheetView.addView(buildHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -324,6 +353,14 @@ class LumaShade(
                 marginEnd = dp(LumaTokens.spaceSM)
             }
         )
+
+        sheetView.addView(buildShortcuts(), LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = dp(LumaTokens.spaceMD)
+            marginStart = dp(LumaTokens.spaceSM)
+            marginEnd = dp(LumaTokens.spaceSM)
+        })
 
         sheetView.addView(buildNotificationHeader(), LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(LumaTokens.spaceMD)
@@ -350,6 +387,12 @@ class LumaShade(
             isVerticalScrollBarEnabled = false
             setPadding(0, 0, 0, dp(LumaTokens.spaceSM))
             clipToPadding = false
+            isNestedScrollingEnabled = false
+            addItemDecoration(object : RecyclerView.ItemDecoration() {
+                override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+                    outRect.bottom = dp(LumaTokens.spaceXS)
+                }
+            })
         }
         list = listView
         val cardAdapter = NotificationCardAdapter(context, this)
@@ -364,9 +407,13 @@ class LumaShade(
             }
         )
 
-        // A long list must not push the panel past the screen: the panel is capped
-        // and the list scrolls inside the space that is left.
-        sheetView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> capPanelHeight() }
+        rootLayoutListener = View.OnLayoutChangeListener { _, l, t, r, b, ol, ot, oright, ob ->
+            if (r - l != oright - ol || b - t != ob - ot) {
+                applyInsets()
+                quickControls?.update(lastControls, controls.torchCapable)
+                sheetScroll?.requestLayout()
+            }
+        }.also { root.addOnLayoutChangeListener(it) }
         applyInsets()
         applyTheme()
     }
@@ -378,29 +425,43 @@ class LumaShade(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(LumaTokens.spaceMD), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXS), 0)
         }
-        val title = TextView(context).apply {
-            text = context.getString(R.string.shade_title)
+        val information = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val locale = context.resources.configuration.locales[0] ?: java.util.Locale.getDefault()
+        val clock = TextClock(context).apply {
+            format12Hour = android.text.format.DateFormat.getBestDateTimePattern(locale, "hm")
+            format24Hour = android.text.format.DateFormat.getBestDateTimePattern(locale, "Hm")
+            maxLines = 1
+            includeFontPadding = false
+            typeface = Typefaces.clock(theme)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+        }
+        headerTitle = clock
+        information.addView(clock)
+        val date = TextClock(context).apply {
+            val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEE MMM d")
+            format12Hour = pattern
+            format24Hour = pattern
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             includeFontPadding = false
-            typeface = Typefaces.title(theme.typography)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeTitleSp)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
+            typeface = Typefaces.body(theme.typography)
         }
-        headerTitle = title
-        row.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
+        headerDate = date
+        information.addView(date)
         val battery = TextView(context).apply {
             maxLines = 1
             includeFontPadding = false
-            gravity = Gravity.CENTER
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             typeface = Typefaces.label(theme.typography)
-            setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
+            setPadding(dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceXS), dp(LumaTokens.spaceXXS))
             visibility = View.GONE
         }
         batteryPill = battery
-        row.addView(battery, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
+        information.addView(battery, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(LumaTokens.spaceXXS)
+        })
+        row.addView(information, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(headerButton(R.drawable.ic_rx_settings, R.string.shade_settings_description) {
             LumaHaptics.tap(it)
             host.onOpenSettings()
@@ -410,6 +471,59 @@ class LumaShade(
             dismiss()
         })
         return row
+    }
+
+    private fun buildShortcuts(): View {
+        val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val title = TextView(context).apply {
+            setText(R.string.shade_shortcuts)
+            includeFontPadding = false
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
+            setPadding(dp(LumaTokens.spaceXXS), 0, 0, 0)
+        }
+        shortcutsTitle = title
+        column.addView(title)
+        val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        column.addView(row, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(LumaTokens.spaceXXS)
+        })
+        fun shortcut(iconRes: Int, titleRes: Int, action: () -> Unit) {
+            val button = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                minimumHeight = dp(72f)
+                setPadding(dp(4f), dp(8f), dp(4f), dp(8f))
+                isClickable = true
+                isFocusable = true
+                contentDescription = context.getString(titleRes)
+                setOnClickListener { LumaHaptics.tap(this); action() }
+            }
+            val icon = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                ThemedUiIcons.bind(this, iconRes, host.theme().id)
+            }
+            button.addView(icon, LayoutParams(dp(24f), dp(24f)))
+            val label = TextView(context).apply {
+                setText(titleRes)
+                maxLines = 2
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            button.addView(label, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(LumaTokens.spaceXXS)
+            })
+            shortcutViews += Triple(button, icon, label)
+            row.addView(button, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (row.childCount > 0) marginStart = dp(LumaTokens.spaceXS)
+            })
+        }
+        shortcut(R.drawable.ic_rx_lock, R.string.shade_vault) { host.onOpenVault() }
+        shortcut(R.drawable.ic_rx_privacy, R.string.shade_focus_protection) { host.onOpenFocusProtection() }
+        shortcut(R.drawable.ic_rx_studio, R.string.shade_customize) { host.onOpenStudio() }
+        return column
     }
 
     private fun headerButton(iconRes: Int, descriptionRes: Int, onClick: (View) -> Unit): ImageButton =
@@ -446,7 +560,7 @@ class LumaShade(
             maxLines = 1
             includeFontPadding = false
             gravity = Gravity.CENTER
-            minHeight = dp(LumaTokens.minTouchTarget * 0.75f)
+            minHeight = dp(LumaTokens.minTouchTarget)
             setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeCaptionSp)
             visibility = View.GONE
@@ -464,27 +578,6 @@ class LumaShade(
         return row
     }
 
-    private fun capPanelHeight() {
-        val sh = sheet ?: return
-        val lv = list ?: return
-        val maximum = maxSheetHeightPx()
-        if (maximum <= 0) return
-        val natural = sh.height
-        if (natural <= maximum) {
-            if (listHeightSet != ViewGroup.LayoutParams.WRAP_CONTENT) {
-                listHeightSet = ViewGroup.LayoutParams.WRAP_CONTENT
-                lv.layoutParams = lv.layoutParams.apply { height = ViewGroup.LayoutParams.WRAP_CONTENT }
-            }
-            return
-        }
-        val overflow = natural - maximum
-        val target = (lv.height - overflow).coerceAtLeast(dp(MIN_LIST_HEIGHT_DP))
-        if (listHeightSet != target) {
-            listHeightSet = target
-            lv.layoutParams = lv.layoutParams.apply { height = target }
-        }
-    }
-
     private fun maxSheetHeightPx(): Int {
         val available = root.height - host.topInsetPx() - host.bottomInsetPx() - dp(PANEL_VERTICAL_MARGIN_DP)
         if (available <= 0) return 0
@@ -495,11 +588,18 @@ class LumaShade(
     }
 
     private fun applyInsets() {
-        val sh = sheet ?: return
+        val sh = sheetScroll ?: return
         val lp = sh.layoutParams as? FrameLayout.LayoutParams ?: return
         val topMargin = host.topInsetPx() + dp(PANEL_TOP_MARGIN_DP)
-        if (lp.topMargin != topMargin) {
+        val start = host.leftInsetPx() + dp(LumaTokens.screenMarginHorizontal)
+        val end = host.rightInsetPx() + dp(LumaTokens.screenMarginHorizontal)
+        val available = root.width - start - end
+        val width = if (available > 0) minOf(available, dp(MAX_PANEL_WIDTH_DP)) else ViewGroup.LayoutParams.MATCH_PARENT
+        if (lp.topMargin != topMargin || lp.leftMargin != start || lp.rightMargin != end || lp.width != width) {
             lp.topMargin = topMargin
+            lp.leftMargin = start
+            lp.rightMargin = end
+            lp.width = width
             sh.layoutParams = lp
         }
     }
@@ -508,7 +608,8 @@ class LumaShade(
     fun onInsetsChanged() {
         if (!built) return
         applyInsets()
-        capPanelHeight()
+        quickControls?.update(lastControls, controls.torchCapable)
+        sheetScroll?.requestLayout()
     }
 
     // ── Theming ────────────────────────────────────────────────────────────
@@ -519,13 +620,28 @@ class LumaShade(
         val theme = host.theme()
         val palette = host.glassPalette()
         val panelSpec = palette[GlassRole.PRIMARY]
-        sheet?.let {
+        sheetScroll?.let {
             GlassViews.apply(
                 it, panelSpec, density, ripple = false, clipToOutline = true, depth = LumaTokens.depthShade,
-                radiusOverrideDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.EXTRA_LARGE)
+                radiusOverrideDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.EXTRA_LARGE),
+                // On API 29–30 the shared glass normally paints cached wallpaper.
+                // Here that would conceal the real launcher views underneath.
+                wallpaperUnderlay = false
             )
         }
         headerTitle?.setTextColor(panelSpec.rest.content)
+        headerTitle?.typeface = Typefaces.clock(theme)
+        headerDate?.setTextColor(panelSpec.rest.muted)
+        headerDate?.typeface = Typefaces.body(theme.typography)
+        shortcutsTitle?.setTextColor(panelSpec.rest.muted)
+        shortcutsTitle?.typeface = Typefaces.label(theme.typography)
+        shortcutViews.forEach { (button, icon, label) ->
+            GlassViews.apply(button, palette[GlassRole.SECONDARY], density, ripple = true,
+                radiusOverrideDp = theme.radius(com.lumaos.pro.launcher.ui.theme.RadiusRole.LARGE), wallpaperUnderlay = false)
+            icon.imageTintList = android.content.res.ColorStateList.valueOf(palette[GlassRole.SECONDARY].rest.content)
+            label.setTextColor(palette[GlassRole.SECONDARY].rest.content)
+            label.typeface = Typefaces.label(theme.typography)
+        }
         batteryPill?.let { pill ->
             pill.setTextColor(panelSpec.rest.content)
             pill.background = ThemedDrawables.surface(
@@ -569,7 +685,9 @@ class LumaShade(
             launch {
                 controls.state.collect { snapshot ->
                     lastControls = snapshot
-                    quickControls?.bind(snapshot)
+                    // Capability-dependent tiles arrive asynchronously with the
+                    // first snapshot, not when the initial view is constructed.
+                    quickControls?.update(snapshot, controls.torchCapable)
                     renderBattery(snapshot)
                 }
             }
@@ -577,7 +695,7 @@ class LumaShade(
                 NotificationHub.state.collect { shade ->
                     adapter?.submit(shade.cards, shade.awaitingReply)
                     list?.visibility = if (shade.cards.isEmpty()) View.GONE else View.VISIBLE
-                    clearAll?.visibility = if (shade.cards.size > 1) View.VISIBLE else View.GONE
+                    clearAll?.visibility = if (shade.cards.any { NotificationPolicy.canClear(it.clearable, it.ongoing) }) View.VISIBLE else View.GONE
                     notificationHeader?.text = if (shade.cards.isEmpty()) {
                         context.getString(R.string.shade_notifications)
                     } else {
@@ -602,15 +720,20 @@ class LumaShade(
         val pill = batteryPill ?: return
         val percent = snapshot.battery.percent
         if (percent == null) {
-            pill.visibility = View.GONE
+            pill.visibility = View.VISIBLE
+            pill.text = context.getString(R.string.battery_unknown)
+            pill.contentDescription = pill.text
             return
         }
         pill.visibility = View.VISIBLE
         pill.text = context.getString(
+            if (snapshot.battery.charging) R.string.shade_battery_charging else R.string.shade_battery_compact,
+            percent
+        )
+        pill.contentDescription = context.getString(
             if (snapshot.battery.charging) R.string.shade_battery_charging else R.string.shade_battery,
             percent
         )
-        pill.contentDescription = pill.text
     }
 
     /**
@@ -732,10 +855,17 @@ class LumaShade(
         overlay = null
         scrim = null
         sheet = null
+        sheetScroll = null
+        rootLayoutListener?.let { root.removeOnLayoutChangeListener(it) }
+        rootLayoutListener = null
+        shortcutViews.clear()
+        headerTitle = null
+        headerDate = null
+        shortcutsTitle = null
+        batteryPill = null
         list = null
         stateView = null
         built = false
-        listHeightSet = -1
         openState = false
     }
 
@@ -755,7 +885,6 @@ class LumaShade(
             is TileTapOutcome.Toggled -> controls.refresh()
             TileTapOutcome.OpenedSystemRoute -> Unit
             is TileTapOutcome.NeedsGrant -> {
-                host.showMessage(context.getString(outcome.explanation))
                 openGrantRoute(id)
             }
             is TileTapOutcome.Unavailable -> host.showMessage(context.getString(outcome.reason))
@@ -763,6 +892,8 @@ class LumaShade(
     }
 
     override fun onTileLongPress(id: TileId) {
+        if (id == TileId.ROTATION_LOCK && !controls.canWriteSystemSettings()) { onNeedsWriteSettings(); return }
+        if (id == TileId.FOCUS && !controls.hasNotificationPolicyAccess()) { onNeedsNotificationPolicy(); return }
         val intent = controls.systemRouteFor(id)
         if (intent == null) {
             host.showMessage(context.getString(R.string.qc_no_system_page))
@@ -773,18 +904,20 @@ class LumaShade(
     }
 
     private fun openGrantRoute(id: TileId) {
-        val intent = when (id) {
-            TileId.ROTATION_LOCK -> controls.writeSettingsIntent()
-            TileId.FOCUS -> controls.notificationPolicyIntent()
-            else -> controls.systemRouteFor(id)
-        } ?: return
+        if (id == TileId.ROTATION_LOCK) { onNeedsWriteSettings(); return }
+        if (id == TileId.FOCUS) { onNeedsNotificationPolicy(); return }
+        val intent = controls.systemRouteFor(id) ?: return
         runCatching { context.startActivity(intent) }
             .onFailure { host.showMessage(context.getString(R.string.qc_no_system_page)) }
     }
 
     override fun onBrightnessChanged(fraction: Float, commit: Boolean) {
         val applied = controls.applyBrightness(fraction, commit)
-        if (!applied && commit) onNeedsWriteSettings()
+        if (!applied && commit) {
+            if (!controls.canWriteSystemSettings()) onNeedsWriteSettings()
+            else host.showMessage(context.getString(R.string.qc_brightness_failed))
+            controls.refresh()
+        }
     }
 
     override fun onVolumeChanged(fraction: Float, commit: Boolean) {
@@ -795,25 +928,67 @@ class LumaShade(
         }
     }
 
+    override fun onStreamVolumeChanged(stream: AudioStream, fraction: Float, commit: Boolean) {
+        val applied = controls.applyVolume(fraction, commit, stream)
+        if (!applied && commit) {
+            host.showMessage(context.getString(R.string.qc_volume_failed))
+            controls.refresh()
+        }
+    }
+
+    override fun onToggleSoundMode() {
+        when (val result = controls.cycleRingerMode()) {
+            is TileTapOutcome.NeedsGrant -> onNeedsNotificationPolicy()
+            is TileTapOutcome.Unavailable -> host.showMessage(context.getString(result.reason))
+            else -> Unit
+        }
+    }
+
+    override fun onOpenSoundSettings() = openSystemSettings(controls.soundSettingsIntent())
+    override fun onOpenDisplaySettings() = openSystemSettings(controls.displaySettingsIntent())
+
+    private fun openSystemSettings(intent: android.content.Intent) {
+        runCatching { context.startActivity(intent) }
+            .onFailure { host.showMessage(context.getString(R.string.qc_no_system_page)) }
+    }
+
     override fun onMediaCommand(command: MusicCommand) {
         if (!controls.mediaCommand(command)) {
             host.showMessage(context.getString(R.string.qc_media_command_failed))
         }
     }
 
+    override fun onMediaSeek(positionMs: Long, sessionId: Long?) {
+        if (!controls.seekMedia(positionMs, sessionId)) {
+            host.showMessage(context.getString(R.string.qc_media_command_failed))
+        }
+    }
+
+    private fun explainGrant(title: Int, explanation: Int, intent: android.content.Intent) {
+        android.app.AlertDialog.Builder(context)
+            .setTitle(title)
+            .setMessage(explanation)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.qc_grant_open_settings) { _, _ -> openSystemSettings(intent) }
+            .show()
+    }
+
     override fun onNeedsWriteSettings() {
-        host.showMessage(context.getString(R.string.qc_grant_write_settings))
-        runCatching { context.startActivity(controls.writeSettingsIntent()) }
-            .onFailure { host.showMessage(context.getString(R.string.qc_no_system_page)) }
+        explainGrant(R.string.qc_grant_write_title, R.string.qc_grant_write_settings, controls.writeSettingsIntent())
     }
 
     override fun onNeedsNotificationPolicy() {
-        host.showMessage(context.getString(R.string.qc_grant_notification_policy))
-        runCatching { context.startActivity(controls.notificationPolicyIntent()) }
-            .onFailure { host.showMessage(context.getString(R.string.qc_no_system_page)) }
+        explainGrant(R.string.qc_grant_dnd_title, R.string.qc_grant_notification_policy, controls.notificationPolicyIntent())
     }
 
-    override fun onNeedsNotificationAccess() = openNotificationAccessSettings()
+    override fun onNeedsNotificationAccess() {
+        android.app.AlertDialog.Builder(context)
+            .setTitle(R.string.notification_access_title)
+            .setMessage(R.string.notification_access_disclosure)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.notification_access_open) { _, _ -> openNotificationAccessSettings() }
+            .show()
+    }
 
     // ── NotificationCardHost ───────────────────────────────────────────────
 
@@ -862,7 +1037,7 @@ class LumaShade(
         private const val PANEL_TOP_MARGIN_DP = 8f
         private const val PANEL_VERTICAL_MARGIN_DP = 24f
         private const val MAX_HEIGHT_FRACTION = 0.92f
-        private const val MIN_LIST_HEIGHT_DP = 72f
+        private const val MAX_PANEL_WIDTH_DP = 520f
 
         /**
          * True when a touch that began at [downY] belongs to the shade's pull-down

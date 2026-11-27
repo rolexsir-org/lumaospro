@@ -25,6 +25,7 @@
     <string name="shade_close_description">Close controls</string>
     <string name="shade_dismiss_description">Dismiss controls and notifications</string>
     <string name="shade_announce_open">Controls and notifications open</string>
+    <string name="shade_battery_compact">%1$d%%</string>
     <string name="shade_battery">%1$d%% battery</string>
     <string name="shade_battery_charging">%1$d%%, charging</string>
 
@@ -36,7 +37,27 @@
     <string name="qc_tile_hotspot">Hotspot</string>
     <string name="qc_tile_torch">Torch</string>
     <string name="qc_tile_rotation">Rotation lock</string>
-    <string name="qc_tile_focus">Focus</string>
+    <string name="qc_tile_focus">Do Not Disturb</string>
+    <string name="qc_tile_power_save">Battery saver</string>
+    <string name="qc_tile_location">Location</string>
+    <string name="qc_tile_nfc">NFC</string>
+    <string name="qc_connectivity">Connectivity</string>
+    <string name="qc_connectivity_more">More connectivity</string>
+    <string name="qc_connectivity_less">Less connectivity</string>
+    <string name="qc_system_controls">System controls</string>
+    <string name="qc_levels">Display and sound</string>
+    <string name="qc_media_expand">Show playback details</string>
+    <string name="qc_media_collapse">Hide playback details</string>
+    <string name="qc_media_seek">Seek playback</string>
+    <string name="qc_media_progress">Playback progress: %1$s of %2$s</string>
+    <string name="qc_value_percent">%1$d%%</string>
+    <string name="qc_value_unknown">—</string>
+    <string name="shade_shortcuts">LumaOS Pro</string>
+    <string name="shade_vault">Vault</string>
+    <string name="shade_focus_protection">Focus Protection</string>
+    <string name="shade_customize">Customize</string>
+    <string name="notification_expand">Expand notification</string>
+    <string name="notification_collapse">Collapse notification</string>
     <string name="qc_tile_cast">Cast</string>
     <string name="qc_tile_camera">Camera</string>
 
@@ -58,15 +79,35 @@
 
     <!-- Grants -->
     <string name="qc_grant_write_settings">Android requires the \"Modify system settings\" grant before LumaOS Pro can change brightness or rotation lock.</string>
-    <string name="qc_grant_notification_policy">Android requires notification policy access before LumaOS Pro can change Focus.</string>
+    <string name="qc_grant_notification_policy">Android requires notification policy access before LumaOS Pro can change Do Not Disturb.</string>
     <string name="qc_no_system_page">This device has no Android page for that control.</string>
 
     <!-- Sliders -->
+    <string name="qc_audio_more">More sound controls</string>
+    <string name="qc_audio_less">Hide sound controls</string>
+    <string name="qc_ring_volume">Ring</string>
+    <string name="qc_notification_volume">Notifications</string>
+    <string name="qc_alarm_volume">Alarm</string>
+    <string name="qc_notification_volume_linked">Some devices link ring and notification volume. Do Not Disturb may restrict changes.</string>
+    <string name="qc_sound_mode_settings">Sound mode: %1$s · Tap to change</string>
+    <string name="qc_open_sound_settings">Open Android sound settings</string>
+    <string name="qc_sound_mode_failed">The sound mode could not be changed.</string>
+    <string name="qc_brightness_failed">Android refused the brightness change.</string>
+    <string name="qc_sound_mode_normal">Sound</string>
+    <string name="qc_sound_mode_vibrate">Vibrate</string>
+    <string name="qc_sound_mode_silent">Silent</string>
+    <string name="qc_display_settings">Screen timeout and appearance · Open display settings</string>
+    <string name="qc_wifi_connected">Wi-Fi connection active</string>
+    <string name="qc_mobile_connected">Cellular connection active</string>
+    <string name="qc_grant_write_title">Modify system settings</string>
+    <string name="qc_grant_dnd_title">Do Not Disturb access</string>
+    <string name="qc_grant_open_settings">Open Android settings</string>
     <string name="qc_brightness">Brightness</string>
     <string name="qc_volume">Volume</string>
     <string name="qc_brightness_automatic">Automatic brightness is on</string>
     <string name="qc_brightness_needs_grant">Grant \"Modify system settings\" to change brightness</string>
     <string name="qc_slider_needs_grant">Android will not let LumaOS Pro change this level</string>
+    <string name="qc_volume_managed">Use Android sound settings to change this level</string>
     <string name="qc_volume_failed">Android refused the volume change.</string>
 
     <!-- Failures, reported as failures -->
@@ -74,7 +115,7 @@
     <string name="qc_torch_failed">The torch could not be switched.</string>
     <string name="qc_torch_in_use">The camera is using the flash, so the torch is unavailable.</string>
     <string name="qc_rotation_failed">Rotation lock could not be changed.</string>
-    <string name="qc_focus_failed">Focus could not be changed.</string>
+    <string name="qc_focus_failed">Do Not Disturb could not be changed.</string>
     <string name="qc_unavailable_wifi">This device has no Wi-Fi radio that LumaOS Pro can read.</string>
     <string name="qc_unavailable_torch">This device has no flash unit.</string>
     <string name="qc_unavailable_camera">No camera app is available to open.</string>
@@ -123,4 +164,13 @@
     <string name="notification_reply_unsupported">This app does not accept a reply from here.</string>
     <string name="notification_reply_failed">The reply to %1$s was not delivered.</string>
 
+    <string name="qc_media_remote_playback">Remote playback</string>
+    <plurals name="notification_group_expand">
+        <item quantity="one">Show %d notification</item>
+        <item quantity="other">Show %d listed notifications</item>
+    </plurals>
+    <plurals name="notification_group_collapse">
+        <item quantity="one">Collapse %d notification</item>
+        <item quantity="other">Collapse %d notifications</item>
+    </plurals>
 </resources>

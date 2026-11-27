@@ -214,6 +214,7 @@ class SettingsActivity : ComponentActivity() {
                                         )
                                     },
                                     onOpenStudio = { tab = 1 },
+                                    openFocusProtection = intent.getBooleanExtra(EXTRA_FOCUS_PROTECTION, false),
                                     onOpenWallpaper = { startActivity(android.content.Intent(this@SettingsActivity, com.lumaos.pro.launcher.wallpaper.WallpaperActivity::class.java)) },
                                     onOpenOnboarding = {
                                         startActivity(
@@ -299,5 +300,6 @@ class SettingsActivity : ComponentActivity() {
         /** Optional tab to open; the home screen's edit mode passes [TAB_STUDIO]. */
         const val EXTRA_TAB = "com.lumaos.pro.launcher.extra.SETTINGS_TAB"
         const val TAB_STUDIO = "studio"
+        const val EXTRA_FOCUS_PROTECTION = "com.lumaos.pro.launcher.extra.FOCUS_PROTECTION"
     }
 }

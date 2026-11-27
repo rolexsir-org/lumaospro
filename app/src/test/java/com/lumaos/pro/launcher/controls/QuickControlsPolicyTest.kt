@@ -26,6 +26,18 @@ class QuickControlsPolicyTest {
         cameraAvailable: Boolean = false
     ) = QuickControlsSnapshot(castAvailable = castAvailable, cameraAvailable = cameraAvailable)
 
+    @Test
+    fun `ringer mode cycle respects vibrator availability and DND access`() {
+        assertEquals(RingerMode.VIBRATE, RingerModePolicy.next(RingerMode.NORMAL, true))
+        assertEquals(RingerMode.SILENT, RingerModePolicy.next(RingerMode.NORMAL, false))
+        assertEquals(RingerMode.SILENT, RingerModePolicy.next(RingerMode.VIBRATE, true))
+        assertEquals(RingerMode.NORMAL, RingerModePolicy.next(RingerMode.SILENT, true))
+        assertFalse(RingerModePolicy.needsPolicyAccess(RingerMode.NORMAL, RingerMode.VIBRATE, false))
+        assertTrue(RingerModePolicy.needsPolicyAccess(RingerMode.VIBRATE, RingerMode.SILENT, false))
+        assertTrue(RingerModePolicy.needsPolicyAccess(RingerMode.SILENT, RingerMode.NORMAL, false))
+        assertFalse(RingerModePolicy.needsPolicyAccess(RingerMode.VIBRATE, RingerMode.SILENT, true))
+    }
+
     // ── Columns ────────────────────────────────────────────────────────────
 
     @Test

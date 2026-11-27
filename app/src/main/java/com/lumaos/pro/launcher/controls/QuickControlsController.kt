@@ -22,8 +22,9 @@ import java.util.concurrent.Executors
  * partial ones, and a slow binder call can never block a drag. Writes are
  * throttled during a slider drag and always committed on release.
  *
- * Everything is started by [start] and torn down by [stop]; there is no periodic
- * timer and no work while the shade is closed.
+ * Everything is started by [start] and torn down by [stop]. A lightweight volume
+ * read while open catches hardware-key changes that lack a public volume broadcast;
+ * no polling or observation continues while the shade is closed.
  */
 class QuickControlsController(context: Context) {
 
@@ -51,15 +52,41 @@ class QuickControlsController(context: Context) {
         private set
 
     private var lastBrightnessWrite = 0L
-    private var lastVolumeWrite = 0L
+    private val lastVolumeWrites = mutableMapOf<AudioStream, Long>()
 
     private val refreshPass = Runnable {
+        if (!running) return@Runnable
         val stamp = ++generation
         worker.execute {
             val snapshot = read()
             // Only the newest pass may publish; an older result would undo a newer
             // state the user has already seen.
-            if (stamp == generation) main.post { _state.value = snapshot }
+            if (stamp == generation) main.post {
+                if (running && stamp == generation) _state.value = snapshot
+            }
+        }
+    }
+
+    // Android exposes no public, reliable stream-volume-changed broadcast. Read
+    // only the audio streams while visible; don't re-read all radios or media art.
+    private val volumePoll = object : Runnable {
+        override fun run() {
+            if (!running) return
+            val stamp = generation
+            worker.execute {
+                val volume = devices.volumeState()
+                val ring = devices.volumeState(AudioStream.RING)
+                val notification = devices.volumeState(AudioStream.NOTIFICATION)
+                val alarm = devices.volumeState(AudioStream.ALARM)
+                val mode = devices.ringerMode()
+                main.post {
+                    if (running && stamp == generation) {
+                        _state.value = _state.value.copy(volume = volume, ringVolume = ring,
+                            notificationVolume = notification, alarmVolume = alarm, ringerMode = mode)
+                    }
+                }
+            }
+            main.postDelayed(this, VOLUME_POLL_MS)
         }
     }
 
@@ -82,6 +109,7 @@ class QuickControlsController(context: Context) {
         devices.startObserving { coalesce() }
         media.start { coalesce() }
         coalesce()
+        main.postDelayed(volumePoll, VOLUME_POLL_MS)
     }
 
     fun stop() {
@@ -90,6 +118,7 @@ class QuickControlsController(context: Context) {
         devices.stopObserving()
         media.stop()
         main.removeCallbacks(refreshPass)
+        main.removeCallbacks(volumePoll)
         // Invalidates any read already in flight: its generation no longer matches.
         generation++
     }
@@ -102,10 +131,16 @@ class QuickControlsController(context: Context) {
 
     /** Asks for one fresh snapshot, coalesced with any other pending request. */
     fun refresh() {
-        if (running) coalesce()
+        if (running) {
+            // Notification access may have changed while Android settings was open.
+            // Rebind sessions as well as re-reading device values on resume.
+            media.refresh()
+            coalesce()
+        }
     }
 
     private fun coalesce() {
+        if (!running) return
         main.removeCallbacks(refreshPass)
         main.postDelayed(refreshPass, COALESCE_MS)
     }
@@ -137,6 +172,9 @@ class QuickControlsController(context: Context) {
         TileId.HOTSPOT -> devices.hotspotIntent()
         TileId.CAST -> devices.castIntent()
         TileId.CAMERA -> devices.cameraIntent()
+        TileId.POWER_SAVE -> devices.powerSaveIntent()
+        TileId.LOCATION -> devices.locationIntent()
+        TileId.NFC -> devices.nfcIntent()
         TileId.TORCH -> null
         TileId.ROTATION_LOCK -> if (devices.canWriteSystemSettings()) null else devices.writeSettingsGrantIntent()
         TileId.FOCUS -> if (devices.hasNotificationPolicyAccess()) null else devices.notificationPolicyIntent()
@@ -158,11 +196,12 @@ class QuickControlsController(context: Context) {
         return written
     }
 
-    fun applyVolume(fraction: Float, commit: Boolean): Boolean {
+    fun applyVolume(fraction: Float, commit: Boolean, stream: AudioStream = AudioStream.MEDIA): Boolean {
         val now = SystemClock.uptimeMillis()
-        if (!commit && now - lastVolumeWrite < WRITE_THROTTLE_MS) return true
-        lastVolumeWrite = now
-        val written = devices.applyVolume(fraction)
+        val lastWrite = lastVolumeWrites[stream] ?: 0L
+        if (!commit && now - lastWrite < WRITE_THROTTLE_MS) return true
+        lastVolumeWrites[stream] = now
+        val written = devices.applyVolume(fraction, stream)
         if (commit) coalesce()
         return written
     }
@@ -181,6 +220,12 @@ class QuickControlsController(context: Context) {
         return ok
     }
 
+    fun seekMedia(positionMs: Long, expectedSessionId: Long?): Boolean {
+        val sent = media.seekTo(positionMs, expectedSessionId)
+        coalesce()
+        return sent
+    }
+
     fun mediaArtwork(): Drawable? {
         val bitmap = runCatching { media.artwork() }.getOrNull() ?: return null
         return android.graphics.drawable.BitmapDrawable(appContext.resources, bitmap)
@@ -195,6 +240,20 @@ class QuickControlsController(context: Context) {
     fun writeSettingsIntent(): Intent = devices.writeSettingsGrantIntent()
 
     fun notificationPolicyIntent(): Intent = devices.notificationPolicyIntent()
+    fun cycleRingerMode(): TileTapOutcome {
+        val before = devices.currentInterruptionFilter()
+        val result = devices.cycleRingerMode()
+        val after = devices.currentInterruptionFilter()
+        if (before != android.app.NotificationManager.INTERRUPTION_FILTER_UNKNOWN &&
+            after != android.app.NotificationManager.INTERRUPTION_FILTER_UNKNOWN && before != after) {
+            onDndChangedByUser?.invoke(before, after)
+        }
+        coalesce()
+        return result
+    }
+
+    fun soundSettingsIntent(): Intent = Intent(android.provider.Settings.ACTION_SOUND_SETTINGS)
+    fun displaySettingsIntent(): Intent = devices.displayFallbackIntent()
 
     /** Android's interruption-filter constants, for the Focus tile's detail line. */
     object Filters {
@@ -205,6 +264,7 @@ class QuickControlsController(context: Context) {
     companion object {
         /** Enough to merge a burst of broadcasts, short enough to feel immediate. */
         private const val COALESCE_MS = 90L
+        private const val VOLUME_POLL_MS = 2_000L
 
         /** Slider writes during a drag; the release always writes. */
         private const val WRITE_THROTTLE_MS = 70L

@@ -32,6 +32,15 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Quick Controls read Wi-Fi and use the platform's user-granted settings APIs. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Legacy Bluetooth state access; newer Android versions use a runtime grant. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Normal permissions for the optional platform biometric Vault unlock path. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
@@ -48,6 +57,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -102,6 +112,9 @@
         <intent>
             <action android:name="android.settings.DISPLAY_SETTINGS" />
         </intent>
+        <intent><action android:name="android.settings.BATTERY_SAVER_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.LOCATION_SOURCE_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.NFC_SETTINGS" /></intent>
         <intent><action android:name="org.adw.launcher.THEMES" /></intent>
         <intent><action android:name="com.novalauncher.THEME" /></intent>
         <intent><action android:name="com.teslacoilsw.launcher.THEME" /></intent>

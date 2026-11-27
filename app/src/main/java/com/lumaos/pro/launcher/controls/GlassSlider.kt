@@ -30,7 +30,7 @@ import com.lumaos.pro.launcher.ui.theme.LumaTokens
  * real reading whenever the panel refreshes. That ordering is what keeps a refused
  * write from leaving the UI claiming a value the device does not have.
  */
-class GlassSlider(context: Context) : View(context) {
+class GlassSlider(context: Context, private val vertical: Boolean = false) : View(context) {
 
     /** Called continuously while the finger moves; `fromUser` distinguishes drags. */
     var onValueChanged: ((fraction: Float, fromUser: Boolean) -> Unit)? = null
@@ -51,6 +51,7 @@ class GlassSlider(context: Context) : View(context) {
     private val thumbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val thumbRimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val rect = RectF()
+    private val pillPath = android.graphics.Path()
 
     private var fraction = 0f
     private var dragging = false
@@ -79,7 +80,7 @@ class GlassSlider(context: Context) : View(context) {
     /** Sets the position from the device's real value without notifying listeners. */
     fun setValueSilently(value: Float) {
         val next = value.coerceIn(0f, 1f)
-        if (next == fraction) return
+        if (dragging || next == fraction) return
         fraction = next
         invalidate()
     }
@@ -88,7 +89,7 @@ class GlassSlider(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = resolveSize(suggestedMinimumWidth, widthMeasureSpec)
-        val height = resolveSize(dp(LumaTokens.minTouchTarget).toInt(), heightMeasureSpec)
+        val height = resolveSize(dp(if (vertical) LumaTokens.volumePillHeight else LumaTokens.minTouchTarget).toInt(), heightMeasureSpec)
         setMeasuredDimension(width, height)
     }
 
@@ -96,6 +97,24 @@ class GlassSlider(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
+        if (vertical) {
+            val horizontalInset = dp(LumaTokens.spaceXXS)
+            rect.set(horizontalInset, 0f, w - horizontalInset, h)
+            val radius = rect.width() / 2f
+            canvas.drawRoundRect(rect, radius, radius, trackPaint)
+            // Clip the fill to the pill rather than fabricating a thumb position.
+            canvas.save()
+            pillPath.reset()
+            pillPath.addRoundRect(rect, radius, radius, android.graphics.Path.Direction.CW)
+            canvas.clipPath(pillPath)
+            canvas.drawRect(rect.left, rect.bottom - rect.height() * fraction, rect.right, rect.bottom, fillPaint)
+            canvas.restore()
+            val rim = RectF(rect)
+            val half = rimPaint.strokeWidth / 2f
+            rim.inset(half, half)
+            canvas.drawRoundRect(rim, radius, radius, rimPaint)
+            return
+        }
         val inset = thumbRadius
         rect.set(inset, (h - trackHeight) / 2f, w - inset, (h + trackHeight) / 2f)
 
@@ -117,24 +136,26 @@ class GlassSlider(context: Context) : View(context) {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!interactive) return false
+        // Restricted sliders still need to dispatch their click to the grant
+        // route installed by SliderRow; they must not adjust the value.
+        if (!interactive) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 dragging = true
                 parent?.requestDisallowInterceptTouchEvent(true)
-                updateFrom(event.x)
+                updateFrom(if (vertical) event.y else event.x)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!dragging) return false
-                updateFrom(event.x)
+                updateFrom(if (vertical) event.y else event.x)
                 return true
             }
             MotionEvent.ACTION_UP -> {
                 if (!dragging) return false
                 dragging = false
                 parent?.requestDisallowInterceptTouchEvent(false)
-                updateFrom(event.x)
+                updateFrom(if (vertical) event.y else event.x)
                 onCommit?.invoke(fraction)
                 performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 return true
@@ -150,10 +171,14 @@ class GlassSlider(context: Context) : View(context) {
         return super.onTouchEvent(event)
     }
 
-    private fun updateFrom(x: Float) {
-        val inset = thumbRadius
-        val usable = (width - inset * 2).coerceAtLeast(1f)
-        val next = ((x - inset) / usable).coerceIn(0f, 1f)
+    private fun updateFrom(coordinate: Float) {
+        val next = if (vertical) {
+            (1f - coordinate / height.coerceAtLeast(1)).coerceIn(0f, 1f)
+        } else {
+            val inset = thumbRadius
+            val usable = (width - inset * 2).coerceAtLeast(1f)
+            ((coordinate - inset) / usable).coerceIn(0f, 1f)
+        }
         if (kotlin.math.abs(next - fraction) < 0.0005f) return
         fraction = next
         invalidate()
@@ -190,9 +215,10 @@ class GlassSlider(context: Context) : View(context) {
             100f,
             fraction * 100f
         )
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
-        if (!interactive) info.isImportantForAccessibility = true
+        if (interactive) {
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+        }
     }
 
     override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
