@@ -1,6 +1,6 @@
-# LumaOS Pro 1.5.1 widget system — implementation audit
+# LumaOS Pro 1.7.0 widget system — implementation audit
 
-The checksummed debug APKs recorded here were built before the version bump; their embedded version is 1.5.0. Rebuild from current source to verify a 1.5.1 APK.
+The checksummed debug APKs recorded here were built before the version bump; their embedded version is 1.7.0. Rebuild from current source to verify a 1.7.0 APK.
 
 ## Architecture inspected
 

@@ -42,8 +42,8 @@ android {
         applicationId = "com.lumaos.pro.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 160
-        versionName = "1.6.0"
+        versionCode = 170
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += setOf("en")

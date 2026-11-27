@@ -1,6 +1,6 @@
-# LumaOS Pro 1.6.0 — Design System QA Checklist
+# LumaOS Pro 1.7.0 — Design System QA Checklist
 
-Current source identity: **1.6.0 / `versionCode` 160**. Historical PASS results below are not a new release sign-off. The widget audit tracks the earlier debug build and outstanding device checks.
+Current source identity: **1.7.0 / `versionCode` 170**. Historical PASS results below are not a new release sign-off. The widget audit tracks the earlier debug build and outstanding device checks.
 
 This checklist separates **what has been verified in this workspace** from **what
 must be verified on a device or in a real build**. Nothing in the "device" section

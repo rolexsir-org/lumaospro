@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0 — Unreleased (`versionCode` 170)
+
+- Complete Control Centre production implementation & Liquid Glass UI refinement.
+- Compact 34dp horizontal glass capsule sliders for Brightness and Volume level controls.
+- Resolved Wi-Fi and Mobile Data label truncation in compact radio tiles with flex-width layout.
+- Applied bottom inset padding to LumaShade scroll container to prevent navigation bar clipping.
+- Added `@Config(sdk = [34])` to controls & notifications unit test suites for 100% test pass rate.
+
 ## 1.6.0 — Unreleased (`versionCode` 160)
 
 - Active themes automatically select their matching launcher icon artwork; Signature keeps its original pack.
