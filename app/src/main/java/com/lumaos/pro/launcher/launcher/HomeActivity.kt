@@ -9,6 +9,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.RenderEffect
 import android.graphics.Shader
@@ -42,6 +43,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
@@ -388,7 +391,16 @@ class HomeActivity : ComponentActivity(), DrawerController.Host, EditModeControl
             viewModel.setActivePage(it)
         }
         core.themes.onConfiguration(resources.configuration)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // The launcher has always drawn edge to edge behind translucent bars,
+        // and Android 15+ enforces that for targetSdk 35+. enableEdgeToEdge()
+        // replaces the hand-rolled decorFits call with the versioned platform
+        // implementation. The navigation style is explicitly transparent: the
+        // home screen draws its own content (and its own contrast) behind the
+        // gesture pill / three-button bar, so the default auto scrim must never
+        // be applied here. Bar icon colours stay content-driven - they are
+        // recomputed from what is actually behind the bars in applyChromeInsets
+        // and onDrawerProgress.
+        enableEdgeToEdge(navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT))
         setContentView(R.layout.activity_home)
         bindViews()
 
