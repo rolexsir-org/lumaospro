@@ -8,10 +8,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 @LooperMode(LooperMode.Mode.PAUSED)
 class QuickControlsLifecycleTest {
     @Test fun stoppingAndShuttingDownCancelsPendingRefreshAndAudioPoll() {

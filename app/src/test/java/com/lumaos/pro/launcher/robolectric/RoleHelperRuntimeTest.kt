@@ -1,5 +1,7 @@
 package com.lumaos.pro.launcher.robolectric
 
+import android.app.role.RoleManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -7,6 +9,7 @@ import android.content.pm.ResolveInfo
 import androidx.test.core.app.ApplicationProvider
 import com.lumaos.pro.launcher.core.LumaApp
 import com.lumaos.pro.launcher.core.util.RoleHelper
+import com.lumaos.pro.launcher.launcher.HomeActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,26 +36,52 @@ class RoleHelperRuntimeTest {
         .addCategory(Intent.CATEGORY_HOME)
         .addCategory(Intent.CATEGORY_DEFAULT)
 
-    private fun resolveHomeTo(packageName: String) {
-        val info = ResolveInfo().apply {
-            activityInfo = ActivityInfo().apply {
-                this.packageName = packageName
-                name = "$packageName.Home"
-            }
+    private fun setHomeActivityEnabled(enabled: Boolean) {
+        val state = if (enabled) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         }
-        shadowOf(context.packageManager).addResolveInfoForIntent(homeIntent(), info)
+        context.packageManager.setComponentEnabledSetting(
+            ComponentName(context, HomeActivity::class.java),
+            state,
+            PackageManager.DONT_KILL_APP
+        )
+    }
+
+    private fun setHomeRoleHeld(held: Boolean) {
+        val rm = context.getSystemService(RoleManager::class.java) ?: return
+        val s = shadowOf(rm)
+        if (held) {
+            s.addHeldRole(RoleManager.ROLE_HOME)
+        } else if (rm.isRoleHeld(RoleManager.ROLE_HOME)) {
+            s.removeHeldRole(RoleManager.ROLE_HOME)
+        }
+    }
+
+    private fun resolveHomeTo(packageName: String) {
+        val isSelf = packageName == context.packageName
+        setHomeActivityEnabled(isSelf)
+        setHomeRoleHeld(isSelf)
+        if (!isSelf) {
+            val info = ResolveInfo().apply {
+                activityInfo = ActivityInfo().apply {
+                    this.packageName = packageName
+                    name = "$packageName.Home"
+                }
+            }
+            shadowOf(context.packageManager).addResolveInfoForIntent(homeIntent(), info)
+        }
     }
 
     @Test fun `no home resolution reads as not default`() {
+        setHomeActivityEnabled(false)
+        setHomeRoleHeld(false)
         assertNull(RoleHelper.defaultHomePackage(context))
         assertFalse(RoleHelper.isDefaultLauncher(context))
     }
 
-    // SDK 28 exercises the resolved-HOME compatibility path deterministically:
-    // on Q+ the production code additionally cross-checks the platform Home
-    // role, whose shadow state this test does not drive.
     @Test
-    @Config(sdk = [28])
     fun `gaining and losing home ownership is tracked`() {
         resolveHomeTo(context.packageName)
         assertEquals(context.packageName, RoleHelper.defaultHomePackage(context))
@@ -64,8 +93,6 @@ class RoleHelperRuntimeTest {
     }
 
     @Test fun `match flags do not affect the resolution`() {
-        // The production call passes MATCH_DEFAULT_ONLY; the shadow must
-        // honor the same lookup the app performs.
         resolveHomeTo(context.packageName)
         val resolved = context.packageManager.resolveActivity(homeIntent(), PackageManager.MATCH_DEFAULT_ONLY)
         assertEquals(context.packageName, resolved?.activityInfo?.packageName)

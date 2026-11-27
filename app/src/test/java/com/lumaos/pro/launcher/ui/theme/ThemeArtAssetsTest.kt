@@ -1,18 +1,23 @@
 package com.lumaos.pro.launcher.ui.theme
 
+import android.graphics.BitmapFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
-import javax.imageio.ImageIO
 
 /**
  * Guards the bundled theme wallpapers on the JVM: every [WallpaperArt] maps to a
  * drawable that ships, and the light/dark property the engine trusts for home
  * text matches the real pixels.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ThemeArtAssetsTest {
 
     private fun firstDir(vararg candidates: String): File? = candidates.map(::File).firstOrNull { it.isDirectory }
@@ -52,7 +57,7 @@ class ThemeArtAssetsTest {
         for (art in WallpaperArt.entries) {
             val file = assetFor(map.getValue(art.name)) ?: continue
             if (file.extension != "png") continue
-            val img = ImageIO.read(file)
+            val img = BitmapFactory.decodeFile(file.absolutePath)
             assertNotNull("${file.name} decodes", img)
             assertTrue("${file.name} is portrait (${img.width}x${img.height})", img.height > img.width)
             assertTrue("${file.name} is at least 1080 wide", img.width >= 1080)
@@ -64,7 +69,8 @@ class ThemeArtAssetsTest {
         for (art in WallpaperArt.entries) {
             val file = assetFor(map.getValue(art.name)) ?: continue
             if (file.extension != "png") continue
-            val img = ImageIO.read(file)
+            val img = BitmapFactory.decodeFile(file.absolutePath)
+            assertNotNull("${file.name} decodes", img)
             // Mean relative luminance over the clock/date band and the dock band,
             // where home text and glyphs sit.
             var sum = 0.0
@@ -74,7 +80,7 @@ class ThemeArtAssetsTest {
                 while (y < img.height * band.endInclusive) {
                     var x = 0
                     while (x < img.width) {
-                        sum += ColorMath.luminance(img.getRGB(x, y) or (0xFF shl 24))
+                        sum += ColorMath.luminance(ColorMath.opaque(img.getPixel(x, y)))
                         n++
                         x += 16
                     }

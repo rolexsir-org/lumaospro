@@ -3,8 +3,6 @@ package com.lumaos.pro.launcher.robolectric
 import android.app.Application
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule

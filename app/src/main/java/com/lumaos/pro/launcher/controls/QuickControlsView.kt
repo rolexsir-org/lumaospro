@@ -662,6 +662,7 @@ class QuickControlsView(
                 textColumn.addView(secondary)
                 content.addView(textColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginStart = dp(LumaTokens.spaceXS)
+                    marginEnd = dp(LumaTokens.spaceXXS)
                 })
                 content.addView(marker, LinearLayout.LayoutParams(dp(MARKER_DP), dp(MARKER_DP)))
             } else {
@@ -696,7 +697,7 @@ class QuickControlsView(
             GlassViews.apply(this, spec, density, ripple = true, radiusOverrideDp = radiusDp, wallpaperUnderlay = false)
             label.text = context.getString(labelRes(id))
             label.typeface = Typefaces.label(theme.typography)
-            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (compact) LumaTokens.typeCaptionSp else LumaTokens.typeMicroSp)
             secondary.typeface = Typefaces.body(theme.typography)
             secondary.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             bind(state)
@@ -731,13 +732,15 @@ class QuickControlsView(
             icon.alpha = if (unavailable) DISABLED_ALPHA else 1f
             label.setTextColor(contentColor)
             if (compact) {
-                secondary.text = next.detail ?: context.getString(when {
+                val detailText = next.detail ?: context.getString(when {
                     unavailable -> R.string.qc_state_unavailable
                     next.on == true -> R.string.qc_state_on
                     next.on == false -> R.string.qc_state_off
                     else -> R.string.qc_state_system_managed
                 })
-                secondary.setTextColor(ColorMath.withAlpha(contentColor, 0.72f))
+                secondary.text = detailText
+                secondary.visibility = if (detailText.isBlank()) View.GONE else View.VISIBLE
+                secondary.setTextColor(ColorMath.withAlpha(contentColor, 0.75f))
             }
             label.alpha = when {
                 unavailable -> DISABLED_ALPHA
@@ -846,20 +849,20 @@ class QuickControlsView(
     ) : LinearLayout(context) {
 
         private val icon = ImageView(context)
-        val slider = GlassSlider(context, vertical = true)
+        val slider = GlassSlider(context, vertical = false)
         private val caption = TextView(context)
         private val value = TextView(context)
 
         init {
             orientation = VERTICAL
-            icon.layoutParams = LinearLayout.LayoutParams(dp(LumaTokens.iconAction), dp(LumaTokens.iconAction))
+            icon.layoutParams = LinearLayout.LayoutParams(dp(LumaTokens.iconInline + 2f), dp(LumaTokens.iconInline + 2f))
             icon.scaleType = ImageView.ScaleType.FIT_CENTER
             icon.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
 
             val titleRow = LinearLayout(context).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = dp(LumaTokens.minTouchTarget)
+                minimumHeight = dp(24f)
             }
             titleRow.addView(icon)
             val title = TextView(context).apply {
@@ -877,7 +880,9 @@ class QuickControlsView(
             value.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             titleRow.addView(value, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(titleRow, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(slider, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(LumaTokens.volumePillHeight)))
+            addView(slider, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34f)).apply {
+                topMargin = dp(LumaTokens.spaceXXS)
+            })
             // Keep the label tied to the same palette as the rest of this module.
             title.tag = "level-title"
 
@@ -892,7 +897,7 @@ class QuickControlsView(
         fun applyMaterial(theme: ResolvedTheme, palette: GlassPalette) {
             val spec = palette[GlassRole.SECONDARY]
             GlassViews.apply(this, spec, density, ripple = false, depth = LumaTokens.depthShade, wallpaperUnderlay = false)
-            setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
+            setPadding(dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXS), dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXS))
             icon.setImageDrawable(tinted(iconRes, spec.rest.content))
             findViewWithTag<TextView>("level-title")?.apply {
                 setTextColor(spec.rest.content)
@@ -900,14 +905,14 @@ class QuickControlsView(
             }
             slider.contentDescription = context.getString(labelRes)
             val material = GlassSlider.material(spec.rest.content, theme.colors.accent, theme.isDark)
-            slider.setMaterial(material.track, ColorMath.withAlpha(spec.rest.content, 0.8f), material.rim, material.thumb, material.thumbRim)
+            slider.setMaterial(material.track, ColorMath.withAlpha(theme.colors.accent, 0.85f), material.rim, material.thumb, material.thumbRim)
             value.setTextColor(spec.rest.content)
             value.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             value.typeface = Typefaces.label(theme.typography)
             caption.setTextColor(spec.rest.muted)
             caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, LumaTokens.typeMicroSp)
             caption.typeface = Typefaces.label(theme.typography)
-            caption.setPadding(dp(LumaTokens.spaceSM), 0, dp(LumaTokens.spaceSM), dp(LumaTokens.spaceXXS))
+            caption.setPadding(0, dp(LumaTokens.spaceXXS), 0, 0)
         }
 
         /**

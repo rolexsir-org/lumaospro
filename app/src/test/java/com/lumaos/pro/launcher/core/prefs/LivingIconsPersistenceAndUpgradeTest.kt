@@ -222,8 +222,8 @@ class LivingIconsPersistenceAndUpgradeTest {
         // Onboarding must never intercept HOME intents
         val onboardingSection = xml.substringAfter("OnboardingActivity").substringBefore("</activity>", "")
         assertFalse(onboardingSection.contains("android.intent.category.HOME"))
-        // No deceptive DeviceAdminReceiver or AccessibilityService declarations
+        // No deceptive DeviceAdminReceiver; FocusAccessibilityService is the only declared accessibility service
         assertFalse(xml.contains("android.app.action.DEVICE_ADMIN_ENABLED"))
-        assertFalse(xml.contains("android.accessibilityservice.AccessibilityService"))
+        assertTrue(xml.contains("android:name=\".context.FocusAccessibilityService\""))
     }
 }

@@ -90,7 +90,7 @@ object ContextScheduleManager {
     ): LocalDateTime? {
         val current = ContextProfileResolver.resolve(schedules, now.toLocalTime(), now.dayOfWeek)
         val candidates = buildList {
-            for (offset in 0..8) {
+            for (offset in -1..8) {
                 val date = now.toLocalDate().plusDays(offset.toLong())
                 schedules.values.filter { it.enabled && date.dayOfWeek in it.days && it.start != it.end }
                     .forEach { schedule ->

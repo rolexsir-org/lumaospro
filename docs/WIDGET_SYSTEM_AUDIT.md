@@ -1,4 +1,6 @@
-# LumaOS Pro 1.6.0 widget system — implementation audit
+# LumaOS Pro 1.5.1 widget system — implementation audit
+
+The checksummed debug APKs recorded here were built before the version bump; their embedded version is 1.5.0. Rebuild from current source to verify a 1.5.1 APK.
 
 ## Architecture inspected
 
@@ -35,7 +37,14 @@ Standard production path: `./build.sh assembleDebug` or the repository's documen
 python3 toolchain/checks/verify_widget_apk.py path/to/app.apk --aapt2 /path/to/aapt2
 ```
 
-The checker reads the packaged manifest, links each provider's metadata to its compiled native layout, and checks the DEX class definitions for the eight providers, configuration activity, weather job, and widget host. It does not assert the providers rendered successfully on a phone. Robolectric tests for native layout inflation, persisted configuration and forecast parsing cover the data paths; render checks remain device work.
+The checker reads the packaged manifest, links each provider's metadata to its compiled native layout, and checks the DEX class definitions for the eight providers, configuration activity, weather job, and widget host. It does not assert the providers rendered successfully on a phone.
+
+### Results in this workspace
+
+- Standard Gradle setup was blocked by the sandbox's JDK download restriction. An alternate local Android 36 / Kotlin / D8 build compiled the current source and produced `artifacts/app-debug.apk`. This uses cached dependencies and is a debug-signed test artifact, not a Gradle release build or a replacement for an installed release APK.
+- `ApkVerifier` passed APK signature schemes v2 and v3. The packaged-widget checker passed for all eight providers and for the configuration activity, weather job, and host class.
+- A JVM smoke check passed for coordinate validation and screen-time accounting across midnight. Robolectric tests for native layout inflation, persisted configuration and forecast parsing were added but not run in this workspace.
+- SHA-256: `08c354d993bb9fc454a7dc72ada84d6cec8c131f032609738b45f03bcf90e9ef`
 
 ## Physical-device sign-off (pending)
 
@@ -56,4 +65,4 @@ The supplied Theme Lab HTML serves as a visual reference, not as a widget implem
 
 The lab's example cities, world times, agenda entries, hourly forecast curve, RAM partitions, charge speed, charge ETA, and top apps were not copied as fixed values. These are native adaptations of the reference rather than an exact copy of every large demo card.
 
-Physical-device visual and behavior checks remain pending.
+The restyled debug APK is `artifacts/theme-lab/app-debug.apk` (SHA-256 `4a3cdc47ae5d226050acfc7f7f493b944c9aff14f6ebfa61bee38d09c0d8f713`). Signature and packaged-provider checks passed again, as did the screen-time boundary smoke check. Physical-device visual and behavior checks remain pending.

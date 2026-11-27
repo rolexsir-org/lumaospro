@@ -602,6 +602,7 @@ class LumaShade(
             lp.width = width
             sh.layoutParams = lp
         }
+        sheet?.setPadding(0, 0, 0, dp(16f) + host.bottomInsetPx())
     }
 
     /** Re-applies insets; called by the host when window insets change. */

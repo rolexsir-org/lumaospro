@@ -113,8 +113,10 @@ object BackupCodec {
         "backdrop_" to ValueType.STRING
     )
 
-    fun expectedType(key: String): ValueType? =
-        EXACT[key] ?: PREFIXES.entries.firstOrNull { key.startsWith(it.key) && key.length > it.key.length }?.value
+    fun expectedType(key: String): ValueType? {
+        if (key.startsWith("context_wallpaper_sysid_")) return null
+        return EXACT[key] ?: PREFIXES.entries.firstOrNull { key.startsWith(it.key) && key.length > it.key.length }?.value
+    }
 
     fun isLayoutKey(key: String): Boolean = key == "home_layout" || key.startsWith("home_layout_")
 

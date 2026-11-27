@@ -115,30 +115,34 @@ class GlassSlider(context: Context, private val vertical: Boolean = false) : Vie
             canvas.drawRoundRect(rim, radius, radius, rimPaint)
             return
         }
-        val inset = thumbRadius
-        rect.set(inset, (h - trackHeight) / 2f, w - inset, (h + trackHeight) / 2f)
+        val radius = h / 2f
+        rect.set(0f, 0f, w, h)
+        canvas.drawRoundRect(rect, radius, radius, trackPaint)
 
-        canvas.drawRoundRect(rect, trackRadius, trackRadius, trackPaint)
-        val filled = RectF(rect)
-        filled.right = (rect.left + rect.width() * fraction).coerceAtLeast(rect.left + trackHeight * 0.5f)
-        canvas.drawRoundRect(filled, trackRadius, trackRadius, fillPaint)
+        canvas.save()
+        pillPath.reset()
+        pillPath.addRoundRect(rect, radius, radius, android.graphics.Path.Direction.CW)
+        canvas.clipPath(pillPath)
+        val fillRight = (w * fraction).coerceAtLeast(if (fraction > 0f) h * 0.1f else 0f)
+        canvas.drawRect(0f, 0f, fillRight, h, fillPaint)
+        canvas.restore()
 
         val rim = RectF(rect)
         val half = rimPaint.strokeWidth / 2f
         rim.inset(half, half)
-        canvas.drawRoundRect(rim, trackRadius, trackRadius, rimPaint)
-
-        val cx = rect.left + rect.width() * fraction
-        val cy = rect.centerY()
-        canvas.drawCircle(cx, cy, thumbRadius, thumbPaint)
-        canvas.drawCircle(cx, cy, thumbRadius - thumbRimPaint.strokeWidth / 2f, thumbRimPaint)
+        canvas.drawRoundRect(rim, radius, radius, rimPaint)
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         // Restricted sliders still need to dispatch their click to the grant
         // route installed by SliderRow; they must not adjust the value.
-        if (!interactive) return super.onTouchEvent(event)
+        if (!interactive) {
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                performClick()
+            }
+            return super.onTouchEvent(event)
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 dragging = true
@@ -175,9 +179,7 @@ class GlassSlider(context: Context, private val vertical: Boolean = false) : Vie
         val next = if (vertical) {
             (1f - coordinate / height.coerceAtLeast(1)).coerceIn(0f, 1f)
         } else {
-            val inset = thumbRadius
-            val usable = (width - inset * 2).coerceAtLeast(1f)
-            ((coordinate - inset) / usable).coerceIn(0f, 1f)
+            (coordinate / width.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
         }
         if (kotlin.math.abs(next - fraction) < 0.0005f) return
         fraction = next

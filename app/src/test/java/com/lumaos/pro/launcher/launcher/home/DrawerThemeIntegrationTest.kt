@@ -88,13 +88,13 @@ class DrawerThemeIntegrationTest(private val themeId: ThemeId) {
         // cannot share the same drawer sheet fill - the drawer is themed, not fixed.
         val ivoryFill = ColorMath.opaque(
             GlassMaterials.palette(
-                ThemeEngine.resolve(ThemeSettings(themeId = ThemeId.IVORY), ThemeEnvironment(true, 720)),
+                ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.IVORY), ThemeEnvironment(true, 720)),
                 GlassCapabilities.DEFAULT
             )[GlassRole.SHEET].rest.fillTop
         )
         val obsidianFill = ColorMath.opaque(
             GlassMaterials.palette(
-                ThemeEngine.resolve(ThemeSettings(themeId = ThemeId.OBSIDIAN), ThemeEnvironment(true, 720)),
+                ThemeEngine.resolve(ThemeSettings().pinned(ThemeId.OBSIDIAN), ThemeEnvironment(true, 720)),
                 GlassCapabilities.DEFAULT
             )[GlassRole.SHEET].rest.fillTop
         )

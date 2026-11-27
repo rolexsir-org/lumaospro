@@ -98,7 +98,7 @@ class ProjectImportResolutionTest {
         // top-level declaration in that package (members after it are nested).
         for (cut in parts.size - 1 downTo 2) {
             val pkg = parts.subList(0, cut).joinToString(".")
-            if (parts[cut] in declarations[pkg]) return true
+            if (declarations[pkg]?.contains(parts[cut]) == true) return true
         }
         return false
     }

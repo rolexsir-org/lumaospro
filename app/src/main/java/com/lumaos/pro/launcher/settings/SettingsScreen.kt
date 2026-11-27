@@ -935,10 +935,9 @@ private fun ContextSection(
             val until = if (liveOverride.untilMillis == Long.MAX_VALUE) {
                 stringResource(R.string.context_override_indefinite, held)
             } else {
-                val time = LocalTime.ofInstant(
-                    java.time.Instant.ofEpochMilli(liveOverride.untilMillis),
-                    java.time.ZoneId.systemDefault()
-                )
+                val time = java.time.Instant.ofEpochMilli(liveOverride.untilMillis)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalTime()
                 stringResource(R.string.context_override_active, held, time.toString())
             }
             CleanRow(

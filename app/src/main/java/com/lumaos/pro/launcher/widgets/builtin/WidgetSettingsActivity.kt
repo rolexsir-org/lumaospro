@@ -35,7 +35,7 @@ class WidgetSettingsActivity : Activity() {
             finish()
             return
         }
-        title = info.loadLabel(packageManager)
+        runCatching { info.loadLabel(packageManager) }.getOrNull()?.let { title = it }
         val kind = BuiltinWidgetKind.entries.firstOrNull { it.component(this) == info.provider }
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

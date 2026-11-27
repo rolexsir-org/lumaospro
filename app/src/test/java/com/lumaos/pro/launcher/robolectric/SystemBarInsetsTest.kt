@@ -283,6 +283,17 @@ class SystemBarInsetsTest {
             )
             configure = ComponentName(app.packageName, WidgetSettingsActivity::class.java.name)
         }
+        val activityInfo = android.content.pm.ActivityInfo().apply {
+            packageName = app.packageName
+            name = "com.lumaos.pro.launcher.widgets.builtin.DigitalClockWidgetProvider"
+            nonLocalizedLabel = "Digital Clock"
+        }
+        runCatching {
+            AppWidgetProviderInfo::class.java.getDeclaredField("providerInfo").apply {
+                isAccessible = true
+                set(info, activityInfo)
+            }
+        }
         shadowOf(AppWidgetManager.getInstance(app)).putWidgetInfo(id, info)
         return info
     }
@@ -292,8 +303,8 @@ class SystemBarInsetsTest {
     fun `widget configuration form keeps clear of bars cutout and keyboard on Android 15`() {
         val app = ApplicationProvider.getApplicationContext<LumaApp>()
         installWidgetInfo(app, 77)
-        val activity = Robolectric.buildActivity(WidgetSettingsActivity::class.java)
-            .withIntent(WidgetSettingsActivity.intent(app, 77))
+        val intent = WidgetSettingsActivity.intent(app, 77)
+        val activity = Robolectric.buildActivity(WidgetSettingsActivity::class.java, intent)
             .setup()
             .get()
 
