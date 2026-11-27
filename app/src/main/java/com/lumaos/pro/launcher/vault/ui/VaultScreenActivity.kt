@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +14,9 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.lumaos.pro.launcher.vault.core.VaultItem
 import com.lumaos.pro.launcher.vault.core.VaultSession
 import com.lumaos.pro.launcher.vault.platform.VaultLifecycleGuard
@@ -58,6 +62,7 @@ abstract class VaultScreenActivity : Activity(), VaultLifecycleGuard.VaultScreen
         root = FrameLayout(this)
         root.setBackgroundColor(VaultDesign.colorBackgroundTop)
         setContentView(root)
+        applyEdgeToEdgeInsets()
         manager.session.addListener(sessionListener)
         val content = onCreateContent()
         root.addView(
@@ -68,6 +73,35 @@ abstract class VaultScreenActivity : Activity(), VaultLifecycleGuard.VaultScreen
 
     /** Build the screen; called once, before the first frame. */
     protected abstract fun onCreateContent(): View
+
+    /**
+     * Android 15+ (API 35) enforces edge-to-edge for apps targeting SDK 35+:
+     * `Window.setDecorFitsSystemWindows` and the bar colour setters are ignored
+     * there, so every Vault screen draws behind the system bars. The Vault root
+     * keeps its own distance from the bars, the display cutout and the keyboard,
+     * and the bar icons switch to light because the Vault canvas is dark
+     * (#0B0E14) - the theme's `windowLightStatusBar` only ever described the
+     * opaque white bars of the pre-15 world.
+     *
+     * Below API 35 nothing is registered: those systems keep the fitted,
+     * opaque-bar behaviour the Vault has always had, so its layout is unchanged.
+     */
+    private fun applyEdgeToEdgeInsets() {
+        if (Build.VERSION.SDK_INT < 35) return
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val pad = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or
+                    WindowInsetsCompat.Type.displayCutout() or
+                    WindowInsetsCompat.Type.ime()
+            )
+            view.setPadding(pad.left, pad.top, pad.right, pad.bottom)
+            insets
+        }
+    }
 
     /**
      * Called when the vault locks while this screen is showing.

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
@@ -15,6 +16,8 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.lumaos.pro.launcher.R
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -39,7 +42,24 @@ class WidgetSettingsActivity : Activity() {
             val padding = (24 * resources.displayMetrics.density).roundToInt()
             setPadding(padding, padding * 2, padding, padding)
         }
-        setContentView(ScrollView(this).apply { isFillViewport = true; addView(body) })
+        val scroll = ScrollView(this).apply { isFillViewport = true; addView(body) }
+        setContentView(scroll)
+        if (Build.VERSION.SDK_INT >= 35) {
+            // Android 15+ enforces edge-to-edge (the platform ignores
+            // setDecorFitsSystemWindows(true) and the bar colours for
+            // targetSdk 35+), so the form keeps its own distance from the
+            // bars, the cutout and the keyboard. Below API 35 the fitted,
+            // opaque-bar layout is unchanged - see VaultScreenActivity.
+            ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+                val pad = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or
+                        WindowInsetsCompat.Type.displayCutout() or
+                        WindowInsetsCompat.Type.ime()
+                )
+                view.setPadding(pad.left, pad.top, pad.right, pad.bottom)
+                insets
+            }
+        }
         fun text(res: Int) = TextView(this).apply { setText(res); textSize = 16f; body.addView(this) }
         fun button(res: Int, action: () -> Unit) = Button(this).apply {
             setText(res)

@@ -53,6 +53,23 @@ if $needs_robolectric && [ ! -s "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE" ]; then
   fi
   mv "$download" "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE"
 fi
+# Best effort: SystemBarInsetsTest also runs @Config(sdk = [35]) - the API level
+# where Android 15 enforces edge-to-edge - so the suite needs the Android 15
+# framework image as well. A missing copy must not fail the task: Robolectric
+# downloads it at runtime when the network is available.
+ROBOLECTRIC_IMAGE_15="android-all-instrumented-15-robolectric-13954326-i7.jar"
+if $needs_robolectric && [ ! -s "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE_15" ]; then
+  echo "==> fetching Robolectric Android 15 image (best effort)"
+  mkdir -p "$ROBOLECTRIC_DIR"
+  download="$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE_15.tmp.$$"
+  if curl -fsSL -o "$download" \
+    "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/15-robolectric-13954326-i7/$ROBOLECTRIC_IMAGE_15"; then
+    mv "$download" "$ROBOLECTRIC_DIR/$ROBOLECTRIC_IMAGE_15"
+  else
+    rm -f "$download"
+    echo "==> warning: Android 15 Robolectric image not cached; tests will fetch it at runtime" >&2
+  fi
+fi
 export ROBOLECTRIC_DEPENDENCY_DIR="$ROBOLECTRIC_DIR"
 
 # AGP reads the SDK location from local.properties or ANDROID_HOME; write it

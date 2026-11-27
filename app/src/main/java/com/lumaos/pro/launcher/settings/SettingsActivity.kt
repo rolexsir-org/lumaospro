@@ -2,7 +2,6 @@ package com.lumaos.pro.launcher.settings
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,8 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -94,8 +99,11 @@ class SettingsActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // enableEdgeToEdge() owns the window chrome on every supported API
+        // level, including the Android 15+ edge-to-edge enforcement for
+        // targetSdk 35+. The Window.setStatusBarColor() call that used to sit
+        // here is deprecated as of API 35 and is a no-op there, so it is gone.
         enableEdgeToEdge()
-        window.statusBarColor = Color.TRANSPARENT
 
         val themes = (application as LumaApp).core.themes
         val themeManager = (application as LumaApp).core.themeManager
@@ -126,8 +134,21 @@ class SettingsActivity : ComponentActivity() {
 
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
+                    // safeDrawing adds the IME to the default system-bars +
+                    // cutout insets so list content is never trapped behind the
+                    // keyboard (pre-Android-15 windows do not resize under
+                    // edge-to-edge); with a top bar present the body top is the
+                    // bar's measured height, so nothing is inset twice.
+                    contentWindowInsets = WindowInsets.safeDrawing,
                     topBar = {
-                        Column {
+                        // Header below the status bar and any display cutout.
+                        // Scaffold offsets the body by this column's measured
+                        // height, so the inset is applied exactly once here.
+                        Column(
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.statusBars.union(WindowInsets.displayCutout)
+                            )
+                        ) {
                             LumaGlassTopBar(
                                 theme = theme,
                                 title = "LumaOS Pro",
